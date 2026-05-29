@@ -26,17 +26,26 @@ def main_loop(FLAGS, job_dir):
         torch.cuda.set_device(FLAGS.gpu_index)
     set_global_seed(cfg.seed)
 
-    start_epoch = int(FLAGS.epoch) if isinstance(FLAGS.epoch, str) and FLAGS.epoch.isnumeric() else FLAGS.epoch
+    # load_epoch: which checkpoint file to load (0 = none, int = epoch_NNNN.p, str = <str>.p)
+    load_epoch = int(FLAGS.epoch) if isinstance(FLAGS.epoch, str) and FLAGS.epoch.isnumeric() else FLAGS.epoch
+    # start_epoch: where the training loop begins
+    # reset_epoch=true: load the checkpoint but restart the counter from 0 (MuJoCo→Choreonoid transfer)
+    if getattr(FLAGS, 'reset_epoch', False):
+        start_epoch = 0
+    elif isinstance(load_epoch, int):
+        start_epoch = load_epoch
+    else:
+        start_epoch = 0
 
 
     """create agent"""
-    agent = BodyGenAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=FLAGS.num_threads, training=True, checkpoint=start_epoch)    
+    agent = BodyGenAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=FLAGS.num_threads, training=True, checkpoint=load_epoch)
 
     if FLAGS.render:
         agent.pre_epoch_update(start_epoch)
         agent.sample(1e8, mean_action=not FLAGS.show_noise, render=True)
     else:
-        for epoch in range(start_epoch, cfg.max_epoch_num):          
+        for epoch in range(start_epoch, cfg.max_epoch_num):
             agent.optimize(epoch)
             agent.save_checkpoint(epoch)
 
