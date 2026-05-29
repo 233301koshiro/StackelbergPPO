@@ -1,6 +1,10 @@
 import numpy as np
+import os
 from gym import utils
-from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
+if os.environ.get('USE_CHOREONOID', '0') == '1':
+    from khrylib.rl.envs.common.mujoco_env_choreonoid import ChoreonoidEnv as MujocoEnv
+else:
+    from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
 from khrylib.robot.xml_robot import Robot
 from khrylib.utils import get_single_body_qposaddr, get_graph_fc_edges
 from khrylib.utils.transformation import quaternion_matrix
