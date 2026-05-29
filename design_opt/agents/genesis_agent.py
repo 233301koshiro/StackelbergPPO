@@ -662,7 +662,7 @@ class BodyGenAgent(AgentPPO):
         
         self.loss_iter = model_cp['loss_iter']
         self.best_rewards = model_cp.get('best_rewards', self.best_rewards)
-        if model_cp['obs_norm'] is not None and cfg.uni_obs_norm and not cfg.morph_prior:
+        if model_cp['obs_norm'] is not None and cfg.uni_obs_norm and not cfg.morph_prior and not cfg.reset_obs_norm:
             self.obs_norm.load_state_dict(model_cp['obs_norm'])
     
     def filter_keys(self, sd, prefix_exclude=None, prefix_include=None):
