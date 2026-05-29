@@ -102,6 +102,8 @@ class Config:
         self.robot_cfg = cfg.get('robot', dict())
 
         self.restore_dir = FLAG.get('restore_dir', None)
+        self.reset_epoch = FLAG.get('reset_epoch', False)
+        self.reset_obs_norm = FLAG.get('reset_obs_norm', False)
         self.skel_uniform_prob = FLAG.get('skel_uniform_prob', 0.0)
         self.stack_follower_steps = int(FLAG.get('stack_follower_steps', 6))
         self.lamda = FLAG.get('lamda', 1e-2)
