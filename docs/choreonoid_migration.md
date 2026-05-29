@@ -192,6 +192,98 @@ capsule は `fromto` 方向に合わせた RPY 回転も計算して付与。
 
 ---
 
+## MuJoCo XML → URDF の情報損失と補完方法
+
+MuJoCo XML には URDF 規格に存在しないフィールドがある。
+変換器（`cnoid_sim_server.py` の `mujoco_xml_to_urdf()`）はそれぞれ以下のように扱っている。
+
+```
+MuJoCo XML の情報
+  │
+  ├── URDF で表現できるもの（シミュレータ非依存）
+  │     質量・慣性テンソル・ジオメトリ・joint damping・関節タイプ・軸・可動域
+  │     → Choreonoid に正確に渡せる（誤差 1.6% 以内）
+  │
+  └── URDF に存在しないもの（シミュレータ固有）
+        armature=1       → URDF規格なし → Choreonoid APIで補完（近似）
+        gear=150         → URDF規格なし → トルク適用時に手動スケール
+        integrator=RK4   → URDF規格なし → Choreonoidは別の積分法（差1.5%）
+        solimp/solref    → URDF規格なし → 接触剛性・ソルバが消える ← 残差の主因
+        condim/friction  → URDF規格なし → 接触摩擦モデルが消える
+```
+
+### armature（関節慣性）
+
+MuJoCo の `<joint armature="1">` はロータ慣性（モータの回転子が関節に与える等価慣性）。
+URDF に対応フィールドがないため、**URDF ロード後に Choreonoid API で事後設定する**。
+
+```python
+# 変換器: MuJoCo XML から armature 値を収集
+joint_armatures = {}          # joint名 → armature値
+# ... parse_xml で hinge joint ごとに ...
+joint_armatures[jname] = float(joint_el.get('armature', default_armature))
+
+# Choreonoid ロード後: Body.joint(i).setEquivalentRotorInertia() で適用
+for i in range(b.numJoints):
+    j = b.joint(i)
+    arm = joint_armatures.get(j.jointName, 0.0)
+    if arm > 0:
+        j.setEquivalentRotorInertia(arm)
+```
+
+armature がないと慣性が ~200 倍小さくなり関節角が爆発する（11 rad → 本来 0.057 rad）。
+補完後も実効慣性に ~1.5% の差が残るが、学習上は許容範囲。
+
+### gear ratio（ギア比）
+
+MuJoCo の `<motor gear="150">` はアクチュエータのギア倍率。URDF に対応なし。
+**シミュレーションのステップ実行時に手動で乗算する**。
+
+```python
+# step コマンド受信時
+for jname, ainfo in self.actuators_map.items():
+    j = b.joint(jname)
+    if j is not None:
+        j.u = float(ctrl[i]) * ainfo['gear']   # ctrl × 150 = 実トルク [Nm]
+```
+
+### integrator（積分スキーム）
+
+MuJoCo は `<option integrator="RK4">` で4次のルンゲ・クッタ法を使用。
+Choreonoid の AIST シミュレータは semi-implicit Euler 固定で変更不可。
+
+単独関節の比較:
+
+```
+MuJoCo RK4        : 1.4676 rad/s
+Choreonoid Euler  : 0.9999 rad/s  （同一パラメータ・同一 dt・同一トルク）
+```
+
+積分法の差による誤差は ~1.5% 程度。
+
+### solimp / solref（接触ソルバパラメータ）・condim / friction（摩擦モデル）
+
+MuJoCo XML では接触の柔らかさ・摩擦モデルを詳細に設定できる。
+
+```xml
+<!-- MuJoCo XML 例 -->
+<default>
+  <geom condim="3"                      <!-- 接触自由度: 法線+2摩擦方向 -->
+        friction="1.0 0.5 0.5"          <!-- 接線/転がり/スピン摩擦係数 -->
+        margin="0.01"                   <!-- 接触検出マージン -->
+        solimp="0.9 0.95 0.001"        <!-- 接触柔性（インピーダンス） -->
+        solref="0.02 1.0"/>             <!-- 目標加速度・減衰比 -->
+</default>
+```
+
+これらは **URDF に対応フィールドが存在しない**。Choreonoid の AIST シミュレータは
+独自のペナルティ接触モデルを使うため、同じジオメトリでも接触力が異なる。
+
+pusher 環境では z=0.4 の初期配置で肢キャプセルが cube に食い込んでおり、
+この食い込み接触の解釈がシミュレータごとに異なることが残差 ~32% の主因。
+
+---
+
 ## 調査結果: 残差 ~32% について
 
 全修正を適用後も、MuJoCo と Choreonoid で関節速度に ~32% の差が残った。
