@@ -1,13 +1,19 @@
 from threading import Lock
-import glfw
-from mujoco_py.builder import cymj
-from mujoco_py.generated import const
 import time
 import copy
 from multiprocessing import Process, Queue
-from mujoco_py.utils import rec_copy, rec_assign
 import numpy as np
 import imageio
+
+try:
+    import glfw
+    from mujoco_py.builder import cymj
+    from mujoco_py.generated import const
+    from mujoco_py.utils import rec_copy, rec_assign
+    _mujoco_available = True
+except Exception:
+    glfw = cymj = const = rec_copy = rec_assign = None
+    _mujoco_available = False
 
 
 class MjViewerBasic(cymj.MjRenderContextWindow):

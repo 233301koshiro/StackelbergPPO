@@ -3,7 +3,10 @@ from gym.utils import seeding
 import numpy as np
 from os import path
 from pathlib import Path
-import mujoco_py
+try:
+    import mujoco_py
+except Exception:
+    mujoco_py = None
 from khrylib.rl.envs.common.mjviewer import MjViewer
 
 DEFAULT_SIZE = 500

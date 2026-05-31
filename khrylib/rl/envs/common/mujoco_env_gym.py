@@ -9,12 +9,15 @@ import gym
 
 try:
     import mujoco_py
-except ImportError as e:
-    raise error.DependencyNotInstalled("{}. (HINT: you need to install mujoco_py, and also perform the setup instructions here: https://github.com/openai/mujoco-py/.)".format(e))
+except Exception:
+    mujoco_py = None  # deferred: error raised only when MujocoEnv is instantiated
 
 DEFAULT_SIZE = 500
 
-from khrylib.rl.envs.common.mjviewer import MjViewer
+try:
+    from khrylib.rl.envs.common.mjviewer import MjViewer
+except Exception:
+    MjViewer = None  # deferred: only needed for rendering
 
 
 
