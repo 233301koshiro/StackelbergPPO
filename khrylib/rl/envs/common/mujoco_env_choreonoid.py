@@ -12,6 +12,7 @@ Usage:
   2. Use ChoreonoidEnv in place of MujocoEnv (same API).
 """
 
+import os
 import numpy as np
 import json
 import zmq
@@ -21,7 +22,7 @@ from gym import spaces
 from gym.utils import seeding
 
 DEFAULT_SIZE = 500
-DEFAULT_PORT = 5556
+DEFAULT_PORT = int(os.environ.get('CNOID_PORT', 5556))
 
 
 class ChoreonoidEnv:
@@ -51,6 +52,7 @@ class ChoreonoidEnv:
             with open(fullpath, 'r') as f:
                 xml_str = f.read()
 
+        self._last_xml = xml_str  # kept for reconnect() after fork
         info = self._send({'cmd': 'load_model', 'xml_str': xml_str, 'frame_skip': frame_skip})
         self._apply_model_info(info)
 
@@ -179,9 +181,27 @@ class ChoreonoidEnv:
         Replace the current robot model (called when morphology changes).
         Equivalent to mujoco_py.MjSim reload.
         """
+        self._last_xml = xml_str  # keep for reconnect() after fork
         info = self._send({'cmd': 'reload_model', 'xml_str': xml_str})
         self._apply_model_info(info)
         self._set_action_space()   # actuator count may have changed
+
+    def reconnect(self, port: int):
+        """
+        Close the current ZMQ socket and reconnect to a different port.
+        Used by forked worker processes to connect to their own Choreonoid server
+        while preserving the current morphology (reloads _last_xml on the new server).
+        """
+        self._sock.close()
+        self._ctx.term()
+        self._port = port
+        self._ctx = zmq.Context()
+        self._sock = self._ctx.socket(zmq.REQ)
+        self._sock.connect(f"tcp://localhost:{port}")
+        # Reload current morphology on the new server
+        info = self._send({'cmd': 'load_model', 'xml_str': self._last_xml,
+                           'frame_skip': self.frame_skip})
+        self._apply_model_info(info)
 
     def state_vector(self):
         return np.concatenate([self._qpos, self._qvel])

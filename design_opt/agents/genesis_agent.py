@@ -152,6 +152,13 @@ class BodyGenAgent(AgentPPO):
         ## make seed for the worker
         if pid > 0:
             torch.manual_seed(torch.randint(0, 5000, (1,)) * pid)
+            # Reconnect to worker-specific Choreonoid server (port 5556+pid).
+            # Uses reconnect() which preserves the current morphology XML so
+            # all workers start with the same robot the parent had at fork time.
+            import os as _os
+            if _os.environ.get('USE_CHOREONOID', '0') == '1' \
+                    and hasattr(self.env, 'reconnect'):
+                self.env.reconnect(5556 + pid)
             if hasattr(self.env, 'np_random'):
                 self.env.np_random.seed(self.env.np_random.randint(5000) * pid)
         
