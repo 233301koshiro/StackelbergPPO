@@ -76,49 +76,144 @@ def get_cfg_from_run(run_dir: str):
 
 # ── Process management ───────────────────────────────────────────────────────
 
-def start_choreonoid(display: int, server_script: str):
-    """Start Xvfb + Choreonoid server. Returns (xvfb_proc, cnoid_proc)."""
-    print(f"  Starting Xvfb :{display}...")
-    xvfb = subprocess.Popen(
-        ['Xvfb', f':{display}', '-screen', '0', '1024x768x24'],
+def _wait_for_heartbeat(cf_path: str, timeout=60):
+    import zmq, json
+    cf = json.load(open(cf_path))
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.DEALER)
+    sock.setsockopt(zmq.RCVTIMEO, 1000)
+    sock.connect(f"tcp://localhost:{cf['hb_port']}")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            sock.send(b'ping')
+            if sock.recv() == b'ping':
+                sock.close(); ctx.term()
+                return True
+        except zmq.Again:
+            pass
+        except Exception:
+            break
+        time.sleep(1)
+    sock.close(); ctx.term()
+    return False
+
+
+def _write_cnoid_connection_file():
+    """Write a Jupyter connection file with a proper HMAC key for xeus-python."""
+    import json, uuid, tempfile, socket
+    ports = {}
+    for name in ('shell', 'iopub', 'stdin', 'control', 'hb'):
+        s = socket.socket(); s.bind(('', 0))
+        ports[name] = s.getsockname()[1]; s.close()
+    data = {
+        'shell_port': ports['shell'], 'iopub_port': ports['iopub'],
+        'stdin_port': ports['stdin'], 'control_port': ports['control'],
+        'hb_port': ports['hb'], 'ip': '127.0.0.1',
+        'key': uuid.uuid4().hex, 'transport': 'tcp',
+        'signature_scheme': 'hmac-sha256', 'kernel_name': 'choreonoid',
+    }
+    fd, path = tempfile.mkstemp(suffix='.json')
+    with os.fdopen(fd, 'w') as f: json.dump(data, f)
+    return path, data
+
+
+def start_choreonoid(server_script: str, port: int = 5556):
+    """
+    Start Choreonoid ZMQ server via jupyter_process.sh (lab standard).
+    Returns (proc, cf_path).
+    """
+    import jupyter_client, zmq
+
+    cf_path, _ = _write_cnoid_connection_file()
+
+    proc = subprocess.Popen(
+        ['jupyter_process.sh', 'choreonoid', cf_path],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
-    time.sleep(1)
+    print(f"  Choreonoid starting (pid={proc.pid})...")
 
-    print(f"  Starting Choreonoid server...")
-    env = {**os.environ, 'DISPLAY': f':{display}'}
-    cnoid = subprocess.Popen(
-        ['choreonoid', '--python', server_script],
-        env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    time.sleep(3)
+    if not _wait_for_heartbeat(cf_path, timeout=60):
+        proc.terminate()
+        raise RuntimeError("Choreonoid kernel heartbeat did not respond within 60s")
+    print(f"  Kernel heartbeat confirmed.")
+
+    import jupyter_client as jc
+    kc = jc.BlockingKernelClient(connection_file=cf_path)
+    kc.load_connection_file()
+    kc.start_channels()
+
+    print(f"  Executing server script in Choreonoid kernel...")
+    with open(server_script) as f:
+        kc.execute(f.read())
+
+    # Wait for ZMQ server to respond
+    print(f"  Waiting for ZMQ server on port {port}...")
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.REQ)
+    sock.setsockopt(zmq.RCVTIMEO, 1000)
+    sock.connect(f"tcp://localhost:{port}")
+    deadline = time.time() + 30
+    ready = False
+    while time.time() < deadline:
+        try:
+            sock.send_json({'cmd': 'ping'})
+            if sock.recv_json().get('status') == 'ok':
+                ready = True
+                break
+        except Exception:
+            pass
+        time.sleep(0.5)
+    sock.close(); ctx.term()
+
+    if ready:
+        print(f"  ZMQ server ready on port {port}")
+    else:
+        print(f"  WARNING: ZMQ server did not respond on port {port}")
     print()
-    return xvfb, cnoid
+    return proc, cf_path
 
 
-def stop_choreonoid(xvfb, cnoid):
+def stop_choreonoid(proc, cf_path):
     print("\nShutting down Choreonoid server...")
-    cnoid.terminate()
-    xvfb.terminate()
-    cnoid.wait(timeout=5)
-    xvfb.wait(timeout=5)
+    proc.terminate()
+    proc.wait(timeout=5)
+    try:
+        os.unlink(cf_path)
+    except OSError:
+        pass
 
 
 # ── Training runner ──────────────────────────────────────────────────────────
 
 def run_train(cfg: str, overrides: list, use_choreonoid: bool = True) -> bool:
-    """Call design_opt.train. Returns True on success."""
+    """Call design_opt.train. stdout/stderr appended to {run_dir}/train.log."""
     env = {**os.environ}
     if use_choreonoid:
         env['USE_CHOREONOID'] = '1'
-    cmd = [sys.executable, '-OMP_NUM_THREADS=1', '-m', 'design_opt.train',
-           f'cfg={cfg}'] + overrides
-    # OMP_NUM_THREADS=1 via env is more reliable than the prefix trick
     env['OMP_NUM_THREADS'] = '1'
     cmd = [sys.executable, '-m', 'design_opt.train', f'cfg={cfg}'] + overrides
     print(f"  $ OMP_NUM_THREADS=1 USE_CHOREONOID={int(use_choreonoid)} {' '.join(cmd[2:])}")
-    result = subprocess.run(cmd, env=env)
-    return result.returncode == 0
+
+    # Determine log file from hydra.run.dir override or default
+    run_dir = f'single_run/{cfg}'
+    for ov in overrides:
+        if ov.startswith('hydra.run.dir='):
+            run_dir = ov.split('=', 1)[1]
+            break
+    log_file = os.path.join(run_dir, 'train.log')
+    os.makedirs(run_dir, exist_ok=True)
+    print(f"  Logging to: {log_file}  (append)")
+
+    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    with open(log_file, 'a') as lf:
+        for line in iter(proc.stdout.readline, b''):
+            sys.stdout.buffer.write(line)
+            sys.stdout.buffer.flush()
+            lf.write(line.decode(errors='replace'))
+            lf.flush()
+    proc.wait()
+    return proc.returncode == 0
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -143,8 +238,6 @@ def main():
                              '(default: 0.5). Accounts for ~30%% physics gap between simulators.')
     parser.add_argument('--auto-scratch', action='store_true',
                         help='Automatically retrain from scratch when transfer result is poor')
-    parser.add_argument('--display', type=int, default=99,
-                        help='Xvfb display number (default: 99)')
     parser.add_argument('--server-script',
                         default='khrylib/rl/envs/common/cnoid_sim_server.py',
                         help='Path to cnoid_sim_server.py')
@@ -174,10 +267,10 @@ def main():
 
     # ── Start Choreonoid server ───────────────────────────────────────────────
     print("[Setup] Starting Choreonoid server...")
-    xvfb, cnoid = start_choreonoid(args.display, args.server_script)
+    proc, cf_path = start_choreonoid(args.server_script)
 
     def _cleanup(*_):
-        stop_choreonoid(xvfb, cnoid)
+        stop_choreonoid(proc, cf_path)
     signal.signal(signal.SIGINT,  _cleanup)
     signal.signal(signal.SIGTERM, _cleanup)
 
