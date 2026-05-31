@@ -141,32 +141,64 @@ def start_server(server_script=CNOID_SERVER_SCRIPT, port=PORT):
     return proc, cf_path
 
 
-def main():
-    proc, cf_path = start_server()
+def start_servers(num_servers=1, base_port=PORT):
+    """
+    Start num_servers Choreonoid ZMQ servers on consecutive ports.
+    Worker i uses port base_port+i (i=0 is the main process, i=1..N are forked workers).
+    Returns list of (proc, cf_path) tuples.
+    """
+    servers = []
+    for i in range(num_servers):
+        port = base_port + i
+        # Inject port into server script via a wrapper that sets CNOID_ZMQ_PORT
+        server_code = open(CNOID_SERVER_SCRIPT).read().replace(
+            'PORT = 5556', f'PORT = {port}', 1
+        )
+        import tempfile
+        fd, patched_script = tempfile.mkstemp(suffix='.py')
+        with os.fdopen(fd, 'w') as f:
+            f.write(server_code)
 
-    print(f"[cnoid_server] Waiting for ZMQ server on port {PORT}...")
-    if wait_for_zmq(PORT, timeout=30):
-        print(f"[cnoid_server] Ready on tcp://localhost:{PORT}")
-        print("[cnoid_server] Press Ctrl+C to stop.")
-    else:
-        print(f"[cnoid_server] WARNING: ZMQ server did not respond on port {PORT}")
+        proc, cf_path = start_server(server_script=patched_script, port=port)
+        servers.append((proc, cf_path, patched_script))
+        print(f"[cnoid_server] Server {i} ready on port {port}")
+    return servers
 
-    def _cleanup(signum=None, frame=None):
-        print("\n[cnoid_server] Shutting down...")
+
+def stop_servers(servers):
+    for proc, cf_path, patched_script in servers:
         proc.terminate()
         proc.wait(timeout=5)
-        try:
-            os.unlink(cf_path)
-        except OSError:
-            pass
+        for p in (cf_path, patched_script):
+            try:
+                os.unlink(p)
+            except OSError:
+                pass
+
+
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--num-servers', type=int, default=1,
+                        help='Number of Choreonoid ZMQ servers to start (default: 1)')
+    parser.add_argument('--base-port', type=int, default=PORT,
+                        help=f'Base port (default: {PORT}). Servers use base, base+1, ...')
+    args = parser.parse_args()
+
+    servers = start_servers(args.num_servers, args.base_port)
+
+    def _cleanup(signum=None, frame=None):
+        print("\n[cnoid_server] Shutting down all servers...")
+        stop_servers(servers)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, _cleanup)
     signal.signal(signal.SIGTERM, _cleanup)
 
-    while proc.poll() is None:
+    print(f"[cnoid_server] {args.num_servers} server(s) running. Press Ctrl+C to stop.")
+    while all(proc.poll() is None for proc, _, _ in servers):
         time.sleep(1)
-    print("[cnoid_server] Choreonoid process exited.")
+    print("[cnoid_server] A Choreonoid process exited.")
 
 
 if __name__ == '__main__':
