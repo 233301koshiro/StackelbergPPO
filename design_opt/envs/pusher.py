@@ -9,7 +9,10 @@ from khrylib.robot.xml_robot import Robot
 from khrylib.utils import get_single_body_qposaddr, get_graph_fc_edges
 from khrylib.utils.transformation import quaternion_matrix
 from copy import deepcopy
-import mujoco_py
+try:
+    import mujoco_py
+except Exception:
+    mujoco_py = None
 import time
 import os
 import shutil
