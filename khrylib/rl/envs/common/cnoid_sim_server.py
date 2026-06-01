@@ -22,9 +22,14 @@ import numpy as np
 import zmq
 
 # Choreonoid Python 3.8 bindings
-CNOID_PYTHON_PATH = '/choreonoid_ws/install/lib/choreonoid-2.0/python'
-if CNOID_PYTHON_PATH not in sys.path:
-    sys.path.insert(0, CNOID_PYTHON_PATH)
+# Support both Choreonoid 2.0 (Ubuntu 20.04 noetic) and 2.3 (Ubuntu 24.04 one)
+for _candidate in (
+    '/choreonoid_ws/install/lib/choreonoid-2.3/python',
+    '/choreonoid_ws/install/lib/choreonoid-2.0/python',
+):
+    if os.path.isdir(_candidate) and _candidate not in sys.path:
+        sys.path.insert(0, _candidate)
+        break
 
 from cnoid.Base import RootItem
 from cnoid.Body import Body, BodyLoader
@@ -508,7 +513,13 @@ class ChoreonoidSimWorld:
         RootItem.instance.addChildItem(self.world_item)
 
         # Floor
-        floor_path = '/choreonoid_ws/install/share/choreonoid-2.0/model/misc/floor.body'
+        floor_path = next(
+            (p for p in (
+                '/choreonoid_ws/install/share/choreonoid-2.3/model/misc/floor.body',
+                '/choreonoid_ws/install/share/choreonoid-2.0/model/misc/floor.body',
+            ) if os.path.exists(p)),
+            None,
+        )
         if os.path.exists(floor_path):
             floor_item = BodyItem()
             floor_item.load(floor_path)
