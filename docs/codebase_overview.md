@@ -195,6 +195,85 @@ BodyGenAgent / PusherEnv / BodyGenPolicy が Config から読む
 
 ---
 
+## 学習中に生成されるファイルと保存場所
+
+学習を実行すると `hydra.run.dir` で指定したディレクトリ（デフォルト: `single_run/{cfg名}/`）に以下が作られる。
+
+```
+single_run/pusher_cnoid/          ← hydra.run.dir で指定した学習ディレクトリ
+│
+├── models/                       ← チェックポイント（ネットワーク重み）
+│   ├── epoch_0010.p              ← 10エポックごとに保存（save_model_interval=10）
+│   ├── epoch_0020.p
+│   ├── ...
+│   └── best.p                    ← exec_R_eps が更新されるたびに上書き保存
+│
+├── log/
+│   └── log_train.txt             ← エポックごとの報酬・時間ログ（追記）
+│
+├── tb/
+│   └── events.out.tfevents.*     ← TensorBoard ログ（報酬・学習率の推移）
+│
+├── train.log                     ← stdout/stderr（追記）
+│
+└── .hydra/
+    ├── config.yaml               ← 実行時の設定全体（マージ済み）
+    ├── overrides.yaml            ← コマンドラインで上書きした設定
+    └── hydra.yaml                ← Hydra 自身の設定
+```
+
+### チェックポイント（`.p` ファイル）の中身
+
+Python の `pickle` 形式。以下のキーを持つ辞書:
+
+| キー | 内容 |
+|-----|------|
+| `policy_dict` | ポリシーネットワークの重み（Transformer × 3ヘッド）|
+| `value_dict` | バリューネットワークの重み |
+| `obs_norm` | 観測の正規化統計（RunningNorm のパラメータ）|
+| `best_rewards` | 保存時点の最高報酬値 |
+| `loss_iter` | 累積の更新ステップ数 |
+| `epoch` | 保存時のエポック番号 |
+
+読み込み方:
+```python
+import pickle
+cp = pickle.load(open('single_run/pusher_cnoid/models/best.p', 'rb'))
+# または
+import torch
+cp = torch.load('single_run/pusher_cnoid/models/best.p', weights_only=False)
+```
+
+### 動画の保存
+
+`eval.py` で `--save_video` を指定すると保存される。
+
+```bash
+python design_opt/eval.py --restore_dir single_run/pusher_cnoid --save_video
+```
+
+保存先: **`out/videos/{cfg名}_seed={seed}.mp4`**（プロジェクトルート直下）
+
+MuJoCo 版のみ対応（`mujoco_py` の OpenGL レンダリングを使用）。
+Choreonoid 版は現状 `visualize_agent()` が呼べないため動画未対応。
+
+### TensorBoard で確認できるメトリクス
+
+```bash
+tensorboard --logdir single_run/pusher_cnoid/tb
+```
+
+| メトリクス | 内容 |
+|-----------|------|
+| `exec_R_avg` | 実行フェーズの平均報酬 |
+| `exec_R_eps_avg` | 実行フェーズの平均エピソード報酬（グラフが一番わかりやすい）|
+| `train_R_avg` | 学習バッチ全体の平均報酬 |
+| `policy_learning_rate` | ポリシーの学習率 |
+| `stackelberg/L_surr_loss` | リーダーのサロゲート損失 |
+| `stackelberg/F_approx_kl` | フォロワーの KL 発散（更新が大きすぎないかの指標）|
+
+---
+
 ## MuJoCo との接点（Choreonoid 移行前）
 
 ```
