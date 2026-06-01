@@ -39,7 +39,23 @@
 エポック0 結果: exec_R_eps=6.81, ETA 5日14時間
 ```
 
-**num_threads=1 の制約**: ZMQ REP サーバーは1つのシミュレーション世界を持つため、
-複数ワーカーが同時アクセスすると状態が混在する。フォーク後の REQ ソケット共有は
-デッドロックを引き起こすため、現状はシングルスレッド。
-→ 根本解決にはワーカーごとに Choreonoid サーバーを1つ用意する構成変更が必要。
+~~num_threads=1 の制約~~: 下記 `9729990` で4スレッド化を実現。
+
+### 2026-06-01
+
+| ハッシュ | 内容 |
+|---------|------|
+| `9729990` | **4スレッド並列学習を実現**。ワーカーごとに専用の Choreonoid サーバーを用意し、ZMQ ソケット競合を解消。`start_cnoid_server.py` に `--num-servers N` オプション追加（N 個のサーバーを 5556〜5556+N-1 番ポートで起動）。`ChoreonoidEnv` に `reconnect(port)` メソッドと `_last_xml` キャッシュを追加（形態を維持したままワーカー専用サーバーに繋ぎ直す）。`genesis_agent.py` の `sample_worker()` で fork 後に `env.reconnect(5556+pid)` を呼ぶ。スレッド数比較: 1→4スレッドで T_sample が 246s→196s（約20%改善）。8スレッドは 210s と遅く、4スレッドが最適と判明。 |
+| `8601b95` | **コードベース概要ドキュメントを追加**（`docs/codebase_overview.md`）。元リポジトリの全体フロー・ファイル関係・Stackelberg PPO の更新アルゴリズム・観測ベクトル構造・設定の流れ等をまとめた。 |
+
+---
+
+### 現在の学習状態（2026-06-01）
+
+```
+学習プロセス: PID 2311773（稼働中）
+設定: USE_CHOREONOID=1, num_threads=4, min_batch_size=5000, eval_batch_size=2000
+Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
+ログ: single_run/pusher_cnoid/log/log_train.txt
+エポック24 結果: exec_R_eps=10.05（エポック0の6.79から上昇中）、ETA 約7日
+```
