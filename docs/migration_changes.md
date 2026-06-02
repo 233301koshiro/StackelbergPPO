@@ -4,263 +4,205 @@
 
 ---
 
+## 削除したファイル
+
+### `khrylib/rl/envs/common/cnoid_sim_server.py`（削除）
+
+Python 3.8 時代に Choreonoid プロセス内で動いていた ZMQ REP サーバー。
+Python 3.12 化により、シミュレーションロジックを `mujoco_env_choreonoid.py` に直接統合したため不要になった。
+
+### `scripts/start_cnoid_server.py`（削除）
+
+Jupyter カーネル経由で Choreonoid ZMQ サーバーを起動するスクリプト。
+ZMQ 構成そのものが廃止されたため不要。
+
+---
+
 ## 新規作成ファイル
 
-### `khrylib/rl/envs/common/mujoco_env_choreonoid.py`
+### `khrylib/rl/envs/common/mujoco_env_choreonoid.py`（全面書き直し）
 
-MuJoCo の `MujocoEnv` と**完全に同じ API** を持つ差し替えクラス `ChoreonoidEnv`。
-既存の env コード（pusher.py 等）は一切変更しなくてよい。
+`mujoco_env_gym.py` と**完全に同じ API** を持つ drop-in replacement。
+旧版は ZMQ クライアントだったが、現在は `cnoid` バインディングを直接使う。
 
 ```
-ChoreonoidEnv.__init__()
-  → ZMQ REQ ソケットで localhost:5556 に接続
-  → load_model コマンドを送って MuJoCo XML をサーバーに渡す
-  → 応答から nq/nv/ctrlrange 等のモデル情報を取得
-
-_ModelProxy, _DataProxy
-  → 既存コードが self.model.nq や self.data.qpos にアクセスする部分を透過補完
-
-step() / reset() / set_state()
-  → ZMQ で対応コマンドを送り、物理演算はサーバー側（Choreonoid）が担う
+mujoco_xml_to_urdf()       ← 旧 cnoid_sim_server.py から移設
+ChoreonoidSimWorld          ← 旧 cnoid_sim_server.py から移設
+ChoreonoidEnv               ← ZMQ 削除、ChoreonoidSimWorld を直接呼ぶように変更
+_ModelProxy, _DataProxy     ← 変更なし（透過補完レイヤー）
 ```
 
-### `khrylib/rl/envs/common/cnoid_sim_server.py`
+`ChoreonoidEnv` の主要メソッドの対応:
 
-Choreonoid の Python 3.8 カーネル内で動く ZMQ REP サーバー。
+| メソッド | 旧（ZMQ） | 新（直接） |
+|---------|----------|-----------|
+| `reload_sim_model()` | `_send({'cmd': 'reload_model'})` | `self._world.load_model()` |
+| `reset()` | `_send({'cmd': 'reset'})` | `self._world.reset()` |
+| `do_simulation()` | `_send({'cmd': 'step'})` | `self._world.step()` |
+| `set_state()` | `_send({'cmd': 'set_state'})` | `self._world.set_state_cmd()` |
+
+削除したもの: `ZMQ`, `reconnect()`, `sys.path` 操作, `irsl_choreonoid` 依存
+
+### `scripts/choreonoid_train.py`（新規）
+
+`choreonoid --no-window --python` に渡すエントリポイント。
 
 ```python
-# 起動方法（scripts/start_cnoid_server.py が自動処理）
-jupyter_process.sh choreonoid {connection_file}
-# → Choreonoid が起動し、このスクリプトがカーネル内で実行される
-
-# 提供コマンド
-load_model  → MuJoCo XML を URDF に変換して Choreonoid にロード
-reset       → シミュレーションをリセット、初期状態を返す
-step        → 1ステップ進める（ctrl × gear でトルク適用）
-set_state   → qpos/qvel を直接セット
-ping        → 疎通確認
-```
-
-**MuJoCo XML → URDF 変換**（`mujoco_xml_to_urdf()`）で行っていること:
-- capsule/sphere/box ジオメトリの `<visual>` + `<collision>` 要素生成
-- hinge/slide/free 関節の変換
-- 複数関節ボディ（cube の x/y スライド等）→ 仮想リンクで連結
-- capsule の慣性テンソルを正しい公式で計算
-
-URDF では表現できない MuJoCo 固有パラメータの補完:
-- `armature` → ロード後に `joint.setEquivalentRotorInertia()` で設定
-- `gear` → step 時に `ctrl × gear` をトルクとして手動スケール
-
-### `scripts/start_cnoid_server.py`
-
-Choreonoid ZMQ サーバーを起動するランチャー。
-`xvfb-run choreonoid --python` の代わりに、研究室標準の**Jupyter カーネル方式**で起動する。
-
-```bash
 # 使い方
-python3.9 scripts/start_cnoid_server.py
-
-# 内部でやっていること
-1. UUID4 キーを持つ Jupyter 接続ファイルを手動生成
-   （jupyter_client.write_connection_file() は空キーを返すため使えない）
-2. jupyter_process.sh choreonoid {接続ファイル} を起動
-   （irsl_entryrc を source → choreonoid --jupyter-connection）
-3. ZMQ DEALER ソケットでハートビートをポーリング（60s タイムアウト）
-4. cnoid_sim_server.py のコードを Jupyter カーネル内で execute
-5. ZMQ ping/pong でサーバー疎通確認
-6. Choreonoid の stdout/stderr を /tmp/cnoid_console.log に記録
+USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
+  choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher num_threads=1
 ```
 
-### `scripts/cnoid_transfer.py`
+### `design_opt/conf/__init__.py`（新規）
 
-MuJoCo で学習済みのチェックポイントを Choreonoid に移行するスクリプト。
-
-```bash
-# 使い方
-python3.9 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher
-python3.9 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher --auto-scratch
-
-# 処理フロー
-Step 1: MuJoCo チェックポイントから形態重みだけ引き継いで Choreonoid で再学習
-        (morph_prior=true, reset_epoch=true, reset_obs_norm=true)
-Step 2: Choreonoid報酬 / MuJoCo報酬の比率を確認（閾値デフォルト 0.5）
-Step 3: 閾値未満なら --auto-scratch でスクラッチ再学習に移行
-```
+Hydra 1.3 が `config_path` をPythonモジュールとして解決するために必要。
 
 ---
 
 ## 既存ファイルへの変更
 
-### `design_opt/envs/pusher.py` — 2行追加（+環境変数スイッチ）
+### `design_opt/envs/pusher.py` ほか全 env ファイル
+
+**変更1**: `USE_CHOREONOID` 環境変数スイッチ（旧来から）
 
 ```python
-# 変更前
-from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
-
-# 変更後（追加 4行）
-import os
 if os.environ.get('USE_CHOREONOID', '0') == '1':
     from khrylib.rl.envs.common.mujoco_env_choreonoid import ChoreonoidEnv as MujocoEnv
 else:
     from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
 ```
 
-これだけで `USE_CHOREONOID=1` の環境変数で切り替わる。クラス名は `MujocoEnv` のまま残すので、`PusherEnv` の中身は一切変更不要。
-
----
-
-### `design_opt/train.py` — `load_epoch` と `start_epoch` の分離
+**変更2**: NumPy 2.0 非互換修正（全 env ファイル共通）
 
 ```python
-# 変更前（1行）
-start_epoch = int(FLAGS.epoch) if ... else FLAGS.epoch
+# 修正前（NumPy 2.0 で ValueError）
+ctrl[aind] = body_a
 
-# 変更後（7行）
-load_epoch = int(FLAGS.epoch) if ... else FLAGS.epoch   # どのファイルを読むか
-
-if getattr(FLAGS, 'reset_epoch', False):
-    start_epoch = 0          # チェックポイントを読むが、エポック0から再学習
-elif isinstance(load_epoch, int):
-    start_epoch = load_epoch # 通常の継続学習
-else:
-    start_epoch = 0
-
-agent = BodyGenAgent(..., checkpoint=load_epoch)  # ← load_epoch で読む
-for epoch in range(start_epoch, ...):             # ← start_epoch から回す
+# 修正後
+ctrl[aind] = body_a.item()
 ```
 
-MuJoCo 学習済みモデルを読み込みつつ、Choreonoid でエポック0から再学習するために必要。
+対象: pusher / gap / hopper / ant / walker / swimmer / stair / stairhard
 
 ---
 
-### `design_opt/agents/genesis_agent.py` — obs_norm リセット条件を1箇所修正
+### `design_opt/agents/genesis_agent.py`
+
+**変更1**: `wandb` を条件付き import に変更（NumPy 2.0 非互換対応）
 
 ```python
-# 変更前
-if model_cp['obs_norm'] is not None and cfg.uni_obs_norm and not cfg.morph_prior:
-
-# 変更後（条件を1つ追加）
-if model_cp['obs_norm'] is not None and cfg.uni_obs_norm \
-        and not cfg.morph_prior and not cfg.reset_obs_norm:
-```
-
-MuJoCo と Choreonoid では観測値のスケールが異なる（接触ダイナミクスの違い）ため、移行時に観測正規化の統計を捨てる。
-
----
-
-### `design_opt/conf/config.yaml` — フラグ2行追加
-
-```yaml
-# 追加
-reset_epoch: false    # true にするとチェックポイントをロードしてもエポック0から再学習
-reset_obs_norm: false # true にすると obs_norm を引き継がず再学習
-```
-
----
-
-### `design_opt/utils/config.py` — フラグ2行追加
-
-```python
-# 追加（Config クラスの __init__ 内）
-self.reset_epoch = FLAG.get('reset_epoch', False)
-self.reset_obs_norm = FLAG.get('reset_obs_norm', False)
-```
-
----
-
-### `khrylib/rl/envs/common/mujoco_env_gym.py` — mujoco_py を遅延 import
-
-```python
-# 変更前
 try:
-    import mujoco_py
-except ImportError as e:
-    raise error.DependencyNotInstalled("...")  # ← import 時点でクラッシュ
+    import wandb
+except Exception:
+    wandb = None
+```
 
-from khrylib.rl.envs.common.mjviewer import MjViewer
+**変更2**: `reconnect()` 呼び出し削除（ZMQ ワーカー接続コードを削除）
+
+```python
+# 削除したコード
+if os.environ.get('USE_CHOREONOID', '0') == '1' \
+        and hasattr(self.env, 'reconnect'):
+    self.env.reconnect(5556 + pid)
+```
+
+---
+
+### `design_opt/train.py`
+
+**変更1**: `wandb` を条件付き import に変更
+
+```python
+try:
+    import wandb
+except Exception:
+    wandb = None
+```
+
+**変更2**: Hydra `version_base` を `"1.2"` に固定
+
+```python
+@hydra.main(version_base="1.2", config_path="conf", config_name="config")
+```
+
+Hydra 1.3.2 は `version_base="1.2"` を受け付け、1.2 互換の挙動を維持する。
+
+**変更3**: 学習ループ終了後に `env.close()` を追加
+
+```python
+agent.logger.info('training done!')
+if hasattr(agent, 'env') and hasattr(agent.env, 'close'):
+    agent.env.close()
+```
+
+サンプリング後にシミュレーションが放置されたままプロセスが終了しない問題の修正。
+`close()` はサンプリングループ内では呼ばない（Qt シグナル連鎖を壊すため）。
+
+---
+
+### `scripts/cnoid_transfer.py`
+
+ZMQ サーバー管理コードを全削除。`run_train()` が `choreonoid --no-window --python` を呼ぶように変更。
+
+```python
+# 変更前
+proc, cf_path = start_choreonoid(args.server_script)
+run_train(cfg, overrides, use_choreonoid=True)
+stop_choreonoid(proc, cf_path)
 
 # 変更後
-try:
-    import mujoco_py
-except Exception:
-    mujoco_py = None  # ← import 時はクラッシュせず、使う時だけ失敗
-
-try:
-    from khrylib.rl.envs.common.mjviewer import MjViewer
-except Exception:
-    MjViewer = None
-```
-
-**なぜ必要か**: `design_opt/envs/__init__.py` が hopper/swimmer/walker/ant 等を全て一括 import し、それらが `mujoco_env_gym` を import する。`USE_CHOREONOID=1` でも pusher 以外の env ファイルが読まれるため、mujoco_py が見つからないと起動時点でクラッシュしていた。
-
----
-
-### `khrylib/rl/envs/common/mjviewer.py` — mujoco_py 系を遅延 import
-
-```python
-# 変更前
-import glfw
-from mujoco_py.builder import cymj
-from mujoco_py.generated import const
-from mujoco_py.utils import rec_copy, rec_assign
-
-# 変更後
-try:
-    import glfw
-    from mujoco_py.builder import cymj
-    from mujoco_py.generated import const
-    from mujoco_py.utils import rec_copy, rec_assign
-    _mujoco_available = True
-except Exception:
-    glfw = cymj = const = rec_copy = rec_assign = None
-    _mujoco_available = False
+run_train(cfg, overrides)  # 内部で choreonoid --no-window --python を subprocess 実行
 ```
 
 ---
 
-### `design_opt/envs/{hopper,swimmer,walker,ant,stair,stairhard}.py` — mujoco_py 遅延 import
+### `scripts/eval_cnoid_numerical.py` / `eval_cnoid_visual.py`
 
-各ファイルで同じ修正（実際には mujoco_py を使っていないが、import 文だけがあった）:
+ZMQ サーバー起動コード（`start_cnoid_server` import、`_eval_proc` 管理）を全削除。
+`choreonoid --no-window --python` で直接実行するスクリプトに変更。
 
-```python
-# 変更前
-import mujoco_py
+---
 
-# 変更後
-try:
-    import mujoco_py
-except Exception:
-    mujoco_py = None
-```
+## 変更しなかったもの
+
+- `khrylib/robot/xml_robot.py` — MuJoCo XML 生成ロジック。Choreonoid でもそのまま使う
+- `design_opt/envs/pusher.py` の `PusherEnv` クラス本体 — `ctrl[aind]` 修正のみ
+- `design_opt/agents/genesis_agent.py` の学習ロジック本体
+- `design_opt/models/` — ネットワーク定義
+- `design_opt/train.py` の学習ループ本体
+- `khrylib/rl/envs/common/mujoco_env_gym.py` — MuJoCo パスとして残存
+
+---
+
+## 依存パッケージの変更
+
+| パッケージ | 旧 | 新 |
+|-----------|----|----|
+| Python | 3.9 | 3.12 |
+| Choreonoidバインディング | Python 3.8 専用 | Python 3.12 用に再ビルド |
+| PyTorch | 2.0.1 | 2.7.0+cu128 |
+| hydra-core | 1.2.0 | 1.3.2 |
+| MuJoCo バイナリ | 2.1.0（必要） | 不要 |
+| ZMQ | 必要 | 不要 |
 
 ---
 
 ## 学習の起動方法
 
 ```bash
-# 1. Choreonoid ZMQ サーバーを起動（初回・再起動時）
-python3.9 scripts/start_cnoid_server.py &
+# Choreonoid バックエンドで学習（現在の方法）
+USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
+  choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher \
+  num_threads=1 \
+  hydra.run.dir=single_run/pusher_cnoid \
+  enable_wandb=false
 
-# 2. 学習開始
-USE_CHOREONOID=1 OMP_NUM_THREADS=1 python3.9 -m design_opt.train \
-    cfg=pusher \
-    hydra.run.dir="single_run/pusher_cnoid" \
-    enable_wandb=false \
-    num_threads=1 \
-    min_batch_size=5000 \
-    eval_batch_size=2000
+# MuJoCo バックエンドで学習（元の方法、MuJoCo が入っている環境のみ）
+OMP_NUM_THREADS=1 python -m design_opt.train cfg=pusher
 ```
 
-**num_threads=1 の理由**: ZMQ REP サーバーは1シミュレーション世界を持ち、複数ワーカーから同時アクセスすると状態が混在する。フォーク後のREQソケット共有はデッドロックを引き起こすため、現状はシングルスレッド運用。マルチスレッド化にはワーカーごとにChoreonoidサーバーを1つ用意する構成変更が必要。
-
-**min_batch_size=5000 の理由**: ZMQ 経由の Choreonoid は 1 env.step() あたり約 50ms（neural network 推論込み）。`50000 × 50ms ≈ 42分/エポック` で非現実的なため、`5000 × 50ms ≈ 4分/エポック`（1000エポックで約3日）に変更。
-
----
-
-## 変更しなかった（変える必要がなかった）もの
-
-- `khrylib/robot/xml_robot.py` — MuJoCo XML 生成ロジック。Choreonoid でもそのまま使う
-- `design_opt/envs/pusher.py` の本体（`PusherEnv` クラス）— 一切変更不要
-- `design_opt/agents/genesis_agent.py` の学習ロジック本体 — 一切変更不要
-- `design_opt/models/` — ネットワーク定義 — 一切変更不要
-- 他の env ファイル（hopper 等）のクラス本体 — mujoco_py import 部分のみ変更
+**num_threads=1 の理由**: Choreonoid の `AISTSimulatorItem` は Qt オブジェクトを含むため、
+Python の `fork()` で子プロセスを作ると Qt の内部状態が壊れる。
+現状はシングルスレッド運用のみ安定動作。

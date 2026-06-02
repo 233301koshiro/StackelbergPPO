@@ -8,7 +8,7 @@ StackelbergPPO（形態・制御の共設計を行う強化学習リポジトリ
 **設計方針（重要）**:
 - MuJoCo XML によるロボット形態生成（`xml_robot.py`）はそのまま流用する
 - MuJoCo をシミュレータとして使っている部分だけを Choreonoid に置き換える
-- MuJoCo の XML→URDF 変換機能など「便利な箇所」はそのまま残す
+- XML→URDF 変換など中間フォーマットは引き続き使用
 
 ---
 
@@ -16,40 +16,29 @@ StackelbergPPO（形態・制御の共設計を行う強化学習リポジトリ
 
 ### 問題
 
-- 研究室提供の Choreonoid Docker イメージは Python 3.8 ベース
-- StackelbergPPO が要求する PyTorch 2.0.1 は RTX 5060 Ti（sm_120, Blackwell）に非対応
-- PyTorch 2.3 以降は Python 3.8 を非サポート
+- 研究室提供の Choreonoid Docker イメージ (`irsl_system:noetic`) は Python 3.8 / Ubuntu 20.04 ベース
+- StackelbergPPO が要求する PyTorch 2.x は Python 3.8 非対応
+- RTX 5060 Ti（sm_120, Blackwell）に対応するには PyTorch 2.7 以降が必要
 
-### 解決策
+### 解決策: `akita_sp` イメージ
 
-`Dockerfile.add_akita_sp`（研究室イメージを継承する個人用Dockerfile）に以下を追加:
+`Dockerfile.add_akita_sp`（研究室イメージを継承する個人用Dockerfile）で以下を構築:
 
-1. **Python 3.9** を Ubuntu 20.04 標準リポジトリからインストール
-2. **PyTorch 2.7.0+cu128** をインストール（RTX 5060 Ti の sm_120 に対応）
-3. **MuJoCo 2.1.0** を `/ros_home/.mujoco/` にインストール（コンテナの HOME が `/ros_home`）
-4. **PPO依存ライブラリ**（gym==0.15.4, mujoco-py, torch-geometric 等）を Python 3.9 でインストール
-5. **xvfb**（Choreonoidのヘッドレス起動用）
-6. **lxml + pyzmq**（Python 3.8 側でも必要、サーバー通信用）
+1. **Python 3.12** + Choreonoidバインディングを **Python 3.12 用に再ビルド**
+2. **PyTorch 2.7.0+cu128** をインストール（RTX 5060 Ti 対応）
+3. **StackelbergPPO 依存ライブラリ**（gym, torch-geometric, hydra-core 等）を Python 3.12 でインストール
+4. **MuJoCo バイナリは不要**（Choreonoid に完全移行するため）
 
-```dockerfile
-FROM repo.irsl.eiiris.tut.ac.jp/irsl_system:noetic
-
-# Python 3.9 + MuJoCo + PyTorch 2.7 (GPU対応)
-RUN apt-get install -y python3.9 python3.9-dev xvfb ...
-RUN python3.9 -m pip install torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128
-RUN python3.9 -m pip install gym==0.15.4 mujoco-py ...
-```
-
-**確認**: `akita_sp` イメージで RTX 5060 Ti を使い PPO 学習が動作することを確認。
+**重要な変化**: Choreonoidバインディングが Python 3.12 で動くようになった。
+これにより ZMQ による2プロセス構成が不要になった。
 
 ---
 
 ## フェーズ2: Choreonoidバックエンドの実装
 
-### アーキテクチャ
+### アーキテクチャの変遷
 
-Choreonoid の Python バインディングは Python 3.8 専用でコンパイルされており、
-PPO 側の Python 3.9 から直接呼び出せない。そこで **ZeroMQ による2プロセス構成**を採用:
+#### 旧アーキテクチャ（Python 3.8 制約時代）
 
 ```
 PPO プロセス (Python 3.9)          Choreonoid プロセス (Python 3.8)
@@ -59,56 +48,60 @@ PPO プロセス (Python 3.9)          Choreonoid プロセス (Python 3.8)
 └─────────────────────────┘        └──────────────────────────────┘
 ```
 
+ZMQ が必要だった理由: Choreonoidバインディングが Python 3.8 専用だったため、
+学習コード（Python 3.9+）から直接呼び出せなかった。
+
+#### 現アーキテクチャ（Python 3.12 統一後）
+
+```
+choreonoid --no-window --python scripts/choreonoid_train.py
+┌──────────────────────────────────────────────────────────┐
+│  Choreonoidプロセス (Python 3.12)                         │
+│   ├─ Qt イベントループ（メインスレッド）                    │
+│   └─ 学習コード（PythonPlugin スレッド）                   │
+│         ├─ BodyGenAgent / PusherEnv                       │
+│         └─ ChoreonoidEnv → ChoreonoidSimWorld             │
+│               └─ WorldItem + AISTSimulatorItem（直接呼出）│
+└──────────────────────────────────────────────────────────┘
+```
+
+ZMQ・別プロセス・別スレッド構成が一切不要。
+学習コードと Choreonoid が同一プロセスで動く。
+
 **起動方法**:
 ```bash
-# Choreonoidサーバーを Xvfb でヘッドレス起動
-Xvfb :99 -screen 0 1024x768x24 &
-DISPLAY=:99 choreonoid --python cnoid_sim_server.py &
-
-# PPO学習（Choreonoidバックエンド）
-USE_CHOREONOID=1 python3.9 -m design_opt.train cfg=pusher
+USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
+  choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher num_threads=1
 ```
 
 ### 実装ファイル
 
-#### `khrylib/rl/envs/common/mujoco_env_choreonoid.py` (Python 3.9)
+#### `khrylib/rl/envs/common/mujoco_env_choreonoid.py`
 
-`mujoco_env_gym.py` と **同じ API** を持つ drop-in replacement。
+`mujoco_env_gym.py` と**同じ API** を持つ drop-in replacement。
+以前は ZMQ クライアントだったが、現在は `cnoid` バインディングを直接呼ぶ。
 
-- `ChoreonoidEnv` クラス: `MujocoEnv` と同じインターフェース
-- ZMQ REQ ソケットでサーバーに `load_model`, `reset`, `step`, `set_state` を送信
-- `_ModelProxy`, `_DataProxy`: 既存の env コード（`pusher.py` 等）が `self.model.nq` や `self.data.qpos` にアクセスする部分を透過的に補完
+主要コンポーネント:
 
-#### `khrylib/rl/envs/common/cnoid_sim_server.py` (Python 3.8)
+- **`mujoco_xml_to_urdf()`**: MuJoCo XML → URDF 変換器（旧 `cnoid_sim_server.py` から移設）
+- **`ChoreonoidSimWorld`**: WorldItem + AISTSimulatorItem の管理クラス（同上）
+- **`ChoreonoidEnv`**: `MujocoEnv` 互換クラス。`ChoreonoidSimWorld` を内部に持ち直接呼ぶ
+- **`_ModelProxy`, `_DataProxy`**: 既存 env コードが `self.model.nq` や `self.data.qpos` にアクセスする部分を透過補完
 
-Choreonoid 内で動く ZMQ REP サーバー。
+#### `scripts/choreonoid_train.py`
 
-- **MuJoCo XML → URDF 変換器**: `mujoco_xml_to_urdf()` 関数
-  - capsule/sphere/box ジオメトリ対応
-  - hinge/slide/free 関節対応
-  - 複数関節ボディ（cube の x/y スライド）を仮想リンクで対応
-  - `<collision>` 要素も生成（接触検出に必要）
-- **`ChoreonoidSimWorld`**: WorldItem + AISTSimulatorItem の管理
-  - `sim.setRealtimeSyncMode(3)`: マニュアルモード（外部から1ステップずつ制御）
-  - `sim.tickRequest(True)`: 1ステップ同期実行（RL に適した同期制御）
+`choreonoid --no-window --python` に渡すエントリポイント。
+`sys.argv` を組み立てて `design_opt.train.main()` を呼ぶだけ。
 
-#### `design_opt/envs/pusher.py` (変更: 2行追加のみ)
+#### `scripts/cnoid_transfer.py`（更新済み）
 
-```python
-import os
-if os.environ.get('USE_CHOREONOID', '0') == '1':
-    from khrylib.rl.envs.common.mujoco_env_choreonoid import ChoreonoidEnv as MujocoEnv
-else:
-    from khrylib.rl.envs.common.mujoco_env_gym import MujocoEnv
-```
-
-元の MuJoCo 版は完全に残したまま、環境変数で切り替え可能。
+MuJoCo → Choreonoid 移行の自動化スクリプト。
+旧版は内部で ZMQ サーバーを起動していたが、現在は `choreonoid --no-window --python` を subprocess で呼ぶ。
 
 ---
 
-## フェーズ3: バグ修正と調査
-
-PPO 学習を動かすと報酬値が異常（10^30 オーダー）になる問題が発生。MuJoCo と Choreonoid の数値を詳細比較した。
+## フェーズ3: バグ修正と調査（シミュレーション精度）
 
 ### 修正1: 角速度の誤取得 (`dv` → `w`)
 
@@ -124,24 +117,14 @@ qvel += list(root.v) + list(root.w)
 
 **影響**: `qvel[5] = -9.807`（重力加速度）が角速度として入り、報酬計算が崩壊。
 
----
-
 ### 修正2: Armature（関節慣性）の欠落
 
 **問題**: MuJoCo XML の `<joint armature="1">` は URDF に対応フィールドがない。
 
-```
-MuJoCo dof_armature: [0,0,0,0,0,0, 1.0,1.0,1.0,1.0, 1.0,1.0]
-                                    ↑ 4関節に各1 kg·m² の慣性
-```
-
 armature がないと慣性が ~200 倍小さくなり、関節角が爆発した（11.18 rad → 本来 0.057 rad）。
 
 **解決**: URDF ロード後に Choreonoid API で設定:
-
 ```python
-joint_armatures = {}  # MuJoCo XML から joint名 → armature値を収集
-...
 for i in range(b.numJoints):
     j = b.joint(i)
     arm = joint_armatures.get(j.jointName, 0.0)
@@ -151,12 +134,10 @@ for i in range(b.numJoints):
 
 **効果**: 11.18 rad → 0.099 rad（MuJoCo の 0.057 rad に近づく）。
 
----
-
 ### 修正3: cube の2本目スライド関節の欠落
 
 **問題**: pusher.xml の cube ボディは2本のスライド関節（x/y方向）を持つが、
-変換器が `body_el.find('joint')` で最初の1本しか取っていなかった。
+変換器が1本しか取っていなかった。
 
 ```
 MuJoCo: nq=13, nv=12
@@ -166,20 +147,13 @@ Choreonoid (修正後): nq=13, nv=12  ✅
 
 **解決**: 複数関節ボディを仮想リンクで連結する処理を追加。
 
----
-
 ### 修正4: collision 要素の欠落
 
-**問題**: URDF に `<visual>` しかなく `<collision>` がないと、Choreonoid は接触計算しない。
+**問題**: URDF に `<visual>` しかなく `<collision>` がないと Choreonoid は接触計算しない。
 
 **解決**: 全ジオメトリタイプ（capsule/sphere/box）に `<collision>` 要素を追加。
-capsule は `fromto` 方向に合わせた RPY 回転も計算して付与。
-
----
 
 ### 修正5: capsule 慣性公式の誤り
-
-**問題**: 半球の慣性計算に誤った公式を使用。
 
 ```python
 # 誤: m_cap * (2r²/5 + l²/2 + 3lr/8)
@@ -187,22 +161,18 @@ capsule は `fromto` 方向に合わせた RPY 回転も計算して付与。
 #              ↑ 半球の重心は平面から 3r/8 内側にある
 ```
 
-**影響**: 慣性テンソルが約 1.5 倍に膨張していた。
 **修正後**: MuJoCo の慣性値との誤差 1.6% 以内。
 
 ---
 
-## MuJoCo XML → URDF の情報損失と補完方法
-
-MuJoCo XML には URDF 規格に存在しないフィールドがある。
-変換器（`cnoid_sim_server.py` の `mujoco_xml_to_urdf()`）はそれぞれ以下のように扱っている。
+## MuJoCo XML → URDF の情報損失と補完
 
 ```
 MuJoCo XML の情報
   │
   ├── URDF で表現できるもの（シミュレータ非依存）
   │     質量・慣性テンソル・ジオメトリ・joint damping・関節タイプ・軸・可動域
-  │     → Choreonoid に正確に渡せる（誤差 1.6% 以内）
+  │     → 誤差 1.6% 以内で渡せる
   │
   └── URDF に存在しないもの（シミュレータ固有）
         armature=1       → URDF規格なし → Choreonoid APIで補完（近似）
@@ -212,211 +182,131 @@ MuJoCo XML の情報
         condim/friction  → URDF規格なし → 接触摩擦モデルが消える
 ```
 
-### armature（関節慣性）
-
-MuJoCo の `<joint armature="1">` はロータ慣性（モータの回転子が関節に与える等価慣性）。
-URDF に対応フィールドがないため、**URDF ロード後に Choreonoid API で事後設定する**。
-
-```python
-# 変換器: MuJoCo XML から armature 値を収集
-joint_armatures = {}          # joint名 → armature値
-# ... parse_xml で hinge joint ごとに ...
-joint_armatures[jname] = float(joint_el.get('armature', default_armature))
-
-# Choreonoid ロード後: Body.joint(i).setEquivalentRotorInertia() で適用
-for i in range(b.numJoints):
-    j = b.joint(i)
-    arm = joint_armatures.get(j.jointName, 0.0)
-    if arm > 0:
-        j.setEquivalentRotorInertia(arm)
-```
-
-armature がないと慣性が ~200 倍小さくなり関節角が爆発する（11 rad → 本来 0.057 rad）。
-補完後も実効慣性に ~1.5% の差が残るが、学習上は許容範囲。
-
-### gear ratio（ギア比）
-
-MuJoCo の `<motor gear="150">` はアクチュエータのギア倍率。URDF に対応なし。
-**シミュレーションのステップ実行時に手動で乗算する**。
-
-```python
-# step コマンド受信時
-for jname, ainfo in self.actuators_map.items():
-    j = b.joint(jname)
-    if j is not None:
-        j.u = float(ctrl[i]) * ainfo['gear']   # ctrl × 150 = 実トルク [Nm]
-```
-
-### integrator（積分スキーム）
-
-MuJoCo は `<option integrator="RK4">` で4次のルンゲ・クッタ法を使用。
-Choreonoid の AIST シミュレータは semi-implicit Euler 固定で変更不可。
-
-単独関節の比較:
-
-```
-MuJoCo RK4        : 1.4676 rad/s
-Choreonoid Euler  : 0.9999 rad/s  （同一パラメータ・同一 dt・同一トルク）
-```
-
-積分法の差による誤差は ~1.5% 程度。
-
-### solimp / solref（接触ソルバパラメータ）・condim / friction（摩擦モデル）
-
-MuJoCo XML では接触の柔らかさ・摩擦モデルを詳細に設定できる。
-
-```xml
-<!-- MuJoCo XML 例 -->
-<default>
-  <geom condim="3"                      <!-- 接触自由度: 法線+2摩擦方向 -->
-        friction="1.0 0.5 0.5"          <!-- 接線/転がり/スピン摩擦係数 -->
-        margin="0.01"                   <!-- 接触検出マージン -->
-        solimp="0.9 0.95 0.001"        <!-- 接触柔性（インピーダンス） -->
-        solref="0.02 1.0"/>             <!-- 目標加速度・減衰比 -->
-</default>
-```
-
-これらは **URDF に対応フィールドが存在しない**。Choreonoid の AIST シミュレータは
-独自のペナルティ接触モデルを使うため、同じジオメトリでも接触力が異なる。
-
-pusher 環境では z=0.4 の初期配置で肢キャプセルが cube に食い込んでおり、
-この食い込み接触の解釈がシミュレータごとに異なることが残差 ~32% の主因。
+**結論**: 接触ソルバと積分法の差がある（残差 ~32%）ため、
+MuJoCo 学習済み重みをそのまま転用するより Choreonoid でゼロから再学習する方が確実。
 
 ---
 
-## 調査結果: 残差 ~32% について
+## フェーズ4: Python 3.12 移行に伴う追加修正
 
-全修正を適用後も、MuJoCo と Choreonoid で関節速度に ~32% の差が残った。
+### 修正6: NumPy 2.0 非互換 (`body_a.item()`)
 
-詳細調査の結果、これは **接触モデルの根本的な違い** によるものと判明:
+**問題**: `ctrl[aind] = body_a` が NumPy 2.0 で `ValueError` になる。
 
+`body_a` が shape `(1,)` の配列のとき、スカラー位置への代入は明示的な変換が必要。
+
+```python
+# 修正前
+ctrl[aind] = body_a
+# 修正後
+ctrl[aind] = body_a.item()
 ```
-MuJoCo: z=0.4 初期配置で、肢キャプセルが cube に食い込んでいる
-  → 接触反力が根ボディを逆回転させる (ωy = +5.59 rad/s)
-  → joint_dq (相対速度) が水増しされる
 
-Choreonoid: 接触剛性・ソルバが異なり同じ接触力が再現されない
-  → 根ボディがほぼ動かない (ωy ≈ 0)
-  → joint_dq が実際の肢の動きをそのまま反映
+全 env ファイル（pusher/gap/hopper/ant/walker/swimmer/stair/stairhard）に適用。
+
+### 修正7: wandb の条件付き import
+
+**問題**: `wandb` が NumPy 2.0 非対応でインポート時にクラッシュする。
+`enable_wandb=false` でも import 文は実行されるため影響が出る。
+
+```python
+# 修正後
+try:
+    import wandb
+except Exception:
+    wandb = None
 ```
 
-**MuJoCo XML に存在するが URDF で表現できないパラメータ**:
+### 修正8: Hydra 1.3 対応
 
-| パラメータ | URDF | 状態 |
-|-----------|------|------|
-| 質量・慣性テンソル | `<inertial>` | ✅ 完全に渡せる（誤差1.6%）|
-| joint damping | `<dynamics damping=>` | ✅ 完全 |
-| armature | なし | ⚠️ Choreonoid API で補完（近似）|
-| gear ratio | なし | ✅ 手動補完 |
-| integrator=RK4 | なし | ❌ Choreonoid は別積分法固定（差1.5%）|
-| solimp/solref（接触柔性） | なし | ❌ 渡せない（主因）|
-| condim/friction（摩擦モデル） | なし | ❌ 渡せない |
+**問題**: Hydra 1.2.0 が Python 3.12 の dataclasses の仕様変更で動かない。
 
-**結論**: 「モデル → XML → URDF」の変換で失われる情報は接触ソルバと積分法のパラメータのみ。
-ロボットの構造・物性（質量・慣性・ジオメトリ）は URDF を介して正確に渡せる。
-残差は Choreonoid 固有の接触モデルに起因するため、**Choreonoid 上でゼロから再学習することで回避可能**。
+- `hydra-core` を 1.2.0 → 1.3.2 に更新
+- `design_opt/conf/__init__.py` を新規作成（Hydra 1.3 はモジュールとして認識させる必要がある）
+
+### 修正9: `sim.setRealtimeSyncMode(3)` → `sim.NonRealtimeSync`
+
+**問題**: Choreonoid 2.3 では数値リテラルではなく enum を使う必要がある。
+
+```python
+# 修正前
+sim.setRealtimeSyncMode(3)
+# 修正後
+sim.setRealtimeSyncMode(sim.NonRealtimeSync)
+```
+
+### 修正10: サンプリング後にシミュレーションを停止しない問題
+
+**問題**: eval サンプリングで必要数を収集した後、実行中のエピソードを止めずに Python が抜けると
+Choreonoid がシミュレーションを走らせ続け、プロセスが数分間終了しない。
+
+**解決**: 学習ループ終了後に `env.close()` を呼ぶ。
+
+```python
+# design_opt/train.py の学習ループ末尾
+agent.logger.info('training done!')
+if hasattr(agent, 'env') and hasattr(agent.env, 'close'):
+    agent.env.close()
+```
+
+```python
+# mujoco_env_choreonoid.py
+def close(self):
+    if self._world.is_running:
+        self._world.sim_item.stopSimulation()
+        self._world.is_running = False
+```
+
+**注意**: `close()` をサンプリングループ内（各エポック後）で呼ぶと
+Qt のシグナル連鎖を壊してクラッシュする。学習全体の終了時のみ呼ぶこと。
 
 ---
 
-## フェーズ4: Choreonoid 上での再学習への移行
+## 動作確認結果
 
-MuJoCo と Choreonoid では接触モデル・積分法が異なるため、
-MuJoCo の学習済み重みをそのまま Choreonoid に転用するのは困難。
-**Choreonoid 上でゼロから（または形態のみ引き継いで）再学習する**方針を採る。
-
-### 追加した設定フラグ
-
-**`design_opt/conf/config.yaml`**
-
-```yaml
-reset_epoch: false    # true にするとチェックポイントをロードしてもエポック 0 から再学習
-reset_obs_norm: false # true にするとobs_normを引き継がず再学習（観測スケールが変わるため必要）
-```
-
-### 変更ファイル詳細
-
-#### `design_opt/train.py` — エポックカウンタのリセット
-
-MuJoCo チェックポイントを読み込みつつ Choreonoid 上でエポック 0 から再学習できるようにした。
-
-```python
-load_epoch = int(FLAGS.epoch) if isinstance(FLAGS.epoch, str) and FLAGS.epoch.isnumeric() else FLAGS.epoch
-
-if getattr(FLAGS, 'reset_epoch', False):
-    start_epoch = 0          # ← Choreonoid 再学習時はここ
-else:
-    start_epoch = load_epoch # ← 通常の継続学習
-```
-
-#### `design_opt/agents/genesis_agent.py` — obs_norm のリセット
-
-MuJoCo と Choreonoid では観測値のスケールが異なるため、
-正規化統計を引き継がず再学習するオプションを追加。
-
-```python
-if model_cp['obs_norm'] is not None and cfg.uni_obs_norm \
-        and not cfg.morph_prior and not cfg.reset_obs_norm:
-    self.obs_norm.load_state_dict(model_cp['obs_norm'])
-```
-
-### 移行自動化スクリプト: `scripts/cnoid_transfer.py`
-
-MuJoCo → Choreonoid 移行の一連のワークフローを自動実行する。
+`min_batch_size=500`, `eval_batch_size=200`, 1スレッドでの計測:
 
 ```
-[Step 1] MuJoCo チェックポイントから形態重みだけ引き継ぎ、Choreonoid 上で再学習
-         (morph_prior=true + reset_epoch=true + reset_obs_norm=true)
-
-[Step 2] Choreonoid 報酬 / MuJoCo 報酬 の比率が threshold(default:0.5) を超えるか確認
-         ※ 接触モデルの差により ~30% のスケール差があるため threshold は意図的に低め
-
-[Step 3] 比率が低ければ --auto-scratch でスクラッチ再学習に自動移行
+0  T_sample 4.83  T_update 5.43  T_eval 3.30  exec_R 0.80  exec_R_eps 803.02  pusher
+[WALL] total=12.9s
 ```
 
-**使い方**:
+| 項目 | 時間 |
+|------|------|
+| T_sample（サンプリング） | 4.83秒 |
+| T_update（Stackelberg 勾配更新） | 5.43秒 |
+| T_eval（評価サンプリング） | 3.30秒 |
+| プロセス全体 wall-clock | **12.9秒** |
+
+`min_batch_size=5000` では約 **130秒/エポック** の見込み。
+
+T_sample のボトルネックは URDF ロード（骨格変換ステップごとに発生、約 7回/エピソード）。
+GPU 利用率はネットワーク更新中に 5〜11%（小規模 Transformer のため低め）。
+シミュレーション自体は CPU 専用（Choreonoid）。
 
 ```bash
-# Xvfb + Choreonoid サーバーの起動は自動処理
-# MuJoCo 学習済みディレクトリを指定するだけ
+# 1スレッドで学習（現在推奨）
+USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
+  choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher num_threads=1 \
+  hydra.run.dir=single_run/pusher_cnoid \
+  enable_wandb=false
 
-# 移行学習のみ試す
-python3.9 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher
-
-# 移行品質が低ければ自動でスクラッチ学習も実行
-python3.9 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher --auto-scratch
-
-# エポック指定 + 閾値調整
-python3.9 scripts/cnoid_transfer.py \
-    --mujoco-dir single_run/pusher \
-    --epoch 100 --threshold 0.4 --auto-scratch
+# 評価（チェックポイントから）
+USE_CHOREONOID=1 choreonoid --no-window --python \
+  scripts/eval_cnoid_numerical.py -- \
+  --restore_dir single_run/pusher_cnoid
 ```
-
-### 移行戦略のまとめ
-
-| 方針 | コマンド例 | 適した場面 |
-|------|-----------|-----------|
-| 形態引き継ぎ+再学習 | `morph_prior=true reset_epoch=true` | MuJoCo で良い形態が見つかっている場合 |
-| 完全スクラッチ | `USE_CHOREONOID=1 python3.9 -m design_opt.train` | 最初から Choreonoid で学習する場合 |
-| 自動判断 | `scripts/cnoid_transfer.py --auto-scratch` | どちらが良いか事前に分からない場合 |
 
 ---
 
-## 動作確認
+## 既知の制限と今後の課題
 
-```bash
-# Choreonoid サーバー起動
-Xvfb :99 &; DISPLAY=:99 choreonoid --python .../cnoid_sim_server.py &
-
-# 小バッチでの動作確認（3エポック完走）
-USE_CHOREONOID=1 python3.9 -m design_opt.train cfg=pusher \
-    min_batch_size=200 eval_batch_size=100 num_threads=1
-
-# 出力例
-# Evaluation: [body_0, body_1, ..., body_114, body_214]  ← 形態が変化
-# 0  T_sample 13.5  T_update 10.5  exec_R 84.81  pusher
-# 1  T_sample 13.1  T_update 9.5   exec_R 202.49
-```
-
-形態が `body_11`, `body_114`, `body_214` などに変化していることから、
-**MuJoCo XML で生成された URDF が Choreonoid 上で動的にロードされていることが確認できた**。
-これが第一フェーズのゴールとして設定していたマイルストーン。
+| 項目 | 状態 |
+|------|------|
+| シングルスレッド学習 | ✅ 動作確認済み（12.9s/epoch で 500steps）|
+| マルチスレッド学習 (`num_threads>1`) | 🔜 spawn + 永続ワーカー方式で実装予定 |
+| `fork()` ベースのマルチプロセス | ❌ Qt / CUDA が fork 後に壊れる |
+| 正常終了 (`B.App.exit()`) | ⚠️ ハング気味、`Ctrl+C` 推奨 |
+| gym → gymnasium 移行 | ⚠️ NumPy 2.0 警告あり（動作に支障なし）|
+| URDF キャッシュ | 🔜 骨格変換ごとの再ロードを削減できる余地あり |
