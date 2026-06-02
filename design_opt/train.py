@@ -7,7 +7,10 @@ from khrylib.utils import *
 from design_opt.utils.config import Config
 from design_opt.agents.genesis_agent import BodyGenAgent
 from design_opt.utils.tools import set_global_seed
-import wandb
+try:
+    import wandb
+except Exception:
+    wandb = None
 import hydra
 from omegaconf import DictConfig
 
@@ -53,6 +56,8 @@ def main_loop(FLAGS, job_dir):
             torch.cuda.empty_cache()
 
         agent.logger.info('training done!')
+        if hasattr(agent, 'env') and hasattr(agent.env, 'close'):
+            agent.env.close()
 
 
 @hydra.main(version_base="1.2", config_path="conf", config_name="config")

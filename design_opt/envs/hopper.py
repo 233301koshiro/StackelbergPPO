@@ -107,7 +107,7 @@ class HopperEnv(MujocoEnv, utils.EzPickle):
         for body, body_a in zip(self.robot.bodies[1:], a[1:]):
             aname = body.get_actuator_name()
             aind = self.model.actuator_names.index(aname)
-            ctrl[aind] = body_a
+            ctrl[aind] = body_a.item()
         return ctrl        
 
     def step(self, a):
