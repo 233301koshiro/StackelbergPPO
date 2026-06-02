@@ -49,45 +49,71 @@ source ~/.bashrc
 
 ## 🚀 Quick Start
 
-**Single environment training**
+### MuJoCo backend (original)
 
-To train a single environment:
 ```bash
 OMP_NUM_THREADS=1 python -m design_opt.train cfg=pusher
 ```
-**Available environments**: cheetah, crawler, glider-hard, glider-medium, glider-regular, pusher, stepper-hard, stepper, swimmer, terraincrosser, walker-hard, walker-medium, walker-regular
 
-Customize the output directory:
+### Choreonoid backend (`akita_sp` Docker image)
+
+Training runs inside the Choreonoid process because the simulator requires the Qt application context:
+
 ```bash
-OMP_NUM_THREADS=1 python -m design_opt.train cfg=pusher hydra.run.dir="single_run/pusher"
+USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
+  choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher num_threads=1 hydra.run.dir=single_run/pusher_cnoid
 ```
+
+**Available environments**: cheetah, crawler, glider-hard, glider-medium, glider-regular, pusher, stepper-hard, stepper, swimmer, terraincrosser, walker-hard, walker-medium, walker-regular
 
 ## ⚙️ Advanced Usage
 
 **Resume training from checkpoint**
 
-Continue training from a previous checkpoint:
-
 ```bash
+# MuJoCo
 OMP_NUM_THREADS=1 python -m design_opt.train cfg=pusher +restore_dir="single_run/test"
+
+# Choreonoid
+USE_CHOREONOID=1 choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher num_threads=1 +restore_dir=single_run/test
 ```
+
 Load only the morphology prior without controller weights:
 ```bash
-OMP_NUM_THREADS=1 python -m design_opt.train cfg=pusher +restore_dir="single_run/test" morph_prior=true
+# Choreonoid scratch training with morphology transfer from MuJoCo checkpoint
+USE_CHOREONOID=1 choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher num_threads=1 \
+  +restore_dir=single_run/pusher morph_prior=true reset_epoch=true
 ```
-**Visualization and evaluation**
 
-Visualize learned policies from a checkpoint:
+**MuJoCo → Choreonoid migration**
+
 ```bash
-python design_opt/eval.py --restore_dir single_run/pusher
+python3 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher
+python3 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher --auto-scratch
+```
+
+**Evaluation (Choreonoid)**
+
+```bash
+USE_CHOREONOID=1 choreonoid --no-window --python \
+  scripts/eval_cnoid_numerical.py -- \
+  --restore_dir single_run/pusher_cnoid --num_episodes 5
 ```
 
 **Configuration**
 
-This project uses Hydra for configuration management. Key configuration files are located in the design_opt/conf/config.yaml directory. Modify configurations either through YAML files or command-line overrides:
+This project uses Hydra for configuration management. Key configuration files are located in `design_opt/conf/`. Modify via YAML files or command-line overrides:
 
 ```bash
+# MuJoCo
 python -m design_opt.train cfg=pusher lamda=5 gradient_ratio_limit=1.0
+
+# Choreonoid
+choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher lamda=5 gradient_ratio_limit=1.0 num_threads=1
 ```
 
 ## 📊 Visualization and Results

@@ -152,18 +152,27 @@ Stackelberg:  形を決める時点で「この形なら動きはこうなる」
 
 ---
 
-## 補足: Choreonoid の Python 3.8 制約について
+## 補足: シミュレーターバックエンドについて
 
-移行作業の中で「ChoreonoidのPythonバインディングはPython 3.8専用」という制約が出てきた。これは**Choreonoid自体の制限ではなく、研究室のDockerイメージが Python 3.8 ベースでビルドされているから**。
-
-Choreonoid本体はC++で書かれており、PythonバインディングはビルドするPythonバージョンに合わせてコンパイルされる。原理的には3.9でも3.12でも作れる。
-
-研究室提供の`irsl_system` DockerイメージはUbuntu 20.04ベース（システムPythonが3.8）で構築されており、そこにビルドされたChoreonoidのバインディングも3.8になっている。
+このシステムは `USE_CHOREONOID=1` 環境変数で MuJoCo と Choreonoid を切り替えられる。
 
 ```
-制約の原因
-  Choreonoid自体の制限         → ✗（どのPythonバージョンでもビルド可能）
-  研究室のDockerイメージが3.8  → ✓ こっちが原因
+USE_CHOREONOID=0（デフォルト）  → mujoco_env_gym.py    → MuJoCo で物理演算
+USE_CHOREONOID=1               → mujoco_env_choreonoid.py → Choreonoid で物理演算
 ```
 
-もし`irsl_system`をPython 3.9以降ベースで作り直してChoreonoidを再ビルドすれば、Python 3.9から直接Choreonoidを呼べるようになり、今回の「ZMQ 2プロセス構成」という迂回が不要になる。ただしそれは研究室のDockerインフラ全体の再構築になるため、今回は既存環境をそのまま使う方針をとった。
+**現在の推奨**: Choreonoid バックエンド（`akita_sp` Docker イメージ）。
+MuJoCo バイナリは不要。
+
+**起動方法**（Choreonoidバックエンド）:
+```bash
+USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
+  choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher num_threads=1
+```
+
+**なぜ `choreonoid --no-window --python` が必要か**:
+`mujoco_env_choreonoid.py` は内部で `WorldItem`・`AISTSimulatorItem` を作成する。
+これらは Choreonoid の Qt アプリケーションコンテキストが必要なため、
+`choreonoid` プロセスの中で実行しなければならない。
+通常の `python3` では segfault になる。
