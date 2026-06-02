@@ -57,12 +57,13 @@ OMP_NUM_THREADS=1 python -m design_opt.train cfg=pusher
 
 ### Choreonoid backend (`akita_sp` Docker image)
 
-Training runs inside the Choreonoid process because the simulator requires the Qt application context:
+Training runs inside the Choreonoid process because the simulator requires the Qt application context.
+4 workers is the recommended setting (5x sampling speedup over single-thread, GPU avg 61%):
 
 ```bash
 USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
   choreonoid --no-window --python scripts/choreonoid_train.py \
-  cfg=pusher num_threads=1 hydra.run.dir=single_run/pusher_cnoid
+  cfg=pusher num_threads=4 hydra.run.dir=single_run/pusher_cnoid
 ```
 
 **Available environments**: cheetah, crawler, glider-hard, glider-medium, glider-regular, pusher, stepper-hard, stepper, swimmer, terraincrosser, walker-hard, walker-medium, walker-regular
