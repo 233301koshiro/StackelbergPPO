@@ -113,7 +113,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             aname = body.get_actuator_name()
             if aname in self.model.actuator_names:
                 aind = self.model.actuator_names.index(aname)
-                ctrl[aind] = body_a
+                ctrl[aind] = body_a.item()
         return ctrl        
 
     def step(self, a):
