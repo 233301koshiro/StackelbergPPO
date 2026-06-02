@@ -7,6 +7,7 @@ import numpy as np
 class Config:
 
     def __init__(self, FLAG, project_path, job_dir):
+        self._flags = FLAG          # OmegaConf DictConfig をそのまま保持（ワーカー直列化用）
         cfg_id = FLAG.cfg
         self.id = cfg_id
         self.project_path = project_path

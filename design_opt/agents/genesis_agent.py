@@ -66,6 +66,13 @@ class BodyGenAgent(AgentPPO):
                          policy_grad_clip=[(self.policy_net.parameters(), 40)],
                          use_mini_batch=cfg.mini_batch_size < cfg.min_batch_size, mini_batch_size=cfg.mini_batch_size)
 
+        # Choreonoid 専用: spawn + 永続ワーカープロセスによる並列サンプリング
+        self._worker_pool = None
+        if os.environ.get('USE_CHOREONOID', '0') == '1' and num_threads > 1 and training:
+            from design_opt.utils.worker_pool import ChoreonoidWorkerPool
+            project_path = cfg.project_path
+            self._worker_pool = ChoreonoidWorkerPool(num_threads, cfg, project_path)
+
     ## Setting Ups        
     def setup_env(self):
         env_class = env_dict[self.cfg.env_name]
@@ -127,15 +134,32 @@ class BodyGenAgent(AgentPPO):
         if self.cfg.uni_obs_norm:
             self.obs_norm.eval()
             self.obs_norm.to('cpu')
-        
+
+        # Choreonoid マルチワーカー: spawn + 永続プロセス方式
+        if self._worker_pool is not None and not render:
+            with to_cpu(*self.sample_modules):
+                with torch.no_grad():
+                    traj_batch, logger = self._worker_pool.sample(
+                        min_batch_size=min_batch_size,
+                        mean_action=mean_action,
+                        policy_net=self.policy_net,
+                        obs_norm=self.obs_norm,
+                        traj_cls=self.traj_cls,
+                        logger_cls=self.logger_cls,
+                        logger_kwargs=self.logger_kwargs,
+                    )
+            logger.sample_time = time.time() - t_start
+            return traj_batch, logger
+
+        # シングルスレッド or MuJoCo の従来パス
         with to_cpu(*self.sample_modules):
             with torch.no_grad():
-                thread_batch_size = int(math.floor(min_batch_size / nthreads)) 
+                thread_batch_size = int(math.floor(min_batch_size / nthreads))
                 queue = multiprocessing.Queue()
                 memories = [None] * nthreads
-                loggers = [None] * nthreads
-                for i in range(nthreads-1):
-                    worker_args = (i+1, queue, thread_batch_size, mean_action, render)
+                loggers  = [None] * nthreads
+                for i in range(nthreads - 1):
+                    worker_args = (i + 1, queue, thread_batch_size, mean_action, render)
                     worker = multiprocessing.Process(target=self.sample_worker, args=worker_args)
                     worker.start()
                 memories[0], loggers[0] = self.sample_worker(0, None, thread_batch_size, mean_action, render)
