@@ -56,6 +56,8 @@ def main_loop(FLAGS, job_dir):
             torch.cuda.empty_cache()
 
         agent.logger.info('training done!')
+        if hasattr(agent, '_worker_pool') and agent._worker_pool is not None:
+            agent._worker_pool.close()
         if hasattr(agent, 'env') and hasattr(agent.env, 'close'):
             agent.env.close()
 
