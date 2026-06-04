@@ -92,7 +92,11 @@ USE_CHOREONOID=1 \
   choreonoid --no-window --python scripts/eval_cnoid_numerical.py -- \
   --restore_dir single_run/pusher_cnoid --num_episodes 10
 
-# 可視化（mp4 保存）
+# Choreonoid GUI ビューアでリアルタイム再生（ウィンドウが開く）
+vglrun choreonoid --python scripts/eval_cnoid_viewer.py -- \
+  --restore_dir single_run/pusher_cnoid --fps 25 --episodes 3
+
+# 可視化（mp4 保存・ウィンドウ不要）
 USE_CHOREONOID=1 \
   choreonoid --no-window --python scripts/eval_cnoid_visual.py -- \
   --restore_dir single_run/pusher_cnoid \
