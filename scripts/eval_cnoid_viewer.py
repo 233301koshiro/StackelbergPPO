@@ -32,16 +32,20 @@ from design_opt.utils.config import Config
 from design_opt.agents.genesis_agent import BodyGenAgent, tensorfy
 from design_opt.utils.tools import set_global_seed
 
-# ---- 引数パース -------------------------------------------------------
-parser = argparse.ArgumentParser()
-parser.add_argument('--restore_dir', type=str, required=True)
-parser.add_argument('--epoch',    default='best')
-parser.add_argument('--fps',      type=int, default=25)
-parser.add_argument('--episodes', type=int, default=3,
-                    help='再生エピソード数（0 で無限ループ）')
-args = parser.parse_args()
+# ---- 引数: 環境変数から取得（choreonoid は sys.argv を渡さないため）-------
+# 例: VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=25 choreonoid --python ...
+restore_dir = os.environ.get('VIEWER_RESTORE_DIR', '')
+if not restore_dir:
+    print('[viewer] ERROR: VIEWER_RESTORE_DIR を設定してください')
+    import os as _os; _os._exit(1)
 
-step_interval = 1.0 / args.fps   # 各シミュレーションステップの待ち時間
+class args:
+    restore_dir = os.environ.get('VIEWER_RESTORE_DIR', '')
+    epoch       = os.environ.get('VIEWER_EPOCH', 'best')
+    fps         = int(os.environ.get('VIEWER_FPS', '25'))
+    episodes    = int(os.environ.get('VIEWER_EPISODES', '3'))
+
+step_interval = 1.0 / args.fps
 
 # ---- 設定読み込み -------------------------------------------------------
 project_path = os.getcwd()
