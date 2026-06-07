@@ -4,9 +4,9 @@
 mp4 動画として保存する。Choreonoid の GUI ウィンドウ不要。
 
 使い方:
+  EVAL_RESTORE_DIR=single_run/pusher_cnoid \
   USE_CHOREONOID=1 choreonoid --no-window --python \
-      scripts/eval_cnoid_visual.py -- \
-      --restore_dir single_run/pusher_cnoid --output out/videos/pusher_cnoid.mp4
+      scripts/eval_cnoid_visual.py
 
 描画内容:
   - 各ロボットボディ → 青い球
@@ -15,7 +15,6 @@ mp4 動画として保存する。Choreonoid の GUI ウィンドウ不要。
   - 骨格のエッジ（親子リンク）→ 青い線
 """
 
-import argparse
 import os
 import sys
 sys.path.append(os.getcwd())
@@ -29,9 +28,15 @@ from omegaconf import OmegaConf
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401 — registers '3d' projection
 import matplotlib.animation as animation
+
+# Use imageio-ffmpeg bundled binary if system ffmpeg is unavailable
+try:
+    import imageio_ffmpeg
+    matplotlib.rcParams['animation.ffmpeg_path'] = imageio_ffmpeg.get_ffmpeg_exe()
+except ImportError:
+    pass
 
 from khrylib.utils import *
 from design_opt.utils.config import Config
@@ -40,15 +45,24 @@ from design_opt.utils.tools import set_global_seed
 
 project_path = os.getcwd()
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--restore_dir', type=str, required=True)
-parser.add_argument('--epoch', default='best')
-parser.add_argument('--output', type=str, default=None,
-                    help='出力 mp4 パス（省略時: {restore_dir}/eval_visual.mp4）')
-parser.add_argument('--fps', type=int, default=20)
-parser.add_argument('--max_exec_steps', type=int, default=200,
-                    help='実行ステージの最大ステップ数')
-args = parser.parse_args()
+# Read parameters from environment variables
+# EVAL_RESTORE_DIR:     required
+# EVAL_EPOCH:           checkpoint to load (default: best)
+# EVAL_OUTPUT:          output mp4 path (default: {restore_dir}/eval_visual.mp4)
+# EVAL_FPS:             frames per second (default: 20)
+# EVAL_MAX_EXEC_STEPS:  max execution stage steps (default: 200)
+class args:
+    restore_dir    = os.environ.get('EVAL_RESTORE_DIR')
+    epoch          = os.environ.get('EVAL_EPOCH', 'best')
+    output         = os.environ.get('EVAL_OUTPUT', None)
+    fps            = int(os.environ.get('EVAL_FPS', '20'))
+    max_exec_steps = int(os.environ.get('EVAL_MAX_EXEC_STEPS', '200'))
+
+if not args.restore_dir:
+    print("Error: EVAL_RESTORE_DIR environment variable is required.")
+    print("Usage: EVAL_RESTORE_DIR=single_run/pusher_cnoid USE_CHOREONOID=1 "
+          "choreonoid --no-window --python scripts/eval_cnoid_visual.py")
+    sys.exit(1)
 
 out_path = args.output or os.path.join(args.restore_dir, 'eval_visual.mp4')
 os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
