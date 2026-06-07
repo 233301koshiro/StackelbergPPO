@@ -326,6 +326,58 @@ Worker N（同上）
 
 ---
 
+## Choreonoid 起動・エピソードリセット時のログ解説
+
+`choreonoid --python` で GUI ビューアを動かすと、エピソードリセット（`env.reset()`）のたびに以下のメッセージが大量に出力される。1かたまりが1エピソードリセット分。
+
+```
+Loading Body "/tmp/tmp1d57gp00.urdf"
+Debug: link "world" has no inertial data.
+...
+Warning: 'dynamics' tag is currently not supported.
+...（関節数分繰り返し）
+ -> ok!
+Simulation by AISTSimulator has finished at 0.02 [s].
+Computation time is 0.542 [s], computation time / simulation time = 27.1.
+Simulation by AISTSimulator has started.
+```
+
+### 各メッセージの意味
+
+| メッセージ | 意味 | 問題か？ |
+|-----------|------|---------|
+| `Loading Body "/tmp/tmpXXXX.urdf"` | エピソードごとに MuJoCo XML → URDF 変換した一時ファイルをロード | 正常 |
+| `Debug: link "world" has no inertial/visual/collision data` | `world` リンクは固定参照フレームで質量・形状なしが正常 | 正常 |
+| `Debug: link "cube_virt0" has no inertial/visual/collision data` | cube の2本スライド関節をつなぐ仮想リンク（質量ゼロが意図的） | 正常 |
+| `Warning: 'dynamics' tag is currently not supported.` ×N | URDF の `<dynamics>` タグ（damping/friction）が Choreonoid パーサー未対応。関節数分繰り返される | 無害（API で別途設定済み）|
+| `-> ok!` | URDF ロード完了 | 正常 |
+| `Simulation by AISTSimulator has finished at 0.02 [s].` | 初期化用の極短いシミュレーション完了。初回は初期化コストで実時間の数十倍かかる | 正常 |
+| `Simulation by AISTSimulator has started.` | 本番エピソード開始 | 正常 |
+
+### ボディ名の命名規則
+
+ログに出る `bodies=['0', '1', '11', '12', '111', ...]` はロボットのツリー構造をエンコードしたもの（[xml_robot.py の `reindex()` メソッド](../khrylib/robot/xml_robot.py)）。
+
+```
+ルール: 子の名前 = str(自分が親の何番目の子か) + 親の名前（ルートは '0' で除く）
+```
+
+```
+'0'              ← ルート（胴体）
+├── '1'          ← ルートの1番目の子
+│   ├── '11'     ← '1' の1番目の子（"1" + "1"）
+│   │   ├── '111'   ← '11' の1番目の子
+│   │   └── '211'   ← '11' の2番目の子（"2" + "11"）
+│   ├── '12', '13', '14'
+├── '2'
+│   ├── '22', '23', '24'
+├── '3', '4'
+```
+
+pusher の `index_base = 5`（最大4子まで許容）はこの名前を5進数として `int(name, base=5)` で観測ベクトルのインデックスに変換するために使用される。
+
+---
+
 ## 既知の制限
 
 | 項目 | 状態 |

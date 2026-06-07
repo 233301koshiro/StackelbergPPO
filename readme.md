@@ -86,22 +86,37 @@ USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
 
 ## 評価
 
+> **注意**: choreonoid は `--` を引数終端マーカーとして扱わない。
+> eval スクリプトへのパラメータは**環境変数**で渡す。
+
 ```bash
 # 数値評価（cube が押せているかを確認）
-USE_CHOREONOID=1 \
-  choreonoid --no-window --python scripts/eval_cnoid_numerical.py -- \
-  --restore_dir single_run/pusher_cnoid --num_episodes 10
-
-# Choreonoid GUI ビューアでリアルタイム再生（ウィンドウが開く）
-vglrun choreonoid --python scripts/eval_cnoid_viewer.py -- \
-  --restore_dir single_run/pusher_cnoid --fps 25 --episodes 3
+EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=5 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_numerical.py
 
 # 可視化（mp4 保存・ウィンドウ不要）
-USE_CHOREONOID=1 \
-  choreonoid --no-window --python scripts/eval_cnoid_visual.py -- \
-  --restore_dir single_run/pusher_cnoid \
-  --output single_run/pusher_cnoid/eval.mp4
+EVAL_RESTORE_DIR=single_run/pusher_cnoid \
+EVAL_OUTPUT=single_run/pusher_cnoid/eval_visual.mp4 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
+
+# Choreonoid GUI ビューアでリアルタイム再生（VirtualGL が必要・詳細は docs/choreonoid_gui_issue.md）
+VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=25 VIEWER_EPISODES=3 \
+  vglrun choreonoid --python scripts/eval_cnoid_viewer.py
 ```
+
+環境変数一覧:
+
+| スクリプト | 変数 | デフォルト | 説明 |
+|-----------|------|-----------|------|
+| numerical | `EVAL_RESTORE_DIR` | （必須）| 学習ディレクトリ |
+| numerical | `EVAL_EPOCH` | `best` | チェックポイント |
+| numerical | `EVAL_NUM_EPISODES` | `5` | エピソード数 |
+| visual | `EVAL_RESTORE_DIR` | （必須）| 学習ディレクトリ |
+| visual | `EVAL_OUTPUT` | `{restore_dir}/eval_visual.mp4` | 出力パス |
+| visual | `EVAL_FPS` | `20` | フレームレート |
+| viewer | `VIEWER_RESTORE_DIR` | （必須）| 学習ディレクトリ |
+| viewer | `VIEWER_FPS` | `25` | 再生フレームレート |
+| viewer | `VIEWER_EPISODES` | `3` | エピソード数（0=無限）|
 
 ---
 
