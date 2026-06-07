@@ -245,13 +245,119 @@ RUN apt-get install -y libnvidia-gl-<version>
 
 ---
 
-## 現在の回避策
+## 追加調査結果（2026-06-05〜06-07）
 
-GUI 表示の代わりに matplotlib で mp4 動画を生成する方法が動作確認済み。
+### choreonoid の `--` 引数区切りは機能しない
+
+README に記載していた評価コマンドの形式：
 
 ```bash
-USE_CHOREONOID=1 \
-  choreonoid --no-window --python scripts/eval_cnoid_visual.py -- \
-  --restore_dir single_run/pusher_cnoid \
-  --output single_run/pusher_cnoid/videos/best_policy.mp4
+choreonoid --no-window --python scripts/eval_cnoid_numerical.py -- \
+  --restore_dir single_run/pusher_cnoid --num_episodes 10
 ```
+
+`--` を使っても choreonoid は `--restore_dir` を**自分のオプション**として解釈してクラッシュする。
+`--` は choreonoid の引数終端マーカーとして機能しない。
+
+**修正**: eval スクリプトを argparse から環境変数読み込みに変更した。
+
+```bash
+# 正しい数値評価コマンド
+EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=5 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_numerical.py
+
+# 正しい可視化コマンド
+EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_OUTPUT=single_run/pusher_cnoid/eval_visual.mp4 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
+```
+
+### mpl_toolkits のバージョン競合
+
+システム版 mpl_toolkits（`/usr/lib/python3/dist-packages/mpl_toolkits/`）の `__init__.py` が
+pip 版 matplotlib 3.10.9 と競合し `matplotlib.tri.triangulation` が見つからないエラーが出た。
+
+**修正**: システム版の `__init__.py` を無効化（`.bak` にリネーム）することで namespace package として
+pip 版が優先されるようにした。
+
+```bash
+mv /usr/lib/python3/dist-packages/mpl_toolkits/__init__.py \
+   /usr/lib/python3/dist-packages/mpl_toolkits/__init__.py.bak
+```
+
+### GUI ビューア（eval_cnoid_viewer.py）の動作確認結果
+
+#### `__GLX_VENDOR_LIBRARY_NAME=nvidia` による改善（2026-06-07）
+
+コンテナ内には GLVND（GL Vendor-Neutral Dispatch）が導入されており、`libGLX_nvidia.so.0` も存在する。
+`__GLX_VENDOR_LIBRARY_NAME=nvidia` を設定することで、Mesa ではなく NVIDIA の GLX ベンダーを選択できる。
+
+```bash
+DISPLAY=:1 __GLX_VENDOR_LIBRARY_NAME=nvidia \
+  VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=15 VIEWER_EPISODES=0 \
+  VIEWER_LOG=/tmp/cnoid_viewer.log USE_CHOREONOID=1 \
+  /choreonoid_ws/install/bin/choreonoid --python scripts/eval_cnoid_viewer.py
+```
+
+この設定で **choreonoid GUI が起動し、シミュレーションが複数エピソード完走**することを確認。
+
+```
+[viewer] Ep 1: reward=809.8  steps=1006  bodies=[...]
+[viewer] Ep 2: reward=739.2  steps=1006  bodies=[...]
+[viewer] Ep 3: reward=17.8   steps=32   bodies=[...]
+```
+
+3D シーンが実際にモニターに描画されているかは**モニター直視でのみ確認可能**（コンテナ外から確認手段なし）。
+
+#### Python stdout のキャプチャ方法
+
+GUI モードでは Python の stdout が Choreonoid の Message View に行き端末に出ない。
+`eval_cnoid_viewer.py` に `sys.stdout` を `_Tee` クラスでファイルにも書き出す処理を追加した。
+
+```python
+# VIEWER_LOG 環境変数でログパスを指定（デフォルト: /tmp/cnoid_viewer.log）
+VIEWER_LOG=/tmp/cnoid_viewer.log ... choreonoid --python scripts/eval_cnoid_viewer.py
+```
+
+#### まとめ
+
+| 項目 | 結果 |
+|------|------|
+| `choreonoid --python` で Python スクリプトは動作するか | ✅ 動作する（起動に 30〜50 秒かかる）|
+| Python の stdout を端末で見られるか | ✅ `VIEWER_LOG` ファイルにリダイレクト済み |
+| `cnoid.IRSLUtil.processEvent()` は動作するか | ✅ 動作する |
+| シミュレーション複数エピソードは完走するか | ✅ 動作確認済み |
+| シーンビューの 3D 描画 | `__GLX_VENDOR_LIBRARY_NAME=nvidia` で起動はするが<br>実際の描画状態はモニター直視のみで確認可能 |
+
+---
+
+## 現在の回避策
+
+### 1. 数値評価（推奨・動作確認済み）
+
+```bash
+EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=5 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_numerical.py
+```
+
+**epoch=best チェックポイントでの結果（2026-06-05 実施）:**
+
+| エピソード | 報酬 | cube +x 変位 | 成否 |
+|-----------|------|-------------|------|
+| 0 | 801.05 | -0.0723 m | ✗ |
+| 1 | 131.98 | +2.1293 m | ✓ |
+| 2 | 56.32 | +0.5638 m | ✓ |
+| 3 | 762.59 | +0.7124 m | ✓ |
+| 4 | 232.55 | +1.9121 m | ✓ |
+| **平均** | **396.9** | **+1.04 m** | **4/5 (80%)** |
+
+### 2. matplotlib による 3D 可視化 mp4
+
+```bash
+EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_OUTPUT=single_run/pusher_cnoid/eval_visual.mp4 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
+```
+
+ロボットボディの座標を Choreonoid シミュレーションから取得し、matplotlib 3D で再現した mp4 を生成する。
+Choreonoid の実際の 3D レンダリングではないが、ポリシーの動作確認には使用可能。
+
+生成済み: `single_run/pusher_cnoid/eval_visual.mp4`（791 KB）

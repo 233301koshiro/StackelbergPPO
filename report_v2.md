@@ -215,11 +215,15 @@ save_model_interval: 10  # 10エポックごとにチェックポイント保存
 
 ```
 scripts/
-  choreonoid_train.py      ← choreonoid --no-window --python 用エントリポイント
-  worker_sampler.py        ← 永続ワーカープロセスのサンプリングループ
+  choreonoid_train.py        ← choreonoid --no-window --python 用エントリポイント
+  worker_sampler.py          ← 永続ワーカープロセスのサンプリングループ
+  eval_cnoid_numerical.py    ← 数値評価（cube 変位・報酬・成功率）
+  eval_cnoid_visual.py       ← matplotlib 3D アニメーション mp4 生成
+  eval_cnoid_viewer.py       ← Choreonoid GUI リアルタイムビューア（OpenGL 要件あり）
+  plot_rewards.py            ← 学習ログから報酬推移グラフ（PNG）を生成
 design_opt/
-  utils/worker_pool.py     ← ChoreonoidWorkerPool クラス
-  conf/__init__.py         ← Hydra 1.3 のモジュール解決に必要
+  utils/worker_pool.py       ← ChoreonoidWorkerPool クラス
+  conf/__init__.py           ← Hydra 1.3 のモジュール解決に必要
 ```
 
 ### 書き直し
@@ -267,51 +271,89 @@ USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
   hydra.run.dir=single_run/pusher_cnoid \
   enable_wandb=false
 
-# チェックポイントから再開
+# チェックポイントから再開（例: epoch 960 から）
 USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
   choreonoid --no-window --python scripts/choreonoid_train.py \
   cfg=pusher num_threads=4 \
   hydra.run.dir=single_run/pusher_cnoid \
-  +restore_dir=single_run/pusher_cnoid \
+  +restore_dir=single_run/pusher_cnoid epoch=960 max_epoch_num=2000 \
   enable_wandb=false
 
-# 数値評価
-USE_CHOREONOID=1 choreonoid --no-window --python \
-  scripts/eval_cnoid_numerical.py -- \
-  --restore_dir single_run/pusher_cnoid --num_episodes 10
+# 数値評価（環境変数でパラメータを渡す — choreonoid は "--" を解釈しないため）
+EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=10 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_numerical.py
+
+# 可視化（mp4 生成）
+EVAL_RESTORE_DIR=single_run/pusher_cnoid \
+EVAL_OUTPUT=single_run/pusher_cnoid/eval_visual.mp4 \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
+
+# 報酬推移グラフ生成
+python3 scripts/plot_rewards.py single_run/pusher_cnoid
 
 # MuJoCo → Choreonoid 移行
 python3 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher
 ```
 
+> **注意**: `choreonoid` は `--` を引数終端マーカーとして扱わない。eval スクリプトへのパラメータは環境変数で渡すこと（詳細: `docs/choreonoid_gui_issue.md`）。
+
 チェックポイントは `single_run/pusher_cnoid/models/` に `epoch_XXXX.p`（10エポックごと）と `best.p`（最高報酬更新時）で保存される。
 
 ---
 
-## 9. 現在の学習状態（2026-06-02）
+## 9. 学習の進捗（2026-06-07 現在）
 
 ```
 設定: cfg=pusher, num_threads=4, min_batch_size=50000（デフォルト）
-      eval_batch_size=10000
-稼働中: PID 1213201（メイン）+ ワーカー 4個
+      eval_batch_size=10000, max_epoch_num=2000
+
+セッション1: epoch 0 → 960    （2026-06-02〜）
+セッション2: epoch 960 → 2000  （2026-06-05〜, 学習中）
 
 1エポックあたりの所要時間:
-  T_sample  ~49s   （4ワーカー並列シミュレーション）
-  T_update  ~275s  （Stackelberg 勾配計算・GPU）
+  T_sample  ~43s   （4ワーカー並列シミュレーション）
+  T_update  ~225s  （Stackelberg 勾配計算・GPU）
   T_eval    ~10s
-  合計      ~330s ≈ 6分/エポック
+  合計      ~280s ≈ 5分/エポック
 
-報酬推移（exec_R_eps）:
-  Epoch 0: 101.9
-  Epoch 2: 254.4  ← 最高（best.p 保存）
-  Epoch 8: 137.1  （現在も上下しながら序盤の探索中）
-
-ETA: 残り ~3日20時間（1000エポックまで）
+現在の到達エポック: 1607 / 2000
+ETA: 残り ~1日6時間（2026-06-08 完了予定）
 ```
+
+報酬推移グラフ: `single_run/pusher_cnoid/reward_plot.png`（`scripts/plot_rewards.py` で生成）
+
+| 指標 | 最大値 | 最終エポック値（epoch 1607）|
+|------|--------|--------------------------|
+| exec_R_eps | 1284.8 | 729.6 |
+| train_R_eps | — | 741.6 |
 
 ---
 
-## 10. 既知の制限
+## 10. 評価結果（2026-06-05 実施、best.p チェックポイント）
+
+### 数値評価（eval_cnoid_numerical.py）
+
+`EVAL_NUM_EPISODES=5` で実施。
+
+| エピソード | 報酬 | cube +x 変位 | 成否 |
+|-----------|------|-------------|------|
+| 0 | 801.05 | -0.0723 m | ✗ |
+| 1 | 131.98 | +2.1293 m | ✓ |
+| 2 | 56.32 | +0.5638 m | ✓ |
+| 3 | 762.59 | +0.7124 m | ✓ |
+| 4 | 232.55 | +1.9121 m | ✓ |
+| **平均** | **396.9** | **+1.04 m** | **4/5 (80%)** |
+
+### 可視化（eval_cnoid_visual.py）
+
+matplotlib 3D でロボットボディ座標を再現した mp4 を生成。  
+出力: `single_run/pusher_cnoid/eval_visual.mp4`（791 KB, 206 フレーム）
+
+> Choreonoid 自体の 3D レンダリングは OpenGL/Mesa 不一致により現在未対応（詳細: `docs/choreonoid_gui_issue.md`）。
+
+---
+
+## 11. 既知の制限
 
 | 項目 | 状態 |
 |------|------|
