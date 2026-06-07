@@ -4,9 +4,9 @@
 cube が実際に +x 方向に押せているかを確認する。
 
 使い方:
+  EVAL_RESTORE_DIR=single_run/pusher_cnoid \
   USE_CHOREONOID=1 choreonoid --no-window --python \
-      scripts/eval_cnoid_numerical.py -- \
-      --restore_dir single_run/pusher_cnoid --num_episodes 5
+      scripts/eval_cnoid_numerical.py
 
 出力:
   - 各エポードの cube 移動距離・報酬
@@ -14,7 +14,6 @@ cube が実際に +x 方向に押せているかを確認する。
   - 報酬の推移グラフ（PNG）
 """
 
-import argparse
 import os
 import sys
 sys.path.append(os.getcwd())
@@ -32,16 +31,21 @@ from design_opt.utils.tools import set_global_seed
 
 project_path = os.getcwd()
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--restore_dir', type=str, required=True,
-                    help='学習ディレクトリ (例: single_run/pusher_cnoid)')
-parser.add_argument('--epoch', default='best',
-                    help='評価するチェックポイント (デフォルト: best)')
-parser.add_argument('--num_episodes', type=int, default=5,
-                    help='評価エピソード数')
-parser.add_argument('--plot', action='store_true', default=True,
-                    help='cube 位置の推移グラフを保存')
-args = parser.parse_args()
+# Read parameters from environment variables
+# EVAL_RESTORE_DIR: required
+# EVAL_EPOCH:       checkpoint to load (default: best)
+# EVAL_NUM_EPISODES: number of episodes (default: 5)
+class args:
+    restore_dir  = os.environ.get('EVAL_RESTORE_DIR')
+    epoch        = os.environ.get('EVAL_EPOCH', 'best')
+    num_episodes = int(os.environ.get('EVAL_NUM_EPISODES', '5'))
+    plot         = True
+
+if not args.restore_dir:
+    print("Error: EVAL_RESTORE_DIR environment variable is required.")
+    print("Usage: EVAL_RESTORE_DIR=single_run/pusher_cnoid USE_CHOREONOID=1 "
+          "choreonoid --no-window --python scripts/eval_cnoid_numerical.py")
+    sys.exit(1)
 
 # ── 設定読み込み ──────────────────────────────────────────────────────────────
 train_config_path = os.path.join(project_path, args.restore_dir, ".hydra", "config.yaml")
