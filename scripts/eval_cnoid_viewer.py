@@ -17,6 +17,24 @@ Choreonoid の GUI ビューアでポリシーを再生するスクリプト。
 """
 
 import sys, os, time, argparse
+
+# GUI モードでは Python stdout が Choreonoid の Message View に行き端末に出ない。
+# ファイルにもリダイレクトしてデバッグを容易にする。
+_log_path = os.environ.get('VIEWER_LOG', '/tmp/cnoid_viewer.log')
+_log_file = open(_log_path, 'w', buffering=1)
+class _Tee:
+    def __init__(self, *streams): self.streams = streams
+    def write(self, data):
+        for s in self.streams:
+            try: s.write(data); s.flush()
+            except Exception: pass
+    def flush(self):
+        for s in self.streams:
+            try: s.flush()
+            except Exception: pass
+sys.stdout = _Tee(sys.__stdout__, _log_file)
+sys.stderr = _Tee(sys.__stderr__, _log_file)
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ['USE_CHOREONOID'] = '1'
