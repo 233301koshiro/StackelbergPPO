@@ -378,6 +378,54 @@ pusher の `index_base = 5`（最大4子まで許容）はこの名前を5進数
 
 ---
 
+## 修正11: `mujoco_xml_to_urdf()` グローバル座標変換バグ（2026-06-09）
+
+### 問題
+
+`mujoco_env_choreonoid.py` の `mujoco_xml_to_urdf()` が、`coordinate="global"` の MuJoCo XML を URDF に変換するとき、ボディの `pos` と geom の `fromto`/`pos` をワールド座標のまま URDF の親相対オフセットとして使っていた。
+
+URDF では `<joint>` の `<origin>` と `<link>` の geometry `<origin>` はすべて**親リンクローカル座標**で記述する必要がある。
+
+**影響範囲**:
+- depth-1 ボディ（`"1"`,`"2"`,…）: 親は常にワールド原点 → 誤差ゼロ（偶然正しい）
+- **depth-2 以降のボディ（`"11"`,`"21"`,`"111"`,…）: 全て影響を受ける**
+
+誤差の大きさ = depth-1 親のワールド座標値（通常 0.2〜0.5 m 程度）
+
+### 影響
+
+- **物理シミュレーション**（AISTSimulator）: 関節位置・衝突形状・慣性テンソルが間違った位置に配置される → depth-2 以降の脚・腕の物理が不正確
+- **可視化**（Choreonoid GUI）: depth-2 以降のリンクが視覚的にも誤った位置に表示される
+- **学習への影響**: 初期形態は全ボディが原点にあるため序盤の誤差はゼロ。depth-2 ボディが出現し親ボディが原点から離れるにつれ誤差が拡大する
+
+### 修正内容
+
+`process_body()` に親のグローバル位置を引き回し、子ボディの位置を親相対に変換するように変更。  
+`add_link()` にボディのグローバル位置を渡し、`fromto`/`pos` をボディローカル座標に変換するように変更。
+
+```python
+# process_body: 親グローバル位置を引き回して親相対オフセットを計算
+def process_body(body_el, parent_link_name, parent_global_pos=None):
+    global_pos = np.array(parse_vec(body_el.get('pos', '0 0 0')))
+    bpos = (global_pos - parent_global_pos).tolist()   # ← 修正点
+    add_link(bname, geom_el, default_density, body_global_pos=global_pos)
+    ...
+    process_body(child_body, bname, global_pos)         # ← 親 pos を伝播
+
+# add_link: fromto をボディローカルに変換
+def add_link(name, geom_el, density, body_global_pos=None):
+    p0 = np.array(fromto[:3]) - body_global_pos        # ← 修正点
+    p1 = np.array(fromto[3:]) - body_global_pos        # ← 修正点
+```
+
+`coordinate="local"` の XML では変換は不要なため、コンパイラ属性を読んで処理を分岐する。
+
+### 経緯
+
+この修正以前に実施した **pusher_cnoid** と **crawler_cnoid (epoch 134 まで)** の学習結果は、depth-2 以降のボディが存在する場合に不正確な物理下での結果となっている。修正後は **crawler_cnoid_v2** として再学習を行い、正しい物理での結果と比較する。
+
+---
+
 ## 既知の制限
 
 | 項目 | 状態 |

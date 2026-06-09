@@ -86,3 +86,9 @@ Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
 | `ef2fcb2` | **crawler 用 `ant.py` に `USE_CHOREONOID` スイッチを追加**。crawler タスクが `env_name: ant` を使うため pusher と同様の切り替えを追加。`eval_morphology.py`（形態 3D 可視化スクリプト）も追加。 |
 | `5589759` | **カスタム形状最適化・メッシュパイプライン設計ドキュメントを追加**。`docs/topology_fixed_optim.md`（初期形状指定・トポロジー固定・属性値最適化の設計方針）、`docs/mesh_to_xml_pipeline.md`（爆発問題の原因分析と FK による座標解決パイプライン設計）、`docs/mesh_segmentation.md`（スケルトン抽出・凹面・VLM 等の分割手法比較）の 3 ファイルを追加。`docs/index.md` を更新。 |
 | `7d31a3f` | **readme と commit.md を更新**。ドキュメント一覧を `docs/index.md` 参照形式に整理。commit.md に 2026-06-09 のコミット履歴を追記。 |
+
+### 2026-06-09（`mujoco_xml_to_urdf` 座標変換バグ修正）
+
+| ハッシュ | 内容 |
+|---------|------|
+| （後で記入） | **`mujoco_xml_to_urdf()` の `coordinate="global"` 座標変換バグを修正**。depth-2 以降のボディの関節位置・衝突形状・慣性がワールド座標のまま URDF に書き出されていた問題を修正。`process_body()` に親グローバル位置を伝播し、`add_link()` でボディローカル座標に変換するよう変更。`docs/choreonoid_migration.md` に「修正11」として原因・影響・経緯を記録。|
