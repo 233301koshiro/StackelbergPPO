@@ -59,3 +59,30 @@ Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
 ログ: single_run/pusher_cnoid/log/log_train.txt
 エポック24 結果: exec_R_eps=10.05（エポック0の6.79から上昇中）、ETA 約7日
 ```
+
+---
+
+### 2026-06-02〜06-08（ZMQ 廃止・直接呼び出しへの移行）
+
+元の ZMQ + Jupyter カーネル方式を廃止し、`choreonoid --no-window --python` による直接呼び出し方式に全面移行した一連のコミット。
+
+| ハッシュ | 内容 |
+|---------|------|
+| `0a33b60` | **アーキテクチャを ZMQ サーバー方式から直接呼び出しに全面移行**。`ChoreonoidEnv` を `ChoreonoidSimWorld` 内包方式に書き直し。`mujoco_xml_to_urdf()` を統合。`worker_pool.py`（`ChoreonoidWorkerPool`）・`choreonoid_train.py`・`worker_sampler.py` を新規追加。fork ベースのマルチプロセスを廃止し spawn + 永続ワーカー方式に変更。`os._exit(0)` での強制終了を採用。 |
+| `b1c6ae5` | **eval スクリプト 3 本を追加**。`eval_cnoid_numerical.py`（数値評価・cube 変位計測）、`eval_cnoid_visual.py`（matplotlib 3D アニメーション mp4 生成）、`eval_cnoid_viewer.py`（Choreonoid GUI リアルタイムビューア、Python stdout の `_Tee` クラスによるログ保存を含む）。 |
+| `5a3b2d1` | **ドキュメントを大幅更新**。`docs/system_overview.md` に学習指標（`exec_R_eps` vs `train_R_eps`）の説明を追加。`docs/choreonoid_migration.md` に起動ログ解説セクション追加。`docs/choreonoid_gui_issue.md` に GLVND/NVIDIA 解決策と `VIEWER_LOG` によるログキャプチャ方法を追記。`docs/index.md` を新規作成（全 md ファイルの索引）。`report_v2.md` を現状に合わせて更新（セクション 8〜11 を全面改訂）。 |
+| `e2f9c44` | **`plot_rewards.py` を新規追加**。`log_train.txt` を解析し exec_R_eps / train_R_eps の推移グラフ（MA-30・best 保存マーカー・再開ライン付き）を PNG で保存。 |
+| `7d4a8f3` | **`save_morphology_urdf.py` を新規追加**。学習済み best チェックポイントを読み込み、設計フェーズをポリシーに従って実行し、実行フェーズ開始時点の形態を URDF と MuJoCo XML で保存。10 エピソードで最も多くのボディを持つ形態を代表として選択。 |
+| `c91d730` | **`eval_morphology.py` を新規追加**。ロボット形態を matplotlib 3D で 3 アングル可視化する PNG 生成スクリプト（後に URDF 保存方式に方針転換したため補助的な位置づけ）。 |
+| `f3a1e09` | **`ant.py` に `USE_CHOREONOID` スイッチを追加**。crawler タスクが `env_name: ant` を使用するため、pusher と同様の Choreonoid/MuJoCo 切り替えを追加。 |
+
+---
+
+### 2026-06-09（出力ディレクトリ整理・設計ドキュメント追加）
+
+| ハッシュ | 内容 |
+|---------|------|
+| `dd0fb45` | **eval スクリプトの出力先をサブディレクトリに整理**。`eval/`・`videos/`・`plots/`・`morphology/` の 4 サブディレクトリを設け、各スクリプトのデフォルト出力先を変更（`os.makedirs` も追加）。`report_v2.md` のパス記述を更新。`save_morphology_urdf.py` を新規追加。 |
+| `ef2fcb2` | **crawler 用 `ant.py` に `USE_CHOREONOID` スイッチを追加**。crawler タスクが `env_name: ant` を使うため pusher と同様の切り替えを追加。`eval_morphology.py`（形態 3D 可視化スクリプト）も追加。 |
+| `5589759` | **カスタム形状最適化・メッシュパイプライン設計ドキュメントを追加**。`docs/topology_fixed_optim.md`（初期形状指定・トポロジー固定・属性値最適化の設計方針）、`docs/mesh_to_xml_pipeline.md`（爆発問題の原因分析と FK による座標解決パイプライン設計）、`docs/mesh_segmentation.md`（スケルトン抽出・凹面・VLM 等の分割手法比較）の 3 ファイルを追加。`docs/index.md` を更新。 |
+| `TBD` | **readme と commit.md を更新**。ドキュメント一覧を `docs/index.md` 参照形式に整理。commit.md に 2026-06-09 のコミット履歴を追記。 |

@@ -96,12 +96,19 @@ EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=5 \
 
 # 可視化（mp4 保存・ウィンドウ不要）
 EVAL_RESTORE_DIR=single_run/pusher_cnoid \
-EVAL_OUTPUT=single_run/pusher_cnoid/eval_visual.mp4 \
+EVAL_OUTPUT=single_run/pusher_cnoid/videos/eval_visual.mp4 \
   USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
 
 # Choreonoid GUI ビューアでリアルタイム再生（VirtualGL が必要・詳細は docs/choreonoid_gui_issue.md）
 VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=25 VIEWER_EPISODES=3 \
   vglrun choreonoid --python scripts/eval_cnoid_viewer.py
+
+# 報酬推移グラフ生成
+python3 scripts/plot_rewards.py single_run/pusher_cnoid
+
+# 最終形態 URDF 保存（morphology/ に出力）
+EVAL_RESTORE_DIR=single_run/pusher_cnoid \
+  USE_CHOREONOID=1 choreonoid --no-window --python scripts/save_morphology_urdf.py
 ```
 
 環境変数一覧:
@@ -112,11 +119,33 @@ VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=25 VIEWER_EPISODES=3 \
 | numerical | `EVAL_EPOCH` | `best` | チェックポイント |
 | numerical | `EVAL_NUM_EPISODES` | `5` | エピソード数 |
 | visual | `EVAL_RESTORE_DIR` | （必須）| 学習ディレクトリ |
-| visual | `EVAL_OUTPUT` | `{restore_dir}/eval_visual.mp4` | 出力パス |
+| visual | `EVAL_OUTPUT` | `{restore_dir}/videos/eval_visual.mp4` | 出力パス |
 | visual | `EVAL_FPS` | `20` | フレームレート |
 | viewer | `VIEWER_RESTORE_DIR` | （必須）| 学習ディレクトリ |
 | viewer | `VIEWER_FPS` | `25` | 再生フレームレート |
 | viewer | `VIEWER_EPISODES` | `3` | エピソード数（0=無限）|
+
+### 出力ディレクトリ構成
+
+評価・可視化スクリプトは `{restore_dir}` 以下のサブディレクトリに出力を整理する:
+
+```
+single_run/pusher_cnoid/
+├── .hydra/                  ← Hydra 設定（自動生成）
+├── log/                     ← 学習ログ（log_train.txt, log_eval.txt）
+├── models/                  ← チェックポイント（best.p, epoch_XXXX.p）
+├── tb/                      ← TensorBoard イベント
+├── videos/                  ← 動画ファイル
+│   ├── best_policy.mp4      ← Choreonoid GUI ビューア録画
+│   └── eval_visual.mp4      ← eval_cnoid_visual.py 出力
+├── eval/                    ← 数値評価グラフ
+│   └── eval_numerical.png   ← eval_cnoid_numerical.py 出力
+├── morphology/              ← 形態ファイル
+│   ├── morphology_best.urdf ← save_morphology_urdf.py 出力（Choreonoid/RViz 用）
+│   └── morphology_best.xml  ← save_morphology_urdf.py 出力（MuJoCo XML）
+└── plots/                   ← 学習グラフ
+    └── reward_plot.png      ← plot_rewards.py 出力
+```
 
 ---
 
@@ -174,12 +203,17 @@ choreonoid --no-window --python scripts/choreonoid_train.py \
 
 ## ドキュメント
 
+全ドキュメントの索引は [`docs/index.md`](docs/index.md) を参照。主要なものを以下に示す。
+
 | ファイル | 内容 |
 |---------|------|
-| `docs/choreonoid_migration.md` | Choreonoid 移行の詳細（バグ修正・アーキテクチャ変遷・ベンチマーク）|
-| `docs/migration_changes.md` | 変更ファイル一覧 |
-| `docs/system_overview.md` | システム全体の概要（Stackelberg PPO の仕組み）|
-| `report_v2.md` | 作業レポート（現状の最終構成）|
+| `docs/system_overview.md` | Stackelberg PPO の仕組み・学習指標の説明 |
+| `docs/choreonoid_migration.md` | Choreonoid 移行の詳細（バグ修正・アーキテクチャ変遷）|
+| `docs/choreonoid_gui_issue.md` | GUI（3D 描画）の問題と GLVND 解決策 |
+| `docs/topology_fixed_optim.md` | 初期形状の指定方法・トポロジー固定で属性値のみ最適化する方法 |
+| `docs/mesh_to_xml_pipeline.md` | 3D メッシュ → MuJoCo XML 変換パイプライン設計（爆発問題の対策）|
+| `docs/mesh_segmentation.md` | メッシュ分割手法の比較（スケルトン抽出・凹面・VLM 等）|
+| `report_v2.md` | 作業レポート（現状の最終構成・学習進捗・評価結果）|
 
 ---
 
