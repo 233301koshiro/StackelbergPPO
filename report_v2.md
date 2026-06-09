@@ -285,7 +285,7 @@ EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=10 \
 
 # 可視化（mp4 生成）
 EVAL_RESTORE_DIR=single_run/pusher_cnoid \
-EVAL_OUTPUT=single_run/pusher_cnoid/eval_visual.mp4 \
+EVAL_OUTPUT=single_run/pusher_cnoid/videos/eval_visual.mp4 \
   USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
 
 # 報酬推移グラフ生成
@@ -320,7 +320,7 @@ python3 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher
 ETA: 残り ~1日6時間（2026-06-08 完了予定）
 ```
 
-報酬推移グラフ: `single_run/pusher_cnoid/reward_plot.png`（`scripts/plot_rewards.py` で生成）
+報酬推移グラフ: `single_run/pusher_cnoid/plots/reward_plot.png`（`scripts/plot_rewards.py` で生成）
 
 | 指標 | 最大値 | 最終エポック値（epoch 1607）|
 |------|--------|--------------------------|
@@ -347,7 +347,7 @@ ETA: 残り ~1日6時間（2026-06-08 完了予定）
 ### 可視化（eval_cnoid_visual.py）
 
 matplotlib 3D でロボットボディ座標を再現した mp4 を生成。  
-出力: `single_run/pusher_cnoid/eval_visual.mp4`（791 KB, 206 フレーム）
+出力: `single_run/pusher_cnoid/videos/eval_visual.mp4`（791 KB, 206 フレーム）
 
 > Choreonoid 自体の 3D レンダリングは OpenGL/Mesa 不一致により現在未対応（詳細: `docs/choreonoid_gui_issue.md`）。
 
