@@ -91,4 +91,4 @@ Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
 
 | ハッシュ | 内容 |
 |---------|------|
-| （後で記入） | **`mujoco_xml_to_urdf()` の `coordinate="global"` 座標変換バグを修正**。depth-2 以降のボディの関節位置・衝突形状・慣性がワールド座標のまま URDF に書き出されていた問題を修正。`process_body()` に親グローバル位置を伝播し、`add_link()` でボディローカル座標に変換するよう変更。`docs/choreonoid_migration.md` に「修正11」として原因・影響・経緯を記録。|
+| `676c5cc` | **`mujoco_xml_to_urdf()` の `coordinate="global"` 座標変換バグを修正**。depth-2 以降のボディの関節位置・衝突形状・慣性がワールド座標のまま URDF に書き出されていた問題を修正。`process_body()` に親グローバル位置を伝播し、`add_link()` でボディローカル座標に変換するよう変更。`docs/choreonoid_migration.md` に「修正11」として原因・影響・経緯を記録。|
