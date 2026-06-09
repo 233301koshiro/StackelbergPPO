@@ -172,7 +172,8 @@ if args.plot and results[0]['cube_x_traj']:
         ax.grid(True, alpha=0.3, axis='y')
 
         plt.tight_layout()
-        out_path = os.path.join(args.restore_dir, 'eval_numerical.png')
+        out_path = os.path.join(args.restore_dir, 'eval', 'eval_numerical.png')
+        os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
         plt.savefig(out_path, dpi=120)
         print(f"\n[eval] Plot saved: {out_path}")
     except Exception as e:

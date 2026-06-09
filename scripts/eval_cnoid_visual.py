@@ -64,7 +64,7 @@ if not args.restore_dir:
           "choreonoid --no-window --python scripts/eval_cnoid_visual.py")
     sys.exit(1)
 
-out_path = args.output or os.path.join(args.restore_dir, 'eval_visual.mp4')
+out_path = args.output or os.path.join(args.restore_dir, 'videos', 'eval_visual.mp4')
 os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
 
 # ── 設定・エージェント読み込み ─────────────────────────────────────────────

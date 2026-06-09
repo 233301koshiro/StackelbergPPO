@@ -15,11 +15,12 @@ import os
 parser = argparse.ArgumentParser()
 parser.add_argument('restore_dir', help='学習ディレクトリ (例: single_run/pusher_cnoid)')
 parser.add_argument('--window', type=int, default=30, help='移動平均ウィンドウ幅 (default: 30)')
-parser.add_argument('--output', default=None, help='出力PNGパス (default: {restore_dir}/reward_plot.png)')
+parser.add_argument('--output', default=None, help='出力PNGパス (default: {restore_dir}/plots/reward_plot.png)')
 args = parser.parse_args()
 
 log_path = os.path.join(args.restore_dir, 'log', 'log_train.txt')
-out_path = args.output or os.path.join(args.restore_dir, 'reward_plot.png')
+out_path = args.output or os.path.join(args.restore_dir, 'plots', 'reward_plot.png')
+os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
 
 # ── ログ解析 ──────────────────────────────────────────────────────────────────
 pattern = re.compile(
