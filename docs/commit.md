@@ -85,4 +85,4 @@ Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
 | `dd0fb45` | **eval スクリプトの出力先をサブディレクトリに整理**。`eval/`・`videos/`・`plots/`・`morphology/` の 4 サブディレクトリを設け、各スクリプトのデフォルト出力先を変更（`os.makedirs` も追加）。`report_v2.md` のパス記述を更新。`save_morphology_urdf.py` を新規追加。 |
 | `ef2fcb2` | **crawler 用 `ant.py` に `USE_CHOREONOID` スイッチを追加**。crawler タスクが `env_name: ant` を使うため pusher と同様の切り替えを追加。`eval_morphology.py`（形態 3D 可視化スクリプト）も追加。 |
 | `5589759` | **カスタム形状最適化・メッシュパイプライン設計ドキュメントを追加**。`docs/topology_fixed_optim.md`（初期形状指定・トポロジー固定・属性値最適化の設計方針）、`docs/mesh_to_xml_pipeline.md`（爆発問題の原因分析と FK による座標解決パイプライン設計）、`docs/mesh_segmentation.md`（スケルトン抽出・凹面・VLM 等の分割手法比較）の 3 ファイルを追加。`docs/index.md` を更新。 |
-| `TBD` | **readme と commit.md を更新**。ドキュメント一覧を `docs/index.md` 参照形式に整理。commit.md に 2026-06-09 のコミット履歴を追記。 |
+| `7d31a3f` | **readme と commit.md を更新**。ドキュメント一覧を `docs/index.md` 参照形式に整理。commit.md に 2026-06-09 のコミット履歴を追記。 |
