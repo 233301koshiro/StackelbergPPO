@@ -99,7 +99,7 @@ EVAL_RESTORE_DIR=single_run/pusher_cnoid \
 EVAL_OUTPUT=single_run/pusher_cnoid/videos/eval_visual.mp4 \
   USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
 
-# Choreonoid GUI ビューアでリアルタイム再生（VirtualGL が必要・詳細は docs/choreonoid_gui_issue.md）
+# Choreonoid GUI ビューアでリアルタイム再生（VirtualGL が必要・詳細は docs/移行記録/choreonoid_gui_issue.md）
 VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=25 VIEWER_EPISODES=3 \
   vglrun choreonoid --python scripts/eval_cnoid_viewer.py
 
@@ -207,12 +207,12 @@ choreonoid --no-window --python scripts/choreonoid_train.py \
 
 | ファイル | 内容 |
 |---------|------|
-| `docs/system_overview.md` | Stackelberg PPO の仕組み・学習指標の説明 |
-| `docs/choreonoid_migration.md` | Choreonoid 移行の詳細（バグ修正・アーキテクチャ変遷）|
-| `docs/choreonoid_gui_issue.md` | GUI（3D 描画）の問題と GLVND 解決策 |
-| `docs/topology_fixed_optim.md` | 初期形状の指定方法・トポロジー固定で属性値のみ最適化する方法 |
-| `docs/mesh_to_xml_pipeline.md` | 3D メッシュ → MuJoCo XML 変換パイプライン設計（爆発問題の対策）|
-| `docs/mesh_segmentation.md` | メッシュ分割手法の比較（スケルトン抽出・凹面・VLM 等）|
+| `docs/リポジトリ説明/system_overview.md` | Stackelberg PPO の仕組み・学習指標の説明 |
+| `docs/移行記録/choreonoid_migration.md` | Choreonoid 移行の詳細（バグ修正・アーキテクチャ変遷）|
+| `docs/移行記録/choreonoid_gui_issue.md` | GUI（3D 描画）の問題と GLVND 解決策 |
+| `docs/研究応用/topology_fixed_optim.md` | 初期形状の指定方法・トポロジー固定で属性値のみ最適化する方法 |
+| `docs/研究応用/mesh_to_xml_pipeline.md` | 3D メッシュ → MuJoCo XML 変換パイプライン設計（爆発問題の対策）|
+| `docs/研究応用/mesh_segmentation.md` | メッシュ分割手法の比較（スケルトン抽出・凹面・VLM 等）|
 | `report_v2.md` | 作業レポート（現状の最終構成・学習進捗・評価結果）|
 
 ---

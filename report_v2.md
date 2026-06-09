@@ -295,7 +295,7 @@ python3 scripts/plot_rewards.py single_run/pusher_cnoid
 python3 scripts/cnoid_transfer.py --mujoco-dir single_run/pusher
 ```
 
-> **注意**: `choreonoid` は `--` を引数終端マーカーとして扱わない。eval スクリプトへのパラメータは環境変数で渡すこと（詳細: `docs/choreonoid_gui_issue.md`）。
+> **注意**: `choreonoid` は `--` を引数終端マーカーとして扱わない。eval スクリプトへのパラメータは環境変数で渡すこと（詳細: `docs/移行記録/choreonoid_gui_issue.md`）。
 
 チェックポイントは `single_run/pusher_cnoid/models/` に `epoch_XXXX.p`（10エポックごと）と `best.p`（最高報酬更新時）で保存される。
 
@@ -349,7 +349,7 @@ ETA: 残り ~1日6時間（2026-06-08 完了予定）
 matplotlib 3D でロボットボディ座標を再現した mp4 を生成。  
 出力: `single_run/pusher_cnoid/videos/eval_visual.mp4`（791 KB, 206 フレーム）
 
-> Choreonoid 自体の 3D レンダリングは OpenGL/Mesa 不一致により現在未対応（詳細: `docs/choreonoid_gui_issue.md`）。
+> Choreonoid 自体の 3D レンダリングは OpenGL/Mesa 不一致により現在未対応（詳細: `docs/移行記録/choreonoid_gui_issue.md`）。
 
 ---
 
