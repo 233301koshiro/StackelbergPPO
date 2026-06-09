@@ -34,6 +34,12 @@ def mujoco_xml_to_urdf(xml_str: str):
 
     tree = etree.fromstring(xml_str.encode())
 
+    # coordinate="global" means all body/geom positions are in world frame.
+    # URDF requires parent-relative offsets, so we must subtract parent positions.
+    compiler_el = tree.find('compiler')
+    is_global_coord = (compiler_el is not None and
+                       compiler_el.get('coordinate', 'local') == 'global')
+
     default_density = 5.0
     default_el = tree.find('default/geom')
     if default_el is not None:
@@ -77,7 +83,9 @@ def mujoco_xml_to_urdf(xml_str: str):
         I = 0.4 * m * radius**2
         return m, I
 
-    def add_link(name, geom_el, density):
+    def add_link(name, geom_el, density, body_global_pos=None):
+        if body_global_pos is None:
+            body_global_pos = np.zeros(3)
         link_el = etree.SubElement(urdf_root, 'link', name=name)
         inertial_el = etree.SubElement(link_el, 'inertial')
 
@@ -86,8 +94,9 @@ def mujoco_xml_to_urdf(xml_str: str):
 
             if gtype == 'capsule' and 'fromto' in geom_el.attrib:
                 fromto = parse_vec(geom_el.get('fromto'))
-                p0 = np.array(fromto[:3])
-                p1 = np.array(fromto[3:])
+                # In coordinate="global" mode, fromto is in world frame; convert to body-local.
+                p0 = np.array(fromto[:3]) - body_global_pos
+                p1 = np.array(fromto[3:]) - body_global_pos
                 center = (p0 + p1) / 2.0
                 diff = p1 - p0
                 length = float(np.linalg.norm(diff))
@@ -130,7 +139,8 @@ def mujoco_xml_to_urdf(xml_str: str):
 
             elif gtype == 'sphere':
                 radius = float(geom_el.get('size', '0.25'))
-                pos_s = geom_el.get('pos', '0 0 0')
+                pos_local = np.array(parse_vec(geom_el.get('pos', '0 0 0'))) - body_global_pos
+                pos_s = f'{pos_local[0]} {pos_local[1]} {pos_local[2]}'
                 m, I = sphere_inertia(radius, density)
                 etree.SubElement(inertial_el, 'origin', xyz=pos_s, rpy='0 0 0')
                 etree.SubElement(inertial_el, 'mass', value=str(m))
@@ -144,7 +154,8 @@ def mujoco_xml_to_urdf(xml_str: str):
 
             elif gtype == 'box':
                 size_s = geom_el.get('size', '1 1 1')
-                pos_s  = geom_el.get('pos', '0 0 0')
+                pos_local = np.array(parse_vec(geom_el.get('pos', '0 0 0'))) - body_global_pos
+                pos_s = f'{pos_local[0]} {pos_local[1]} {pos_local[2]}'
                 sx, sy, sz = [float(x) for x in size_s.split()]
                 m = density * 8 * sx * sy * sz
                 Ixx = m * (sy**2 + sz**2) / 12
@@ -212,12 +223,17 @@ def mujoco_xml_to_urdf(xml_str: str):
                            parent=parent_lk, child=child_lk, pos=bpos,
                            axis=axis, jrange=rng, damping=0.0)
 
-    def process_body(body_el, parent_link_name):
+    def process_body(body_el, parent_link_name, parent_global_pos=None):
+        if parent_global_pos is None:
+            parent_global_pos = np.zeros(3)
         bname = body_el.get('name')
         body_order.append(bname)
-        bpos  = parse_vec(body_el.get('pos', '0 0 0'))
+        global_pos = np.array(parse_vec(body_el.get('pos', '0 0 0')))
+        # In coordinate="global" mode, body pos is world-frame; URDF needs parent-relative.
+        bpos = (global_pos - parent_global_pos).tolist() if is_global_coord else global_pos.tolist()
         geom_el = body_el.find('geom')
-        add_link(bname, geom_el, default_density)
+        add_link(bname, geom_el, default_density,
+                 body_global_pos=global_pos if is_global_coord else np.zeros(3))
 
         joint_els = body_el.findall('joint')
         if not joint_els:
@@ -238,10 +254,10 @@ def mujoco_xml_to_urdf(xml_str: str):
                     _add_one_joint(j_el, prev_lk, bname, [0,0,0])
 
         for child_body in body_el.findall('body'):
-            process_body(child_body, bname)
+            process_body(child_body, bname, global_pos if is_global_coord else np.zeros(3))
 
     for body_el in tree.findall('worldbody/body'):
-        process_body(body_el, 'world')
+        process_body(body_el, 'world', np.zeros(3))
 
     urdf_str = etree.tostring(urdf_root, pretty_print=True).decode()
     return urdf_str, body_order, actuators, timestep, joint_armatures
