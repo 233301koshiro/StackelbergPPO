@@ -147,7 +147,7 @@ joint_params:
 
 ### コード上の仕組み
 
-初期形状は `design_opt/envs/pusher.py`（および `ant.py`）の `__init__` で決まる（[pusher.py:27-30](../design_opt/envs/pusher.py#L27-L30)）:
+初期形状は `design_opt/envs/pusher.py`（および `ant.py`）の `__init__` で決まる（[pusher.py:27-30](../../design_opt/envs/pusher.py#L27-L30)）:
 
 ```python
 if self.cfg.xml_name == "default":
@@ -210,7 +210,7 @@ Tripo3D / Meshy 等
 初期リンク長・半径を推定
   ↓ scripts/mesh_to_xml/pipeline.py
     （FK による座標解決・カプセルフィット・干渉チェックを実施）
-    詳細設計 → docs/mesh_to_xml_pipeline.md
+    詳細設計 → docs/研究応用/mesh_to_xml_pipeline.md
 MuJoCo XML（命名規則に準拠）
   ↓
 xml_name=my_robot + fix_skeleton=true で学習
