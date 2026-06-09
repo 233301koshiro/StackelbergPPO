@@ -64,9 +64,51 @@ choreonoid --no-window --python scripts/choreonoid_train.py
 │               └─ WorldItem + AISTSimulatorItem（直接呼出）│
 └──────────────────────────────────────────────────────────┘
 ```
+```
+train.py: main_loop()
+│
+├─ agent = BodyGenAgent(cfg, ...)          ← 初期化フェーズ
+│     │
+│     ├─ self.env = PusherEnv(cfg)         ← タスク環境を生成
+│     │     │
+│     │     └─ super().__init__()          ← ChoreonoidEnv.__init__()
+│     │           │
+│     │           └─ self._world = ChoreonoidSimWorld()
+│     │                 │
+│     │                 ├─ WorldItem()          ← Choreonoidシーングラフに物理空間を追加
+│     │                 └─ AISTSimulatorItem()  ← 物理エンジンをWorldItemに接続
+│     │
+│     ├─ self.policy_net = BodyGenPolicy(...)
+│     └─ self.value_net  = BodyGenValue(...)
+│
+└─ for epoch in range(...):
+      agent.optimize(epoch)               ← 1エポック全体
+            │
+            ├─ agent.sample()             ← サンプル収集
+            │     │
+            │     └─ ループ:
+            │           env.reset()
+            │           env.step(action)       ← PusherEnv.step()
+            │                 │
+            │                 ├─ apply_skel_action() → reload_sim_model()
+            │                 │     └─ self._world.load_model()
+            │                 │           └─ AISTSimulatorItem.startSimulation()
+            │                 │
+            │                 └─ do_simulation() → self._world.step()
+            │                       └─ AISTSimulatorItem.stepSimulation()
+            │
+            ├─ agent.update_params()      ← PPO勾配更新（GPU）
+            └─ agent.log_eval()           ← ログ出力
+```
 
-ZMQ・別プロセス・別スレッド構成が一切不要。
-学習コードと Choreonoid が同一プロセスで動く。
+| クラス | 責任範囲 |
+|--------|---------|
+| `WorldItem + AISTSimulatorItem` | Choreonoid本体のC++オブジェクト。物理計算のみ。RL・MuJoCo・タスクを知らない |
+| `ChoreonoidSimWorld` | Choreonoid固有のセットアップ（床ロード・シーングラフ追加）を1か所に閉じ込める |
+| `ChoreonoidEnv` | MuJoCo版（`mujoco_env_gym.py`）と同じAPIを提供。`PusherEnv`はMuJoCoかChoreonoidかを意識しない |
+| `PusherEnv` | タスク固有ロジック。`USE_CHOREONOID=0`にすればMuJoCo版と共存できる |
+
+`ChoreonoidSimWorld`は「Choreonoidの操作方法」、`ChoreonoidEnv`は「MuJoCoのふりをする」、`PusherEnv`は「pusherタスクのルール」という役割分担。`WorldItem + AISTSimulatorItem`はChoreonoidのC++クラスをPythonバインディングで呼んでいるだけ。
 
 **起動方法**:
 ```bash
