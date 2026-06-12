@@ -44,6 +44,11 @@ import torch
 import yaml
 from omegaconf import OmegaConf
 import cnoid.IRSLUtil as IU
+try:
+    from cnoid.Base import MessageView as _MV
+    def _msg(text): _MV.instance.putln(text)
+except Exception:
+    def _msg(text): pass
 
 from khrylib.utils import *
 from design_opt.utils.config import Config
@@ -100,7 +105,10 @@ try:
     while args.episodes == 0 or ep < args.episodes:
         state = env.reset()
         step  = 0
+        exec_steps = 0
         total_reward = 0.0
+        cube_start_x = None
+        cube_end_x   = None
 
         while True:
             # ネットワーク推論
@@ -118,6 +126,11 @@ try:
 
             if info.get('stage') == 'execution':
                 total_reward += reward
+                exec_steps += 1
+                cube_pos = env.get_body_com('cube')
+                if cube_start_x is None:
+                    cube_start_x = cube_pos[0]
+                cube_end_x = cube_pos[0]
                 # 実行フェーズのみスリープ（形態変換フェーズは速送り）
                 time.sleep(step_interval)
 
@@ -129,8 +142,17 @@ try:
             state = next_state
 
         ep += 1
-        print(f'[viewer] Ep {ep}: reward={total_reward:.1f}  steps={step}  '
-              f'bodies={[b.name for b in env.robot.bodies]}')
+        pushed = (cube_end_x - cube_start_x) if (cube_start_x is not None and cube_end_x is not None) else 0.0
+        term_reason = 'truncation(max steps)' if trunc else 'termination(fallen/NaN)'
+        line1 = (f'[viewer] Ep {ep}: reward={total_reward:.1f}  実行ステップ={exec_steps}  '
+                 f'cube移動={pushed:.3f}m  終了={term_reason}')
+        line2 = f'         bodies({len(env.robot.bodies)}体)={[b.name for b in env.robot.bodies]}'
+        print(line1)
+        print(line2)
+        print('-' * 70)
+        _msg('-' * 50)
+        _msg(line1)
+        _msg(line2)
 
 except KeyboardInterrupt:
     print('\n[viewer] 停止しました')
