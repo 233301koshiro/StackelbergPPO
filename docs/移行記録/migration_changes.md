@@ -4,19 +4,6 @@
 
 ---
 
-## 削除したファイル
-
-### `khrylib/rl/envs/common/cnoid_sim_server.py`（削除）
-
-Python 3.8 時代に Choreonoid プロセス内で動いていた ZMQ REP サーバー。
-Python 3.12 化により、シミュレーションロジックを `mujoco_env_choreonoid.py` に直接統合したため不要になった。
-
-### `scripts/start_cnoid_server.py`（削除）
-
-Jupyter カーネル経由で Choreonoid ZMQ サーバーを起動するスクリプト。
-ZMQ 構成そのものが廃止されたため不要。
-
----
 
 ## 新規作成ファイル
 
