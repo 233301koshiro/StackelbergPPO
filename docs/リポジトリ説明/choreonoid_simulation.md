@@ -220,3 +220,58 @@ train.py: for epoch in range(max_epoch):
 ```
 
 設計フェーズは 6 回（skeleton×5 + attribute×1）この再ロードが走るため、Choreonoid のロードログが一気に流れる。
+
+---
+
+## コードナビゲーション
+
+### エントリーポイント
+
+| 用途 | ファイル |
+|------|---------|
+| 学習 | [`scripts/choreonoid_train.py`](../../scripts/choreonoid_train.py) → [`design_opt/train.py`](../../design_opt/train.py) |
+| 評価（数値） | [`scripts/eval_cnoid_numerical.py`](../../scripts/eval_cnoid_numerical.py) |
+| 評価（動画） | [`scripts/eval_cnoid_visual.py`](../../scripts/eval_cnoid_visual.py) |
+| 評価（GUI） | [`scripts/eval_cnoid_viewer.py`](../../scripts/eval_cnoid_viewer.py) |
+
+### メソッド定義場所
+
+**`design_opt/train.py`**
+
+| メソッド | 行 | 説明 |
+|---------|-----|------|
+| `main_loop()` | L19 | 学習ループ本体（epoch ループ） |
+| `main()` | L66 | Hydra エントリーポイント |
+
+**`design_opt/agents/genesis_agent.py`**
+
+| メソッド | 行 | 説明 |
+|---------|-----|------|
+| `BodyGenAgent` | L32 | エージェントクラス定義 |
+| `sample()` | L128 | 環境からエピソードデータを収集 |
+| `optimize()` | L232 | 1 エポック分の学習（sample → PPO 更新） |
+
+**`design_opt/envs/pusher.py`**
+
+| メソッド | 行 | 説明 |
+|---------|-----|------|
+| `PusherEnv` | L21 | pusher タスク環境クラス定義 |
+| `step()` | L119 | 設計フェーズ分岐 + 実行フェーズの報酬計算 |
+| `transit_execution()` | L201 | 設計フェーズ終了→実行フェーズへ移行 |
+| `reset_state()` | L328 | ロボット初期姿勢設定（`add_noise` で ±0.1 ノイズ） |
+| `reset_model()` | L347 | エピソードリセット |
+
+**`khrylib/rl/envs/common/mujoco_env_choreonoid.py`**
+
+| クラス / メソッド | 行 | 説明 |
+|-----------------|-----|------|
+| `ChoreonoidSimWorld` | L407 | Choreonoid 操作ラッパークラス |
+| `_setup_world()` | L418 | アイテムツリー初期化（WorldItem・床・AISTSimulatorItem） |
+| `load_model()` | L437 | XML → URDF 変換・BodyItem ロード・シミュレーション開始 |
+| `reset()` | L487 | シミュレーション再起動・初期状態復元 |
+| `step()` | L505 | トルク書き込み・`tickRequest()` × frame_skip |
+| `set_state_cmd()` | L522 | 関節角度・角速度を直接指定 |
+| `ChoreonoidEnv` | L534 | MuJoCo 互換 API ラッパークラス |
+| `do_simulation()` | L653 | `ChoreonoidSimWorld.step()` の呼び出し口 |
+| `reload_sim_model()` | L657 | 形態変更時のモデル再ロード |
+| `get_body_com()` | L666 | リンクのワールド座標取得 |
