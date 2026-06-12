@@ -86,66 +86,20 @@ USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
 
 ## 評価
 
-> **注意**: choreonoid は `--` を引数終端マーカーとして扱わない。
-> eval スクリプトへのパラメータは**環境変数**で渡す。
+コマンド・環境変数・出力ディレクトリ構成の詳細は [`docs/リポジトリ説明/eval.md`](docs/リポジトリ説明/eval.md) を参照。
 
 ```bash
-# 数値評価（cube が押せているかを確認）
+# 数値評価（成功率・報酬を数値で確認）
 EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=5 \
   USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_numerical.py
 
-# 可視化（mp4 保存・ウィンドウ不要）
+# 動画保存（mp4・ヘッドレス）
 EVAL_RESTORE_DIR=single_run/pusher_cnoid \
-EVAL_OUTPUT=single_run/pusher_cnoid/videos/eval_visual.mp4 \
   USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
 
-# Choreonoid GUI ビューアでリアルタイム再生（VirtualGL が必要・詳細は docs/移行記録/choreonoid_gui_issue.md）
+# GUI リアルタイム再生（VirtualGL が必要）
 VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=25 VIEWER_EPISODES=3 \
   vglrun choreonoid --python scripts/eval_cnoid_viewer.py
-
-# 報酬推移グラフ生成
-python3 scripts/plot_rewards.py single_run/pusher_cnoid
-
-# 最終形態 URDF 保存（morphology/ に出力）
-EVAL_RESTORE_DIR=single_run/pusher_cnoid \
-  USE_CHOREONOID=1 choreonoid --no-window --python scripts/save_morphology_urdf.py
-```
-
-環境変数一覧:
-
-| スクリプト | 変数 | デフォルト | 説明 |
-|-----------|------|-----------|------|
-| numerical | `EVAL_RESTORE_DIR` | （必須）| 学習ディレクトリ |
-| numerical | `EVAL_EPOCH` | `best` | チェックポイント |
-| numerical | `EVAL_NUM_EPISODES` | `5` | エピソード数 |
-| visual | `EVAL_RESTORE_DIR` | （必須）| 学習ディレクトリ |
-| visual | `EVAL_OUTPUT` | `{restore_dir}/videos/eval_visual.mp4` | 出力パス |
-| visual | `EVAL_FPS` | `20` | フレームレート |
-| viewer | `VIEWER_RESTORE_DIR` | （必須）| 学習ディレクトリ |
-| viewer | `VIEWER_FPS` | `25` | 再生フレームレート |
-| viewer | `VIEWER_EPISODES` | `3` | エピソード数（0=無限）|
-
-### 出力ディレクトリ構成
-
-評価・可視化スクリプトは `{restore_dir}` 以下のサブディレクトリに出力を整理する:
-
-```
-single_run/pusher_cnoid/
-├── .hydra/                  ← Hydra 設定（自動生成）
-├── log/                     ← 学習ログ（log_train.txt, log_eval.txt）
-├── models/                  ← チェックポイント（best.p, epoch_XXXX.p）
-├── tb/                      ← TensorBoard イベント
-├── videos/                  ← 動画ファイル
-│   ├── best_policy.mp4      ← Choreonoid GUI ビューア録画
-│   └── eval_visual.mp4      ← eval_cnoid_visual.py 出力
-├── eval/                    ← 数値評価グラフ
-│   └── eval_numerical.png   ← eval_cnoid_numerical.py 出力
-├── morphology/              ← 形態ファイル
-│   ├── morphology_best.urdf ← save_morphology_urdf.py 出力（Choreonoid/RViz 用）
-│   └── morphology_best.xml  ← save_morphology_urdf.py 出力（MuJoCo XML）
-└── plots/                   ← 学習グラフ
-    └── reward_plot.png      ← plot_rewards.py 出力
-```
 
 ---
 
