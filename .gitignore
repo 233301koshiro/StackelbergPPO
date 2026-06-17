@@ -19,6 +19,7 @@ condaenv.*.requirements.txt
 
 # MuJoCo
 mujoco_py/
+*.xml.bak
 
 # Python
 __pycache__/
