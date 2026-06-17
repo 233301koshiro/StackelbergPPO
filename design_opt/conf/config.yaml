@@ -54,7 +54,7 @@ num_optim_epoch: 10
 eval_batch_size: 10000
 norm_return : true
 norm_advantage: true
-max_grad_norm: 40
+max_grad_norm: 5
 uni_obs_norm: true  
 xml_name: "default"
 planner_demean: false
