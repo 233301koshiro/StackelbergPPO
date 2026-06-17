@@ -529,8 +529,11 @@ class BodyGenAgent(AgentPPO):
                     if g is not None:
                         p.grad = g.clone()
                 torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.cfg.max_grad_norm)
-                self.optimizer_policy.step()
-            
+                if any(p.grad is not None and torch.isnan(p.grad).any() for p in self.policy_net.parameters()):
+                    self.optimizer_policy.zero_grad()
+                else:
+                    self.optimizer_policy.step()
+
             # -------------------------- Follower: normal update ----------------------------
             if update_list is not None and ('execution' not in update_list):
                 continue
@@ -555,8 +558,11 @@ class BodyGenAgent(AgentPPO):
                 self.para_mgr.selective_backward(surr_loss, self.policy_net, update_list=['execution'])
 
                 torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.cfg.max_grad_norm)
-                self.optimizer_policy.step()
-                
+                if any(p.grad is not None and torch.isnan(p.grad).any() for p in self.policy_net.parameters()):
+                    self.optimizer_policy.zero_grad()
+                else:
+                    self.optimizer_policy.step()
+
         return log_stackel
     
     def split_episodes_from_dones(self, next_dones_t: torch.Tensor):

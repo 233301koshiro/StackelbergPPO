@@ -184,7 +184,11 @@ class BodyGenPolicy(Policy):
                 x = self.control_mlp(x)
             
             control_action_mean = self.control_action_mean(x)
-            
+            if torch.isnan(control_action_mean).any():
+                raise RuntimeError(
+                    f"NaN in control_action_mean (shape {control_action_mean.shape}). "
+                    "Likely gradient explosion — lower max_grad_norm (currently check cfg)."
+                )
             control_action_std = self.control_action_log_std.expand_as(control_action_mean).exp()
             control_dist = DiagGaussian(control_action_mean, control_action_std)
         else:
