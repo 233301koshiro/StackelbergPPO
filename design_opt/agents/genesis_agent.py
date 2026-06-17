@@ -66,12 +66,16 @@ class BodyGenAgent(AgentPPO):
                          policy_grad_clip=[(self.policy_net.parameters(), 40)],
                          use_mini_batch=cfg.mini_batch_size < cfg.min_batch_size, mini_batch_size=cfg.mini_batch_size)
 
-        # Choreonoid 専用: spawn + 永続ワーカープロセスによる並列サンプリング
+        # 永続ワーカープロセスによる並列サンプリング（Choreonoid / MuJoCo 共通）
         self._worker_pool = None
-        if os.environ.get('USE_CHOREONOID', '0') == '1' and num_threads > 1 and training:
-            from design_opt.utils.worker_pool import ChoreonoidWorkerPool
+        if num_threads > 1 and training:
             project_path = cfg.project_path
-            self._worker_pool = ChoreonoidWorkerPool(num_threads, cfg, project_path)
+            if os.environ.get('USE_CHOREONOID', '0') == '1':
+                from design_opt.utils.worker_pool import ChoreonoidWorkerPool
+                self._worker_pool = ChoreonoidWorkerPool(num_threads, cfg, project_path)
+            else:
+                from design_opt.utils.mujoco_worker_pool import MujocoWorkerPool
+                self._worker_pool = MujocoWorkerPool(num_threads, cfg, project_path)
 
     ## Setting Ups        
     def setup_env(self):
