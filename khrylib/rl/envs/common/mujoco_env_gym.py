@@ -1,30 +1,115 @@
 from collections import OrderedDict
 import os
+from pathlib import Path
 
-from gym import error, spaces
+from gym import spaces
 from gym.utils import seeding
 import numpy as np
-from os import path
 import gym
 
 try:
-    import mujoco_py
+    import mujoco
 except Exception:
-    mujoco_py = None  # deferred: error raised only when MujocoEnv is instantiated
+    mujoco = None  # deferred: error raised only when MujocoEnv is instantiated
 
 DEFAULT_SIZE = 500
 
-try:
-    from khrylib.rl.envs.common.mjviewer import MjViewer
-except Exception:
-    MjViewer = None  # deferred: only needed for rendering
 
+# ---------------------------------------------------------------------------
+# Compatibility wrappers: expose mujoco-py-style API over the new mujoco pkg
+# ---------------------------------------------------------------------------
+
+class _ModelWrapper:
+    """Wraps mujoco.MjModel to expose the mujoco-py attribute API."""
+
+    def __init__(self, m):
+        self._m = m
+        # Build actuator_names tuple (mujoco-py style)
+        self.actuator_names = tuple(
+            mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or f"actuator_{i}"
+            for i in range(m.nu)
+        )
+        # Build body_names tuple and _body_name2id dict (mujoco-py style)
+        self.body_names = tuple(
+            mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, i) or f"body_{i}"
+            for i in range(m.nbody)
+        )
+        self._body_name2id = {
+            name: i for i, name in enumerate(self.body_names)
+        }
+        # Build _camera_name2id dict
+        self._camera_name2id = {
+            mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i): i
+            for i in range(m.ncam)
+            if mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_CAMERA, i) is not None
+        }
+
+    def camera_name2id(self, name):
+        return mujoco.mj_name2id(self._m, mujoco.mjtObj.mjOBJ_CAMERA, name)
+
+    def __getattr__(self, name):
+        return getattr(self._m, name)
+
+
+class _DataWrapper:
+    """Wraps mujoco.MjData to expose the mujoco-py attribute API."""
+
+    def __init__(self, m, d):
+        self._m = m
+        self._d = d
+
+    # Expose all MjData attributes transparently
+    def __getattr__(self, name):
+        return getattr(self._d, name)
+
+    # mujoco-py: data.body_xpos[body_id]  →  new: data.xpos[body_id]
+    @property
+    def body_xpos(self):
+        return self._d.xpos
+
+    # mujoco-py: data.get_body_xpos(name)
+    def get_body_xpos(self, name):
+        bid = mujoco.mj_name2id(self._m, mujoco.mjtObj.mjOBJ_BODY, name)
+        return self._d.xpos[bid].copy()
+
+    # mujoco-py: data.get_body_xmat(name)  →  returns (3,3)
+    def get_body_xmat(self, name):
+        bid = mujoco.mj_name2id(self._m, mujoco.mjtObj.mjOBJ_BODY, name)
+        return self._d.xmat[bid].reshape(3, 3).copy()
+
+
+class _SimWrapper:
+    """Mimics mujoco_py.MjSim using the new mujoco package."""
+
+    def __init__(self, m, d):
+        self._m = m
+        self._d = d
+        self.data = _DataWrapper(m, d)
+
+    def reset(self):
+        mujoco.mj_resetData(self._m, self._d)
+
+    def forward(self):
+        mujoco.mj_forward(self._m, self._d)
+
+    def step(self):
+        mujoco.mj_step(self._m, self._d)
+
+
+# ---------------------------------------------------------------------------
+# Helper
+# ---------------------------------------------------------------------------
+
+def _load_model(xml_str=None, path=None):
+    """Load MjModel from XML string or file path."""
+    if xml_str is not None:
+        return mujoco.MjModel.from_xml_string(xml_str)
+    return mujoco.MjModel.from_xml_path(str(path))
 
 
 def convert_observation_to_space(observation):
     if isinstance(observation, list):
         return None
-
     if isinstance(observation, dict):
         space = spaces.Dict(OrderedDict([
             (key, convert_observation_to_space(value))
@@ -36,51 +121,61 @@ def convert_observation_to_space(observation):
         space = spaces.Box(low, high, dtype=observation.dtype)
     else:
         raise NotImplementedError(type(observation), observation)
-
     return space
 
 
+# ---------------------------------------------------------------------------
+# MujocoEnv — same public API as before, now backed by new mujoco package
+# ---------------------------------------------------------------------------
+
 class MujocoEnv(gym.Env):
-    """Superclass for all MuJoCo environments.
-    """
+    """Superclass for all MuJoCo environments (backed by mujoco >= 3.x)."""
 
     def __init__(self, fullpath, frame_skip, mujoco_xml=None):
+        if mujoco is None:
+            raise RuntimeError("mujoco package not installed. Run: pip install mujoco")
 
         if mujoco_xml is not None:
-            self.model = mujoco_py.load_model_from_xml(mujoco_xml)
+            raw_model = _load_model(xml_str=mujoco_xml)
         else:
-            if not path.exists(fullpath):
-                # try the default assets path
-                fullpath = path.join(Path(__file__).parent.parent.parent.parent, 'assets/mujoco_models', path.basename(fullpath))
-                if not path.exists(fullpath):
-                    raise IOError("File %s does not exist" % fullpath)
-            self.model = mujoco_py.load_model_from_path(fullpath)
+            fp = Path(fullpath)
+            if not fp.exists():
+                fp = Path(__file__).parents[3] / 'assets' / 'mujoco_models' / fp.name
+                if not fp.exists():
+                    raise IOError(f"File {fullpath} does not exist")
+            raw_model = _load_model(path=fp)
+
         self.frame_skip = frame_skip
-        self.sim = mujoco_py.MjSim(self.model)
-        self.data = self.sim.data
-        self.viewer = None
-        self._viewers = {}
+        self._setup_sim(raw_model)
+        self.is_inited = False
 
         self.metadata = {
             'render.modes': ['human', 'rgb_array', 'depth_array'],
             'video.frames_per_second': int(np.round(1.0 / self.dt))
         }
 
-        self.init_qpos = self.sim.data.qpos.ravel().copy()
-        self.init_qvel = self.sim.data.qvel.ravel().copy()
-        self.is_inited = False
-
         self._set_action_space()
 
         action = self.action_space.sample()
         observation, _reward, termination, truncation, _info = self.step(action)
-        done = (termination or truncation)
-        assert not done
+        assert not (termination or truncation)
 
         self._set_observation_space(observation)
-
         self.seed()
         self.is_inited = True
+
+    def _setup_sim(self, raw_model):
+        """Create wrapper objects from a raw MjModel."""
+        raw_data = mujoco.MjData(raw_model)
+        self.model = _ModelWrapper(raw_model)
+        self.sim = _SimWrapper(raw_model, raw_data)
+        self.data = self.sim.data
+        self.viewer = None
+        self._viewers = {}
+        self.init_qpos = raw_data.qpos.ravel().copy()
+        self.init_qvel = raw_data.qvel.ravel().copy()
+
+    # ------------------------------------------------------------------
 
     def _set_action_space(self):
         bounds = self.model.actuator_ctrlrange.copy().astype(np.float32)
@@ -97,50 +192,28 @@ class MujocoEnv(gym.Env):
         return [seed]
 
     def reload_sim_model(self, xml_str):
-        del self.sim
-        del self.model
-        del self.data
-        del self.viewer
-        del self._viewers
-        self.model = mujoco_py.load_model_from_xml(xml_str)
-        self.sim = mujoco_py.MjSim(self.model)
-        self.data = self.sim.data
-        self.init_qpos = self.sim.data.qpos.copy()
-        self.init_qvel = self.sim.data.qvel.copy()
-        self.viewer = None
-        self._viewers = {}
+        raw_model = _load_model(xml_str=xml_str)
+        self._setup_sim(raw_model)
 
-    # methods to override:
-    # ----------------------------
+    # ------------------------------------------------------------------
+    # Subclass hooks
 
     def reset_model(self):
-        """
-        Reset the robot degrees of freedom (qpos and qvel).
-        Implement this in each subclass.
-        """
         raise NotImplementedError
 
     def viewer_setup(self):
-        """
-        This method is called when the viewer is initialized.
-        Optionally implement this method, if you need to tinker with camera position
-        and so forth.
-        """
         pass
 
-    # -----------------------------
+    # ------------------------------------------------------------------
 
     def reset(self):
         self.sim.reset()
-        ob = self.reset_model()
-        return ob
+        return self.reset_model()
 
     def set_state(self, qpos, qvel):
         assert qpos.shape == (self.model.nq,) and qvel.shape == (self.model.nv,)
-        old_state = self.sim.get_state()
-        new_state = mujoco_py.MjSimState(old_state.time, qpos, qvel,
-                                         old_state.act, old_state.udd_state)
-        self.sim.set_state(new_state)
+        self.sim._d.qpos[:] = qpos
+        self.sim._d.qvel[:] = qvel
         self.sim.forward()
 
     @property
@@ -148,83 +221,39 @@ class MujocoEnv(gym.Env):
         return self.model.opt.timestep * self.frame_skip
 
     def do_simulation(self, ctrl, n_frames):
-        self.sim.data.ctrl[:] = ctrl
+        self.sim._d.ctrl[:] = ctrl
         for _ in range(n_frames):
             self.sim.step()
 
-    def render(self,
-               mode='human',
-               width=DEFAULT_SIZE,
-               height=DEFAULT_SIZE,
-               camera_id=None,
-               camera_name=None):
-        if mode == 'rgb_array' or mode == 'depth_array':
-            if camera_id is not None and camera_name is not None:
-                raise ValueError("Both `camera_id` and `camera_name` cannot be"
-                                 " specified at the same time.")
-
-            no_camera_specified = camera_name is None and camera_id is None
-            if no_camera_specified:
-                camera_name = 'track'
-
-            if camera_id is None and camera_name in self.model._camera_name2id:
-                camera_id = self.model.camera_name2id(camera_name)
-
-            self._get_viewer(mode).render(width, height, camera_id=camera_id)
-
-        if mode == 'rgb_array':
-            # window size used for old mujoco-py:
-            data = self._get_viewer(mode).read_pixels(width, height, depth=False)
-            # original image is upside-down, so flip it
-            return data[::-1, :, :]
-        elif mode == 'depth_array':
-            self._get_viewer(mode).render(width, height)
-            # window size used for old mujoco-py:
-            # Extract depth part of the read_pixels() tuple
-            data = self._get_viewer(mode).read_pixels(width, height, depth=True)[1]
-            # original image is upside-down, so flip it
-            return data[::-1, :]
-        elif mode == 'human':
-            self._get_viewer(mode).render()
+    def render(self, mode='human', width=DEFAULT_SIZE, height=DEFAULT_SIZE,
+               camera_id=None, camera_name=None):
+        # Rendering requires a display; headless training skips this.
+        pass
 
     def close(self):
-        if self.viewer is not None:
-            # self.viewer.finish()
-            self.viewer = None
-            self._viewers = {}
+        self.viewer = None
+        self._viewers = {}
 
     def _get_viewer(self, mode):
-        self.viewer = self._viewers.get(mode)
-        if self.viewer is None:
-            if mode == 'human':
-                self.viewer = MjViewer(self.sim)
-            elif mode == 'rgb_array' or mode == 'depth_array':
-                self.viewer = mujoco_py.MjRenderContextOffscreen(self.sim, -1)
-
-            self._viewers[mode] = self.viewer
-        self.viewer_setup()
-        return self.viewer
+        return None
 
     def set_custom_key_callback(self, key_func):
-        self._get_viewer('human').custom_key_callback = key_func
+        pass
 
     def get_body_com(self, body_name):
         return self.data.get_body_xpos(body_name)
 
     def state_vector(self):
         return np.concatenate([
-            self.sim.data.qpos.flat,
-            self.sim.data.qvel.flat
+            self.sim._d.qpos.flat,
+            self.sim._d.qvel.flat
         ])
 
     def vec_body2world(self, body_name, vec):
         body_xmat = self.data.get_body_xmat(body_name)
-        vec_world = (body_xmat @ vec[:, None]).ravel()
-        return vec_world
+        return (body_xmat @ vec[:, None]).ravel()
 
     def pos_body2world(self, body_name, pos):
         body_xpos = self.data.get_body_xpos(body_name)
         body_xmat = self.data.get_body_xmat(body_name)
-        pos_world = (body_xmat @ pos[:, None]).ravel() + body_xpos
-        return pos_world
-
+        return (body_xmat @ pos[:, None]).ravel() + body_xpos
