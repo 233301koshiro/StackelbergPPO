@@ -264,6 +264,338 @@ def mujoco_xml_to_urdf(xml_str: str):
 
 
 # ---------------------------------------------------------------------------
+# MuJoCo XML → Choreonoid .body (supports native Capsule geometry)
+# ---------------------------------------------------------------------------
+
+def mujoco_xml_to_body(xml_str: str):
+    """
+    Convert MuJoCo XML to Choreonoid .body format (format_version 2.0).
+    Returns (body_defs, body_order, actuators_map, timestep, joint_armatures).
+
+    body_defs is a list of (item_name, yaml_str) — one entry per top-level
+    worldbody child.  Each child becomes the root of its own BodyItem so that
+    Choreonoid never sees a non-root FreeJoint (which triggers an interactive
+    dialog).  For most envs body_defs has one entry (robot).  For pusher it has
+    two: robot ("0" as FreeJoint root) and cube ("cube_virt0" as prismatic root).
+    """
+    from lxml import etree
+
+    tree = etree.fromstring(xml_str.encode())
+
+    compiler_el = tree.find('compiler')
+    is_global_coord = (compiler_el is not None and
+                       compiler_el.get('coordinate', 'local') == 'global')
+    angle_is_degree = (compiler_el is None or
+                       compiler_el.get('angle', 'degree') == 'degree')
+
+    default_density = 5.0
+    default_el = tree.find('default/geom')
+    if default_el is not None:
+        default_density = float(default_el.get('density', default_density))
+
+    opt_el = tree.find('option')
+    timestep = float(opt_el.get('timestep', '0.01')) if opt_el is not None else 0.01
+
+    actuators = {}
+    for motor in tree.findall('actuator/motor'):
+        jname = motor.get('joint')
+        cr = motor.get('ctrlrange', '-1 1')
+        lo, hi = [float(x) for x in cr.split()]
+        gear = float(motor.get('gear', '1'))
+        actuators[jname] = {'ctrlrange': [lo, hi], 'gear': gear,
+                             'name': motor.get('name', jname)}
+
+    robot_name = tree.get('model', 'robot')
+    body_order = []
+    joint_armatures = {}
+    links = []   # list of dicts, one per .body link entry
+
+    default_joint_el = tree.find('default/joint')
+    default_armature = float(default_joint_el.get('armature', '0')) if default_joint_el is not None else 0.0
+    default_damping  = float(default_joint_el.get('damping',  '1')) if default_joint_el is not None else 1.0
+
+    def parse_vec(s):
+        return [float(x) for x in s.split()]
+
+    def capsule_inertia(length, radius, density):
+        r, l = radius, length
+        m_cyl = density * math.pi * r**2 * l
+        m_cap = density * (4.0/3.0) * math.pi * r**3
+        m = m_cyl + m_cap
+        d_hemi = l/2.0 - 3.0*r/8.0
+        Iperp  = m_cyl*(r**2/4.0 + l**2/12.0) + m_cap*(2.0*r**2/5.0 + d_hemi**2)
+        Iaxial = m * r**2 / 2.0
+        return m, Iperp, Iaxial   # capsule along Y: Ixx=Izz=Iperp, Iyy=Iaxial
+
+    def sphere_inertia(radius, density):
+        m = density * (4/3) * math.pi * radius**3
+        I = 0.4 * m * radius**2
+        return m, I
+
+    def rot_y_to_vec(d):
+        """Rotation (axis, angle_deg) that maps Y-axis onto direction d."""
+        d = np.asarray(d, dtype=float)
+        norm = np.linalg.norm(d)
+        if norm < 1e-12:
+            return [1.0, 0.0, 0.0], 0.0
+        d = d / norm
+        y = np.array([0.0, 1.0, 0.0])
+        dot = float(np.clip(np.dot(y, d), -1.0, 1.0))
+        if abs(dot - 1.0) < 1e-9:
+            return [1.0, 0.0, 0.0], 0.0
+        if abs(dot + 1.0) < 1e-9:
+            return [1.0, 0.0, 0.0], 180.0
+        angle_deg = math.degrees(math.acos(dot))
+        axis = np.cross(y, d)
+        axis /= np.linalg.norm(axis)
+        return axis.tolist(), angle_deg
+
+    def make_shape(geom_el, body_global_pos):
+        if geom_el is None:
+            return None
+        bpos = np.asarray(body_global_pos, dtype=float)
+        gtype = geom_el.get('type', 'sphere')
+
+        if gtype == 'capsule' and 'fromto' in geom_el.attrib:
+            fv  = parse_vec(geom_el.get('fromto'))
+            p0  = np.array(fv[:3])
+            p1  = np.array(fv[3:])
+            if is_global_coord:
+                p0 -= bpos; p1 -= bpos
+            center = (p0 + p1) / 2.0
+            diff   = p1 - p0
+            length = float(np.linalg.norm(diff))
+            radius = float(geom_el.get('size', '0.08'))
+            m, Iperp, Iaxial = capsule_inertia(length, radius, default_density)
+            rot_axis, rot_angle = rot_y_to_vec(diff)
+            return dict(type='capsule', center=center.tolist(), length=length,
+                        radius=radius, rot_axis=rot_axis, rot_angle=rot_angle,
+                        mass=m, Iperp=Iperp, Iaxial=Iaxial)
+
+        elif gtype == 'sphere':
+            radius  = float(geom_el.get('size', '0.25'))
+            pos_raw = np.array(parse_vec(geom_el.get('pos', '0 0 0')))
+            pos_loc = (pos_raw - bpos) if is_global_coord else pos_raw
+            m, I    = sphere_inertia(radius, default_density)
+            return dict(type='sphere', center=pos_loc.tolist(), radius=radius, mass=m, I=I)
+
+        elif gtype == 'box':
+            sz      = [float(x) for x in geom_el.get('size', '1 1 1').split()]
+            pos_raw = np.array(parse_vec(geom_el.get('pos', '0 0 0')))
+            pos_loc = (pos_raw - bpos) if is_global_coord else pos_raw
+            sx, sy, sz_v = sz[0], sz[1], sz[2]
+            m   = default_density * 8 * sx * sy * sz_v
+            Ixx = m * (sy**2 + sz_v**2) / 12
+            Iyy = m * (sx**2 + sz_v**2) / 12
+            Izz = m * (sx**2 + sy**2)   / 12
+            return dict(type='box', center=pos_loc.tolist(),
+                        size=[2*sx, 2*sy, 2*sz_v], mass=m, Ixx=Ixx, Iyy=Iyy, Izz=Izz)
+
+        return None
+
+    def inertia9(shape):
+        """Return 3x3 inertia as 9-element list (row-major)."""
+        if shape is None:
+            e = 1e-6
+            return [e,0,0, 0,e,0, 0,0,e]
+        t = shape['type']
+        if t == 'capsule':
+            Ip, Ia = shape['Iperp'], shape['Iaxial']
+            return [Ip,0,0, 0,Ia,0, 0,0,Ip]   # Y-axis capsule
+        if t == 'sphere':
+            I = shape['I']
+            return [I,0,0, 0,I,0, 0,0,I]
+        if t == 'box':
+            return [shape['Ixx'],0,0, 0,shape['Iyy'],0, 0,0,shape['Izz']]
+        e = 1e-6
+        return [e,0,0, 0,e,0, 0,0,e]
+
+    # Per-.body file joint ID counter (reset for each worldbody child).
+    # Choreonoid requires explicit joint_id >= 0 on each non-root, non-fixed
+    # link for Body::numJoints() and Body::joint(i) to work correctly.
+    _joint_id_ctr = [0]
+
+    def add_link(name, parent, jtype, jname, jaxis, jrange_deg,
+                 translation, mass, com, inertia, shape):
+        if jtype in ('revolute', 'prismatic'):
+            jid = _joint_id_ctr[0]
+            _joint_id_ctr[0] += 1
+        else:
+            jid = -1
+        links.append(dict(name=name, parent=parent, jtype=jtype, jname=jname,
+                          jaxis=jaxis, jrange=jrange_deg, translation=translation,
+                          mass=mass, com=com, inertia=inertia, shape=shape,
+                          joint_id=jid))
+
+    def process_one_joint(j_el, parent_name, child_name, translation,
+                          mass, com, inr, shape):
+        jtype_mj = j_el.get('type', 'hinge')
+        jname    = j_el.get('name', f'{child_name}_joint')
+        armature = float(j_el.get('armature', default_armature))
+        joint_armatures[jname] = armature
+
+        if jtype_mj == 'free':
+            add_link(child_name, parent_name, 'free', jname,
+                     None, None, translation, mass, com, inr, shape)
+        elif jtype_mj == 'hinge':
+            axis    = parse_vec(j_el.get('axis', '0 0 1'))
+            rng_raw = [float(x) for x in j_el.get('range', '-180 180').split()]
+            rng_deg = rng_raw if angle_is_degree else [math.degrees(r) for r in rng_raw]
+            add_link(child_name, parent_name, 'revolute', jname,
+                     axis, rng_deg, translation, mass, com, inr, shape)
+        elif jtype_mj in ('slide', 'prismatic'):
+            axis    = parse_vec(j_el.get('axis', '1 0 0'))
+            rng_raw = [float(x) for x in j_el.get('range', '-10 10').split()]
+            add_link(child_name, parent_name, 'prismatic', jname,
+                     axis, rng_raw, translation, mass, com, inr, shape)
+
+    def process_body(body_el, parent_name, parent_global_pos=None):
+        if parent_global_pos is None:
+            parent_global_pos = np.zeros(3)
+
+        bname      = body_el.get('name')
+        body_order.append(bname)
+        global_pos = np.array(parse_vec(body_el.get('pos', '0 0 0')))
+        trans      = ((global_pos - parent_global_pos) if is_global_coord
+                      else global_pos).tolist()
+
+        shape = make_shape(body_el.find('geom'),
+                           global_pos if is_global_coord else np.zeros(3))
+        mass  = shape['mass'] if shape else 0.001
+        com   = shape['center'] if shape else [0.0, 0.0, 0.0]
+        inr   = inertia9(shape)
+
+        joint_els = body_el.findall('joint')
+
+        if not joint_els:
+            add_link(bname, parent_name, 'fixed', None,
+                     None, None, trans, mass, com, inr, shape)
+            last_name = bname
+        elif len(joint_els) == 1:
+            process_one_joint(joint_els[0], parent_name, bname,
+                              trans, mass, com, inr, shape)
+            last_name = bname
+        else:
+            # Multi-joint body (e.g. cube with 2 slide joints).
+            # When this body is the tree root (parent_name is None), insert a
+            # fixed dummy root so all prismatic/revolute joints are counted in
+            # body.numJoints regardless of Choreonoid's root-joint convention.
+            if parent_name is None:
+                fixed_root_name = f'{bname}_fixed_root'
+                add_link(fixed_root_name, None, 'fixed', None,
+                         None, None, trans, 0.001, [0.0,0.0,0.0],
+                         inertia9(None), None)
+                prev = fixed_root_name
+                first_child_trans = [0.0, 0.0, 0.0]
+            else:
+                prev = parent_name
+                first_child_trans = trans
+            for idx, j_el in enumerate(joint_els):
+                if idx < len(joint_els) - 1:
+                    vname = f'{bname}_virt{idx}'
+                    process_one_joint(j_el, prev, vname,
+                                      first_child_trans if idx == 0 else [0.0,0.0,0.0],
+                                      0.001, [0.0,0.0,0.0],
+                                      inertia9(None), None)
+                    prev = vname
+                else:
+                    process_one_joint(j_el, prev, bname,
+                                      [0.0,0.0,0.0],
+                                      mass, com, inr, shape)
+            last_name = bname
+
+        for child in body_el.findall('body'):
+            process_body(child, last_name,
+                         global_pos if is_global_coord else np.zeros(3))
+
+    # ---- Serialize helper -----------------------------------------------
+    def fv(v, prec=8):
+        return '[ ' + ', '.join(f'{x:.{prec}g}' for x in v) + ' ]'
+
+    def serialize_links_to_yaml(links_list, root_name, body_name):
+        out = [
+            'format: ChoreonoidBody',
+            'format_version: 2.0',
+            'angle_unit: degree',
+            f'name: {body_name}',
+            f'root_link: "{root_name}"',
+            'links:',
+        ]
+        for lk in links_list:
+            out.append('  -')
+            out.append(f'    name: "{lk["name"]}"')
+            if lk['parent'] is not None:
+                out.append(f'    parent: "{lk["parent"]}"')
+            if lk['jname']:
+                out.append(f'    joint_name: {lk["jname"]}')
+            out.append(f'    joint_type: {lk["jtype"]}')
+            if lk.get('joint_id', -1) >= 0:
+                out.append(f'    joint_id: {lk["joint_id"]}')
+            if lk['jaxis'] is not None:
+                out.append(f'    joint_axis: {fv(lk["jaxis"], 6)}')
+            if lk['jrange'] is not None:
+                out.append(f'    joint_range: {fv(lk["jrange"], 6)}')
+            out.append(f'    translation: {fv(lk["translation"])}')
+            out.append(f'    mass: {lk["mass"]:.6g}')
+            out.append(f'    center_of_mass: {fv(lk["com"])}')
+            m = lk['inertia']
+            out.append( '    inertia: [')
+            out.append(f'      {m[0]:.6g}, {m[1]:.6g}, {m[2]:.6g},')
+            out.append(f'      {m[3]:.6g}, {m[4]:.6g}, {m[5]:.6g},')
+            out.append(f'      {m[6]:.6g}, {m[7]:.6g}, {m[8]:.6g} ]')
+            shape = lk['shape']
+            if shape:
+                st = shape['type']
+                cx, cy, cz = shape['center']
+                out.append('    elements:')
+                out.append('      -')
+                out.append('        type: Shape')
+                out.append(f'        translation: [ {cx:.6g}, {cy:.6g}, {cz:.6g} ]')
+                if st == 'capsule':
+                    ax, ay, az = shape['rot_axis']
+                    ang = shape['rot_angle']
+                    if abs(ang) > 0.01:
+                        out.append(f'        rotation: [ {ax:.6g}, {ay:.6g}, {az:.6g}, {ang:.4g} ]')
+                    r, h = shape['radius'], shape['length']
+                    out.append(f'        geometry: {{ type: Capsule, radius: {r:.6g}, height: {h:.6g} }}')
+                elif st == 'sphere':
+                    out.append(f'        geometry: {{ type: Sphere, radius: {shape["radius"]:.6g} }}')
+                elif st == 'box':
+                    out.append(f'        geometry: {{ type: Box, size: {fv(shape["size"], 6)} }}')
+        return '\n'.join(out) + '\n'
+
+    # Process each top-level worldbody child as its own independent .body file.
+    # Each child becomes the root of its BodyItem — no shared "world" wrapper —
+    # so Choreonoid never encounters a non-root FreeJoint (which triggers the
+    # "all link position recording" dialog and breaks headless operation).
+    all_body_defs = []      # list of (item_name, yaml_str)
+    all_body_order = []
+    all_armatures = {}
+
+    for body_idx, child_el in enumerate(tree.findall('worldbody/body')):
+        links.clear()
+        body_order.clear()
+        joint_armatures.clear()
+        _joint_id_ctr[0] = 0
+
+        process_body(child_el, None, np.zeros(3))
+
+        root_name = links[0]['name']
+        # Each BodyItem needs a unique Choreonoid body name for findSimulationBody().
+        # Robot (first child) keeps robot_name; extras use their XML name attribute.
+        if body_idx == 0:
+            body_name = robot_name
+        else:
+            body_name = child_el.get('name', f'extra_{body_idx}')
+        yaml_str = serialize_links_to_yaml(links, root_name, body_name)
+        all_body_defs.append((body_name, yaml_str))
+        all_body_order.extend(body_order)
+        all_armatures.update(joint_armatures)
+
+    return all_body_defs, all_body_order, actuators, timestep, all_armatures
+
+
+# ---------------------------------------------------------------------------
 # State extraction helpers
 # ---------------------------------------------------------------------------
 
@@ -306,98 +638,129 @@ def _quat_wxyz_to_rot(quat):
     ])
 
 
-def _get_model_info(body, actuators_map, timestep):
-    njoints = body.numJoints
-    nlinks  = body.numLinks
-    body_names = [body.link(i).name for i in range(nlinks)]
+def _get_model_info(sim_body_list, actuators_map, timestep):
+    """Build combined model info from a list of SimulationBodies (robot first)."""
+    body_names     = []
+    jnt_qposadr    = []
+    body_jntadr_all = []
+    body_jntnum_all = []
+    nq_total       = 0
+    nv_total       = 0
+    njoints_total  = 0
 
-    root = body.rootLink
-    is_floating = (root.jointType == root.FreeJoint)
-    qpos_offset = 7 if is_floating else 0
-    nq = qpos_offset + njoints
-    nv = (6 if is_floating else 0) + njoints
+    for sim_body in sim_body_list:
+        b       = sim_body.body()
+        njoints = b.numJoints
+        nlinks  = b.numLinks
+        root    = b.rootLink
+        is_floating  = (root.jointType == root.FreeJoint)
+        qpos_offset  = 7 if is_floating else 0
 
-    jnt_qposadr = list(range(qpos_offset, qpos_offset + njoints))
+        body_names += [b.link(i).name for i in range(nlinks)]
 
-    joint_name_to_idx = {body.joint(i).jointName: i for i in range(njoints)}
-    body_jntadr = []
-    body_jntnum = []
-    for i in range(nlinks):
-        lk = body.link(i)
-        jname = lk.jointName if hasattr(lk, 'jointName') else lk.name
-        if jname in joint_name_to_idx:
-            body_jntadr.append(joint_name_to_idx[jname])
-            body_jntnum.append(1)
-        else:
-            body_jntadr.append(-1)
-            body_jntnum.append(0)
+        # Absolute qpos indices for this body's non-free joints
+        qpos_joint_start = nq_total + qpos_offset
+        jnt_qposadr += list(range(qpos_joint_start, qpos_joint_start + njoints))
+
+        joint_name_to_local = {b.joint(i).jointName: i for i in range(njoints)}
+        for li in range(nlinks):
+            lk    = b.link(li)
+            jname = lk.jointName if hasattr(lk, 'jointName') else lk.name
+            if jname in joint_name_to_local:
+                body_jntadr_all.append(njoints_total + joint_name_to_local[jname])
+                body_jntnum_all.append(1)
+            else:
+                body_jntadr_all.append(-1)
+                body_jntnum_all.append(0)
+
+        nq_total      += qpos_offset + njoints
+        nv_total      += (6 if is_floating else 0) + njoints
+        njoints_total += njoints
 
     actuator_names = [v['name'] for v in actuators_map.values()]
-    ctrlrange = [v['ctrlrange'] for v in actuators_map.values()]
+    ctrlrange      = [v['ctrlrange'] for v in actuators_map.values()]
 
-    init_qpos = [0.0] * nq
-    if is_floating:
-        init_qpos[2] = 0.4
+    init_qpos = [0.0] * nq_total
+    first_b   = sim_body_list[0].body()
+    if first_b.rootLink.jointType == first_b.rootLink.FreeJoint:
+        init_qpos[2] = 0.4  # robot initial z-height
 
     return {
-        'nq': nq, 'nv': nv, 'timestep': timestep,
+        'nq': nq_total, 'nv': nv_total, 'timestep': timestep,
         'actuator_names': actuator_names, 'ctrlrange': ctrlrange,
         'body_names': body_names,
-        'body_jntadr': body_jntadr, 'body_jntnum': body_jntnum,
+        'body_jntadr': body_jntadr_all, 'body_jntnum': body_jntnum_all,
         'jnt_qposadr': jnt_qposadr,
-        'init_qpos': init_qpos, 'init_qvel': [0.0] * nv,
+        'init_qpos': init_qpos, 'init_qvel': [0.0] * nv_total,
     }
 
 
-def _get_state_dict(sim_body):
-    b = sim_body.body()
-    root = b.rootLink
-    is_floating = (root.jointType == root.FreeJoint)
-    njoints = b.numJoints
-
+def _get_state_dict(sim_body_entries):
+    """
+    sim_body_entries: list of (sim_body, is_floating) — robot first, extras after.
+    Returns combined qpos/qvel/body_xpos/body_xmat across all bodies.
+    """
     qpos, qvel = [], []
-    if is_floating:
-        p = root.translation
-        quat = _rot_to_quat_wxyz(np.asarray(root.rotation))
-        qpos += list(p) + quat
-        qvel += list(root.v) + list(root.w)
-
-    for i in range(njoints):
-        j = b.joint(i)
-        qpos.append(j.q)
-        qvel.append(j.dq)
-
     body_xpos, body_xmat = {}, {}
-    for i in range(b.numLinks):
-        lk = b.link(i)
-        body_xpos[lk.name] = list(lk.translation)
-        body_xmat[lk.name] = np.asarray(lk.rotation).flatten().tolist()
+    n_nonfree_joints = 0
+
+    for (sim_body, is_floating) in sim_body_entries:
+        b    = sim_body.body()
+        root = b.rootLink
+
+        if is_floating:
+            p    = root.translation
+            quat = _rot_to_quat_wxyz(np.asarray(root.rotation))
+            qpos += list(p) + quat
+            qvel += list(root.v) + list(root.w)
+
+        for i in range(b.numJoints):
+            j = b.joint(i)
+            qpos.append(j.q)
+            qvel.append(j.dq)
+
+        n_nonfree_joints += b.numJoints
+
+        for i in range(b.numLinks):
+            lk = b.link(i)
+            body_xpos[lk.name] = list(lk.translation)
+            body_xmat[lk.name] = np.asarray(lk.rotation).flatten().tolist()
 
     return {
         'qpos': qpos, 'qvel': qvel,
         'body_xpos': body_xpos, 'body_xmat': body_xmat,
-        'ctrl': [0.0] * njoints,
+        'ctrl': [0.0] * n_nonfree_joints,
     }
 
 
-def _set_state(sim_body, qpos, qvel):
-    b = sim_body.body()
-    root = b.rootLink
-    is_floating = (root.jointType == root.FreeJoint)
+def _set_state(sim_body_entries, qpos, qvel):
+    """
+    sim_body_entries: list of (sim_body, is_floating) — robot first.
+    qpos/qvel: combined arrays covering all bodies in order.
+    """
+    qpos_off = 0
+    qvel_off = 0
+    for (sim_body, is_floating) in sim_body_entries:
+        b       = sim_body.body()
+        root    = b.rootLink
+        njoints = b.numJoints
 
-    if is_floating:
-        root.setTranslation(qpos[:3])
-        root.setRotation(_quat_wxyz_to_rot(qpos[3:7]))
-        root.v = np.array(qvel[:3])
-        root.w = np.array(qvel[3:6])
+        if is_floating:
+            root.setTranslation(qpos[qpos_off:qpos_off+3])
+            root.setRotation(_quat_wxyz_to_rot(qpos[qpos_off+3:qpos_off+7]))
+            root.v = np.array(qvel[qvel_off:qvel_off+3])
+            root.w = np.array(qvel[qvel_off+3:qvel_off+6])
+            qpos_off += 7
+            qvel_off += 6
 
-    offset = 7 if is_floating else 0
-    for i in range(b.numJoints):
-        j = b.joint(i)
-        j.q  = qpos[offset + i]
-        j.dq = qvel[(6 if is_floating else 0) + i]
+        for i in range(njoints):
+            j     = b.joint(i)
+            j.q   = qpos[qpos_off + i]
+            j.dq  = qvel[qvel_off + i]
 
-    b.calcForwardKinematics()
+        qpos_off += njoints
+        qvel_off += njoints
+        b.calcForwardKinematics()
 
 
 # ---------------------------------------------------------------------------
@@ -406,14 +769,23 @@ def _set_state(sim_body, qpos, qvel):
 
 class ChoreonoidSimWorld:
     def __init__(self):
-        self.world_item   = None
-        self.sim_item     = None
-        self.body_items   = {}
-        self.sim_bodies   = {}
-        self.actuators_map = {}
-        self.frame_skip   = 4
-        self.is_running   = False
+        self.world_item        = None
+        self.sim_item          = None
+        self.body_items        = {}   # insertion-ordered: 'robot' first
+        self.sim_bodies        = {}
+        self._sim_body_entries = []   # [(sim_body, is_floating), ...] robot first
+        self.actuators_map     = {}
+        self.frame_skip        = 4
+        self.is_running        = False
         self._setup_world()
+
+    def _build_sim_body_entries(self):
+        entries = []
+        for sb in self.sim_bodies.values():
+            b           = sb.body()
+            is_floating = (b.rootLink.jointType == b.rootLink.FreeJoint)
+            entries.append((sb, is_floating))
+        self._sim_body_entries = entries
 
     def _setup_world(self):
         self.world_item = WorldItem()
@@ -441,32 +813,37 @@ class ChoreonoidSimWorld:
             item.detachFromParentItem()
         self.body_items.clear()
         self.sim_bodies.clear()
+        self._sim_body_entries = []
 
-        urdf_str, _body_order, actuators_map, timestep, joint_armatures = \
-            mujoco_xml_to_urdf(xml_str)
+        body_defs, _all_order, actuators_map, timestep, joint_armatures = \
+            mujoco_xml_to_body(xml_str)
         self.actuators_map = actuators_map
         self.sim_item.setTimeStep(timestep)
 
-        with tempfile.NamedTemporaryFile(suffix='.urdf', mode='w', delete=False) as f:
-            f.write(urdf_str)
-            urdf_path = f.name
+        # Load each body def as a separate BodyItem ('robot' first, then extras)
+        for i, (item_name, body_yaml) in enumerate(body_defs):
+            body_key = 'robot' if i == 0 else f'extra_{i-1}'
 
-        robot_item = BodyItem()
-        loaded = robot_item.load(urdf_path)
-        os.unlink(urdf_path)
-        if not loaded:
-            raise RuntimeError("Failed to load URDF into Choreonoid")
+            with tempfile.NamedTemporaryFile(suffix='.body', mode='w', delete=False) as f:
+                f.write(body_yaml)
+                body_path = f.name
 
-        b = robot_item.body
-        for i in range(b.numJoints):
-            j = b.joint(i)
-            arm = joint_armatures.get(j.jointName, 0.0)
-            if arm > 0:
-                j.setEquivalentRotorInertia(arm)
+            body_item = BodyItem()
+            loaded = body_item.load(body_path)
+            os.unlink(body_path)
+            if not loaded:
+                raise RuntimeError(f"Failed to load .body for '{item_name}'")
 
-        robot_item.storeInitialState()
-        self.world_item.addChildItem(robot_item)
-        self.body_items['robot'] = robot_item
+            b = body_item.body
+            for j in range(b.numJoints):
+                jnt = b.joint(j)
+                arm = joint_armatures.get(jnt.jointName, 0.0)
+                if arm > 0:
+                    jnt.setEquivalentRotorInertia(arm)
+
+            body_item.storeInitialState()
+            self.world_item.addChildItem(body_item)
+            self.body_items[body_key] = body_item
 
         if self.is_running:
             self.sim_item.stopSimulation()
@@ -476,12 +853,16 @@ class ChoreonoidSimWorld:
         self.sim_item.tickRequest(True)
         IU.processEvent()
 
-        sim_body = self.sim_item.findSimulationBody(robot_item.name)
-        if sim_body is None:
-            raise RuntimeError("SimulationBody not found after startSimulation")
-        self.sim_bodies['robot'] = sim_body
+        for key, item in self.body_items.items():
+            sb = self.sim_item.findSimulationBody(item.name)
+            if sb is None:
+                raise RuntimeError(f"SimulationBody not found for '{key}'")
+            self.sim_bodies[key] = sb
 
-        info = _get_model_info(sim_body.body(), actuators_map, timestep)
+        self._build_sim_body_entries()
+        info = _get_model_info(
+            [e[0] for e in self._sim_body_entries], actuators_map, timestep
+        )
         return info
 
     def reset(self) -> dict:
@@ -492,22 +873,23 @@ class ChoreonoidSimWorld:
         self.sim_item.tickRequest(True)
         IU.processEvent()
 
-        for name, item in self.body_items.items():
+        for key, item in self.body_items.items():
             sb = self.sim_item.findSimulationBody(item.name)
             if sb is not None:
-                self.sim_bodies[name] = sb
+                self.sim_bodies[key] = sb
 
-        sb = self.sim_bodies.get('robot')
-        if sb is None:
+        self._build_sim_body_entries()
+        if not self._sim_body_entries:
             return {'qpos': [], 'qvel': [], 'body_xpos': {}, 'body_xmat': {}}
-        return _get_state_dict(sb)
+        return _get_state_dict(self._sim_body_entries)
 
     def step(self, ctrl: list, n_frames: int) -> dict:
-        sb = self.sim_bodies.get('robot')
-        if sb is None:
+        if not self._sim_body_entries:
             return {'qpos': [], 'qvel': [], 'body_xpos': {}, 'body_xmat': {}}
 
-        b = sb.body()
+        # Apply ctrl to the robot body only (first entry)
+        robot_sb, _ = self._sim_body_entries[0]
+        b = robot_sb.body()
         for i, (jname, ainfo) in enumerate(self.actuators_map.items()):
             j = b.joint(jname)
             if j is not None and i < len(ctrl):
@@ -517,14 +899,13 @@ class ChoreonoidSimWorld:
             self.sim_item.tickRequest(True)
             IU.processEvent()
 
-        return _get_state_dict(sb)
+        return _get_state_dict(self._sim_body_entries)
 
     def set_state_cmd(self, qpos: list, qvel: list) -> dict:
-        sb = self.sim_bodies.get('robot')
-        if sb is None:
+        if not self._sim_body_entries:
             return {'qpos': qpos, 'qvel': qvel, 'body_xpos': {}, 'body_xmat': {}}
-        _set_state(sb, qpos, qvel)
-        return _get_state_dict(sb)
+        _set_state(self._sim_body_entries, qpos, qvel)
+        return _get_state_dict(self._sim_body_entries)
 
 
 # ---------------------------------------------------------------------------
