@@ -520,7 +520,9 @@ class Robot:
     def load_from_xml(self, xml, is_xml_str=False):
         parser = XMLParser(remove_blank_text=True)
         self.tree = parse(BytesIO(xml) if is_xml_str else xml, parser=parser)
-        self.local_coord = self.tree.getroot().find('.//compiler').attrib['coordinate'] == 'local'
+        compiler = self.tree.getroot().find('.//compiler')
+        coord = compiler.attrib.get('coordinate', 'local') if compiler is not None else 'local'
+        self.local_coord = coord != 'global'
         root = self.tree.getroot().find('worldbody').find('body')
         self.add_body(root, None)
 
