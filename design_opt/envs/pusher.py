@@ -173,7 +173,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             yposafter = self.get_body_com("cube")[1]
             
             reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
-            reward_fwd_contact = 1.0 / (1.0 + np.linalg.norm(self.get_body_com("cube") - self.get_body_com("0")))
+            arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
+            reward_fwd_contact = 1.0 / (1.0 + np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body)))
             reward_fwd = reward_fwd_cube + reward_fwd_contact
             reward_ctrl = - ctrl_cost_coeff * np.square(ctrl).mean()
             alive_bonus = self.cfg.reward_specs.get('alive_bonus', 0.0)
@@ -230,7 +231,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             if self.clip_qvel:
                 qvel = np.clip(qvel, -10, 10)
             if i == 0:
-                relative_dis = self.get_body_com("cube")-self.get_body_com("0")
+                arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
+                relative_dis = self.get_body_com("cube") - self.get_body_com(arm_ref_body)
                 if self.is_fixed_base:
                     # fixed base: no free joint state; fill with zeros to keep 17-dim structure
                     obs_i = [np.zeros(11), relative_dis, np.zeros(3)]
