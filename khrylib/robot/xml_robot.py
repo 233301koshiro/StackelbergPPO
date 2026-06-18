@@ -298,6 +298,10 @@ class Body:
             self.bone_start = self.pos.copy()
         self.joints = [Joint(x, self) for x in node.findall('joint[@type="hinge"]')] + [Joint(x, self) for x in node.findall('joint[@type="free"]')]
         self.geoms = [Geom(x, self) for x in node.findall('geom[@type="capsule"]')] + [Geom(x, self) for x in node.findall('geom[@type="sphere"]')]
+        # Visual-only geoms (box/cylinder) that track the capsule's bone_offset.
+        # contype="0" in XML marks them as non-colliding visual decorations.
+        self.visual_geom_nodes = (node.findall('geom[@type="box"]') +
+                                   node.findall('geom[@type="cylinder"]'))
         self.parse_param_specs()
         self.param_inited = False
         # parameters
@@ -367,6 +371,34 @@ class Body:
             joint.sync_node()
         for geom in self.geoms:
             geom.sync_node()
+        self._sync_visual_geoms()
+
+    def _sync_visual_geoms(self):
+        """Update box/cylinder visual geom positions to follow the capsule's current fromto."""
+        if not self.visual_geom_nodes:
+            return
+        capsule = next((g for g in self.geoms if g.type == 'capsule'), None)
+        if capsule is None:
+            return
+        # capsule start/end in local body frame
+        if self.local_coord:
+            start = capsule.start - self.pos
+            end = capsule.end - self.pos
+        else:
+            start = capsule.start.copy()
+            end = capsule.end.copy()
+        vec = end - start
+        length = np.linalg.norm(vec)
+        if length < 1e-8:
+            return
+        center = (start + end) / 2
+        fmt = lambda v: ' '.join([f'{x:.6f}'.rstrip('0').rstrip('.') for x in v])
+        for vg_node in self.visual_geom_nodes:
+            vg_node.attrib['pos'] = fmt(center)
+            orig_size = np.fromstring(vg_node.attrib.get('size', '0.05 0.05 0.05'), sep=' ')
+            new_size = orig_size.copy()
+            new_size[0] = length / 2
+            vg_node.attrib['size'] = fmt(new_size)
 
     def sync_geom(self):
         for geom in self.geoms:
