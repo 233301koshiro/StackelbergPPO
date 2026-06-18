@@ -32,16 +32,30 @@
 
 
 
-### Task 3: rrbotを用いたレベル0テスト（`rrbot_topology.json`） ⏳ XML完成・学習待ち
+### Task 3: rrbotを用いたレベル0テスト（`rrbot_topology.json`） 🔄 学習実行中
 
 * **なんのために:** 生成AIのノイズがない綺麗なモデルを使って、「アーム形態でのPusherタスク」が本当に学習可能かを最速で検証するため。
 * **何を作るか:** rrbotの寸法（link1をルートとする）を手作業で記述した検証用JSON + MuJoCo XML + Choreonoid用 `.body` ファイル。
 * **難易度:** ★★☆（中）
 * **理由:** JSON とMuJoCo XMLは作成済み・xml_robot ロード確認済み。ただし Choreonoid 用 `.body` ファイルはフォーマットが独特（`joint_id` 必須・複数ボディ構成）で別途作業が必要。
-* **MuJoCo学習コマンド（Task 1 完了後）:**
+* **MuJoCo学習コマンド:**
   ```bash
-  python3 design_opt/train.py cfg=pusher xml_name=rrbot_arm num_threads=20
+  python3 design_opt/train.py cfg=pusher xml_name=rrbot_arm num_threads=20 enable_wandb=false 'hydra.run.dir=single_run/rrbot_arm'
   ```
+* **実装上のポイント（固定根本アーム対応）:**
+  * `is_fixed_base` プロパティ追加（ルートbodyにfree jointがなければTrue）
+  * 固定根本時の `get_sim_obs()` は自由度なし → zeros(11) でパディング
+  * qvel インデックスは `model.jnt_dofadr[jnt_adr]` で取得（free joint非存在時にオフセット-1が壊れるバグを回避）
+  * 終了条件・`reset_state()` の高さ初期化も固定根本分岐で対応
+
+* **発見したバグ（修正済み）:**
+  1. **cube bodyの原点問題**: `<body name="cube" pos="0 0 0">` のままだと `get_body_com("cube")` が常に `[0,0,0]` を返し、接触報酬 `1/(1+|cube-base|)` が常に1.0になる。アームが何もしなくても満点近くになるため形態最適化の勾配がゼロ。→ body posを `"1.0 0 0.15"` に移動してgeom/joint側のローカルoffsetを削除。
+  2. **接触報酬の基準点**: 固定根本ではbody "0"（基部）が常に原点のため、`get_body_com("0")`も常に`[0,0,0]`。→ 固定根本時は `robot.bodies[-1]`（末端ボディ）を基準に変更。`get_sim_obs()`の `relative_dis` も同様に修正。
+
+* **現在の状況（epoch 27, 2026-06-18時点）:**
+  * `exec_R_eps` = 733（epoch 0: 664 → 上昇中）
+  * キューブ面がx=0.85m、デフォルトリーチ0.55m → リーダーがbone_offsetを伸ばすと届く設計
+  * ETA: 約1日9時間
 
 
 
