@@ -66,17 +66,6 @@ class BodyGenAgent(AgentPPO):
                          policy_grad_clip=[(self.policy_net.parameters(), 40)],
                          use_mini_batch=cfg.mini_batch_size < cfg.min_batch_size, mini_batch_size=cfg.mini_batch_size)
 
-        # 永続ワーカープロセスによる並列サンプリング（Choreonoid / MuJoCo 共通）
-        self._worker_pool = None
-        if num_threads > 1 and training:
-            project_path = cfg.project_path
-            if os.environ.get('USE_CHOREONOID', '0') == '1':
-                from design_opt.utils.worker_pool import ChoreonoidWorkerPool
-                self._worker_pool = ChoreonoidWorkerPool(num_threads, cfg, project_path)
-            else:
-                from design_opt.utils.mujoco_worker_pool import MujocoWorkerPool
-                self._worker_pool = MujocoWorkerPool(num_threads, cfg, project_path)
-
     ## Setting Ups        
     def setup_env(self):
         env_class = env_dict[self.cfg.env_name]
@@ -138,32 +127,15 @@ class BodyGenAgent(AgentPPO):
         if self.cfg.uni_obs_norm:
             self.obs_norm.eval()
             self.obs_norm.to('cpu')
-
-        # Choreonoid マルチワーカー: spawn + 永続プロセス方式
-        if self._worker_pool is not None and not render:
-            with to_cpu(*self.sample_modules):
-                with torch.no_grad():
-                    traj_batch, logger = self._worker_pool.sample(
-                        min_batch_size=min_batch_size,
-                        mean_action=mean_action,
-                        policy_net=self.policy_net,
-                        obs_norm=self.obs_norm,
-                        traj_cls=self.traj_cls,
-                        logger_cls=self.logger_cls,
-                        logger_kwargs=self.logger_kwargs,
-                    )
-            logger.sample_time = time.time() - t_start
-            return traj_batch, logger
-
-        # シングルスレッド or MuJoCo の従来パス
+        
         with to_cpu(*self.sample_modules):
             with torch.no_grad():
-                thread_batch_size = int(math.floor(min_batch_size / nthreads))
+                thread_batch_size = int(math.floor(min_batch_size / nthreads)) 
                 queue = multiprocessing.Queue()
                 memories = [None] * nthreads
-                loggers  = [None] * nthreads
-                for i in range(nthreads - 1):
-                    worker_args = (i + 1, queue, thread_batch_size, mean_action, render)
+                loggers = [None] * nthreads
+                for i in range(nthreads-1):
+                    worker_args = (i+1, queue, thread_batch_size, mean_action, render)
                     worker = multiprocessing.Process(target=self.sample_worker, args=worker_args)
                     worker.start()
                 memories[0], loggers[0] = self.sample_worker(0, None, thread_batch_size, mean_action, render)
@@ -225,7 +197,7 @@ class BodyGenAgent(AgentPPO):
                     break
                 state = next_state
                 
-            logger.end_episode(self.env)
+            logger.end_episode(self.env)        
         logger.end_sampling()
 
         if queue is not None:
@@ -529,11 +501,8 @@ class BodyGenAgent(AgentPPO):
                     if g is not None:
                         p.grad = g.clone()
                 torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.cfg.max_grad_norm)
-                if any(p.grad is not None and torch.isnan(p.grad).any() for p in self.policy_net.parameters()):
-                    self.optimizer_policy.zero_grad()
-                else:
-                    self.optimizer_policy.step()
-
+                self.optimizer_policy.step()
+            
             # -------------------------- Follower: normal update ----------------------------
             if update_list is not None and ('execution' not in update_list):
                 continue
@@ -558,11 +527,8 @@ class BodyGenAgent(AgentPPO):
                 self.para_mgr.selective_backward(surr_loss, self.policy_net, update_list=['execution'])
 
                 torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(), self.cfg.max_grad_norm)
-                if any(p.grad is not None and torch.isnan(p.grad).any() for p in self.policy_net.parameters()):
-                    self.optimizer_policy.zero_grad()
-                else:
-                    self.optimizer_policy.step()
-
+                self.optimizer_policy.step()
+                
         return log_stackel
     
     def split_episodes_from_dones(self, next_dones_t: torch.Tensor):
@@ -699,7 +665,7 @@ class BodyGenAgent(AgentPPO):
         
         self.loss_iter = model_cp['loss_iter']
         self.best_rewards = model_cp.get('best_rewards', self.best_rewards)
-        if model_cp['obs_norm'] is not None and cfg.uni_obs_norm and not cfg.morph_prior and not cfg.reset_obs_norm:
+        if model_cp['obs_norm'] is not None and cfg.uni_obs_norm and not cfg.morph_prior:
             self.obs_norm.load_state_dict(model_cp['obs_norm'])
     
     def filter_keys(self, sd, prefix_exclude=None, prefix_include=None):
