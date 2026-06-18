@@ -152,6 +152,8 @@ class BodyGenAgent(AgentPPO):
 
     ## Per worker sampling
     def sample_worker(self, pid, queue, min_batch_size, mean_action, render):
+        # Prevent libgomp segfault after fork by resetting OpenMP thread count
+        torch.set_num_threads(1)
         ## make seed for the worker
         if pid > 0:
             torch.manual_seed(torch.randint(0, 5000, (1,)) * pid)
