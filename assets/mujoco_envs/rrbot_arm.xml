@@ -23,7 +23,8 @@
     <!-- 2-joint serial arm (rrbot derived, scale 1/8).
          Joints rotate about Z-axis → arm sweeps in XY plane for horizontal pushing.
          bone_offset type=xy: optimizer changes (x,y) of each link endpoint.
-         Total reach: 0.3 + 0.25 = 0.55m; cube face starts at x=0.2. -->
+         Total reach: default 0.55m, max (with bone_offset ub=+0.5) 1.55m.
+         Cube face at x=0.7 → arm CANNOT reach without morphology optimization. -->
     <body name="0" pos="0 0 0">
       <camera name="track" mode="trackcom" pos="0 -3 0.3" xyaxes="1 0 0 0 0 1" />
       <geom pos="0 0 0" size="0.1" type="sphere" />
@@ -40,10 +41,14 @@
         </body>
       </body>
     </body>
-    <body name="cube" pos="0 0 0">
-      <joint name="cube_slide" type="slide" axis="1 0 0" pos="1.2 0 1.02" damping="5.0" range="0  200" />
-      <joint name="cube_slide2" type="slide" axis="0 1 0" pos="1.2 0 1.02" damping="5.0" range="-100  100" />
-      <geom pos="1.2 0 1.02" name="cube_geom" type="box" size="1.0 1.0 1.0" rgba="0.8 0.2 0.2 0.6" friction="0 0 0" density="1" contype="1" conaffinity="1" />
+    <!-- cube: size 0.15 (0.3m side), face at x = 1.0 - 0.15 = 0.85m
+         Body pos at actual cube location so get_body_com("cube") returns (1.0, 0, 0.15).
+         Arm default reach 0.55m < 0.85m → cannot push without morphology change.
+         After leader extends links (+0.3 each), reach ~1.1m > 0.85m → can push. -->
+    <body name="cube" pos="1.0 0 0.15">
+      <joint name="cube_slide" type="slide" axis="1 0 0" damping="2.0" range="-2 200" />
+      <joint name="cube_slide2" type="slide" axis="0 1 0" damping="2.0" range="-100 100" />
+      <geom name="cube_geom" type="box" size="0.15 0.15 0.15" rgba="0.8 0.2 0.2 1.0" friction="0.5 0.1 0.1" density="100" contype="1" conaffinity="1" />
     </body>
   </worldbody>
   <actuator>
