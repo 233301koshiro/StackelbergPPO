@@ -182,15 +182,18 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             reward *= scale
 
             s = self.state_vector()
-            height = s[2]
-            zdir = quaternion_matrix(s[3:7])[:3, 2]
-            ang = np.arccos(zdir[2])
             done_condition = self.cfg.done_condition
-            min_height = done_condition.get('min_height', 0.0)
-            max_height = done_condition.get('max_height', 2.0)
-            max_ang = done_condition.get('max_ang', 3600)
             max_nsteps = done_condition.get('max_nsteps', 1000)
-            termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
+            if self.is_fixed_base:
+                termination = not np.isfinite(s).all()
+            else:
+                height = s[2]
+                zdir = quaternion_matrix(s[3:7])[:3, 2]
+                ang = np.arccos(zdir[2])
+                min_height = done_condition.get('min_height', 0.0)
+                max_height = done_condition.get('max_height', 2.0)
+                max_ang = done_condition.get('max_ang', 3600)
+                termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': reward_ctrl}
@@ -209,6 +212,11 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         return True
         
 
+    @property
+    def is_fixed_base(self):
+        root_joints = self.robot.bodies[0].joints
+        return all(j.type != 'free' for j in root_joints)
+
     def if_use_transform_action(self):
         return ['skeleton_transform', 'attribute_transform', 'execution'].index(self.stage)
 
@@ -223,13 +231,20 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 qvel = np.clip(qvel, -10, 10)
             if i == 0:
                 relative_dis = self.get_body_com("cube")-self.get_body_com("0")
-                obs_i = [self.data.qpos[2:7], qvel[:6], relative_dis, np.zeros(3)]
+                if self.is_fixed_base:
+                    # fixed base: no free joint state; fill with zeros to keep 17-dim structure
+                    obs_i = [np.zeros(11), relative_dis, np.zeros(3)]
+                else:
+                    obs_i = [self.data.qpos[2:7], qvel[:6], relative_dis, np.zeros(3)]
             else:
                 qs, qe = get_single_body_qposaddr(self.model, body.name)
                 if qe - qs >= 1:
                     assert qe - qs == 1
-                    obs_i = [np.zeros(15), self.data.qpos[qs:qe], qvel[qs-1:qe-1]]
-                    # print(qs)
+                    # Use jnt_dofadr for correct qvel index (accounts for free-joint qpos/qvel size mismatch)
+                    body_id = self.model._body_name2id[body.name]
+                    jnt_adr = int(self.model.body_jntadr[body_id])
+                    vs = int(self.model.jnt_dofadr[jnt_adr])
+                    obs_i = [np.zeros(15), self.data.qpos[qs:qe], qvel[vs:vs+1]]
                 else:
                     obs_i = [np.zeros(17)]
             if 'root_offset' in self.sim_specs:
@@ -332,7 +347,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         else:
             qpos = self.init_qpos
             qvel = self.init_qvel
-        if self.env_specs.get('init_height', True):
+        if self.env_specs.get('init_height', True) and not self.is_fixed_base:
             qpos[2] = 0.4
         self.set_state(qpos, qvel)
 

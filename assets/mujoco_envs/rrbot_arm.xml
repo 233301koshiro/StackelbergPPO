@@ -27,14 +27,15 @@
     <body name="0" pos="0 0 0">
       <camera name="track" mode="trackcom" pos="0 -3 0.3" xyaxes="1 0 0 0 0 1" />
       <geom pos="0 0 0" size="0.1" type="sphere" />
-      <joint armature="0" damping="0" limited="false" margin="0.01" name="root" pos="0 0 0" type="free" />
+      <!-- no free joint: base is fixed to world -->
       <!-- shoulder: connects base to upper arm -->
       <body name="1" pos="0 0 0">
         <joint axis="0 0 1" name="1_joint" pos="0 0 0" range="-60 60" type="hinge" />
         <geom fromto="0 0 0 0.3 0 0" size="0.05" type="capsule" />
         <!-- elbow: connects upper arm to forearm; pos is endpoint of upper arm geom -->
-        <body name="2" pos="0.3 0 0">
-          <joint axis="0 0 1" name="2_joint" pos="0 0 0" range="-90 90" type="hinge" />
+        <!-- body name "11" = xml_robot.py reindex: 1st child(ind=1) of body "1" → str(1)+"1" = "11" -->
+        <body name="11" pos="0.3 0 0">
+          <joint axis="0 0 1" name="11_joint" pos="0 0 0" range="-90 90" type="hinge" />
           <geom fromto="0 0 0 0.25 0 0" size="0.04" type="capsule" />
         </body>
       </body>
@@ -47,6 +48,6 @@
   </worldbody>
   <actuator>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1_joint" gear="150" name="1_joint" />
-    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="2_joint" gear="100" name="2_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint" gear="100" name="11_joint" />
   </actuator>
 </mujoco>
