@@ -155,8 +155,7 @@ class BodyGenAgent(AgentPPO):
         ## make seed for the worker
         if pid > 0:
             torch.manual_seed(torch.randint(0, 5000, (1,)) * pid)
-            if hasattr(self.env, 'np_random'):
-                self.env.np_random.seed(self.env.np_random.randint(5000) * pid)
+            np.random.seed(pid * 1337)
         
         memory = Memory()
         logger = self.logger_cls(**self.logger_kwargs)
