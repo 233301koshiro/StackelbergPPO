@@ -44,10 +44,13 @@
       </body>
     </body>
     <!-- cube: size 0.15 (0.3m side), face at x = 1.0 - 0.15 = 0.85m
-         Body pos at actual cube location so get_body_com("cube") returns (1.0, 0, 0.15).
+         Body pos at actual cube location so get_body_com("cube") returns (1.0, 0, 0.20).
+         z=0.20: cube bottom at z=0.05 (5cm above floor) → avoids Choreonoid tickRequest hang
+         caused by exact floor contact (z=0) during stopSim+startSim restart cycle.
+         Arm at z=0.15 hits cube side within range z=0.05-0.35 → horizontal pushing works.
          Arm default reach 0.55m < 0.85m → cannot push without morphology change.
          After leader extends links (+0.3 each), reach ~1.1m > 0.85m → can push. -->
-    <body name="cube" pos="1.0 0 0.15">
+    <body name="cube" pos="1.0 0 0.20">
       <joint name="cube_slide" type="slide" axis="1 0 0" damping="2.0" range="-2 200" />
       <joint name="cube_slide2" type="slide" axis="0 1 0" damping="2.0" range="-100 100" />
       <geom name="cube_geom" type="box" size="0.15 0.15 0.15" rgba="0.8 0.2 0.2 1.0" friction="0.5 0.1 0.1" density="100" contype="1" conaffinity="1" />

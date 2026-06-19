@@ -847,6 +847,7 @@ class ChoreonoidSimWorld:
 
         if self.is_running:
             self.sim_item.stopSimulation()
+            IU.processEvent()  # flush stop signal before restart
         self.sim_item.startSimulation(doReset=True)
         self.is_running = True
 
@@ -867,6 +868,7 @@ class ChoreonoidSimWorld:
 
     def reset(self) -> dict:
         self.sim_item.stopSimulation()
+        IU.processEvent()  # flush stop signal before restart
         for item in self.body_items.values():
             item.restoreInitialState(True)
         self.sim_item.startSimulation(doReset=True)
