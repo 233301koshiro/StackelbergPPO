@@ -24,8 +24,10 @@
          Joints rotate about Z-axis → arm sweeps in XY plane for horizontal pushing.
          bone_offset type=xy: optimizer changes (x,y) of each link endpoint.
          Total reach: default 0.55m, max (with bone_offset ub=+0.5) 1.55m.
-         Cube face at x=0.7 → arm CANNOT reach without morphology optimization. -->
-    <body name="0" pos="0 0 0">
+         Cube face at x=0.85m → arm CANNOT reach without morphology optimization.
+         Base at z=0.15: sphere (r=0.1) bottom at z=0.05, avoids floor penetration in Choreonoid.
+         Arm and cube both at z=0.15 → horizontal pushing geometry aligned. -->
+    <body name="0" pos="0 0 0.15">
       <camera name="track" mode="trackcom" pos="0 -3 0.3" xyaxes="1 0 0 0 0 1" />
       <geom pos="0 0 0" size="0.1" type="sphere" />
       <!-- no free joint: base is fixed to world -->
