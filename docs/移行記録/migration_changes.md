@@ -13,7 +13,8 @@
 旧版は ZMQ クライアントだったが、現在は `cnoid` バインディングを直接使う。
 
 ```
-mujoco_xml_to_urdf()       ← 旧 cnoid_sim_server.py から移設
+mujoco_xml_to_body()       ← MuJoCo XML → Choreonoid .body YAML 変換（ネイティブ形式）
+                              ※当初は mujoco_xml_to_urdf() を使っていたが .body 形式に移行
 ChoreonoidSimWorld          ← 旧 cnoid_sim_server.py から移設
 ChoreonoidEnv               ← ZMQ 削除、ChoreonoidSimWorld を直接呼ぶように変更
 _ModelProxy, _DataProxy     ← 変更なし（透過補完レイヤー）
@@ -45,6 +46,19 @@ USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
 
 Hydra 1.3 が `config_path` をPythonモジュールとして解決するために必要。
 
+### `scripts/worker_pool.py`（新規）
+
+マルチスレッド学習用の永続ワーカープール。`choreonoid --no-window --python scripts/worker_sampler.py` をスポーンし、Pipe 経由でポリシー重みとサンプル結果をやり取りする。
+
+### `scripts/smoke_test_cnoid.py`（新規）
+
+Choreonoid 環境のヘルスチェックスクリプト。学習前の事前確認用。3エピソード完走・NaN/Inf なし・exec_reward > 0 をチェック。
+
+```bash
+USE_CHOREONOID=1 /choreonoid_ws/install/bin/choreonoid --no-window \
+  --python scripts/smoke_test_cnoid.py cfg=pusher xml_name=rrbot_arm
+```
+
 ---
 
 ## 既存ファイルへの変更
@@ -71,6 +85,14 @@ ctrl[aind] = body_a.item()
 ```
 
 対象: pusher / gap / hopper / ant / walker / swimmer / stair / stairhard
+
+**変更3 (pusher.py 固有)**: 固定根本アーム（`rrbot_arm`）対応
+
+- `is_fixed_base` プロパティ追加（ルートに free joint がなければ True）
+- `get_sim_obs()` i==0 分岐: 固定根本時は `zeros(11)` でパディング（free joint state なし）
+- 接触報酬・観測の基準点: 固定根本では `robot.bodies[-1].name`（末端ボディ）を使用
+- `model.jnt_dofadr` フォールバック: Choreonoid `_ModelProxy` は `jnt_dofadr` 非対応のため `jnt_qposadr` で代替
+- `reset_model()` を `reset_robot()` + `reset_state()` に分離（reload 責務の明確化）
 
 ---
 

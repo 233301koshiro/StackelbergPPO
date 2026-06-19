@@ -105,8 +105,8 @@ self.world_item.addChildItem(self.sim_item)
 
 ```
 MuJoCo XML（xml_robot.py が生成）
-   ↓  mujoco_xml_to_urdf()
-URDF 文字列（/tmp/xxxxx.urdf に一時書き出し）
+   ↓  mujoco_xml_to_body()
+Choreonoid .body YAML（/tmp/xxxxx.body に一時書き出し）
    ↓  BodyItem.load()
 Choreonoid のアイテムツリーに追加
    ↓  sim_item.startSimulation(doReset=True)
@@ -115,7 +115,7 @@ Choreonoid のアイテムツリーに追加
 SimulationBody（状態読み書き用ハンドル）を取得
 ```
 
-URDF は Choreonoid が直接読める形式なので、MuJoCo XML → URDF 変換が必要になる。変換処理（`mujoco_xml_to_urdf()`）は `mujoco_env_choreonoid.py` 内に実装されている。
+Choreonoid ネイティブの `.body` YAML フォーマットに変換してロードする。変換処理（`mujoco_xml_to_body()`）は `mujoco_env_choreonoid.py` 内に実装されている。URDF 経由ではなくネイティブ形式を使う理由は、Capsule ジオメトリを精度よく表現できることと、URDF パーサーの `<dynamics>` タグ未対応警告を回避できるため。
 
 ---
 
@@ -248,8 +248,8 @@ train.py: for epoch in range(max_epoch):
 | メソッド | 行 | 説明 |
 |---------|-----|------|
 | `BodyGenAgent` | L32 | エージェントクラス定義 |
-| `sample()` | L128 | 環境からエピソードデータを収集 |
-| `optimize()` | L232 | 1 エポック分の学習（sample → PPO 更新） |
+| `sample()` | L132 | 環境からエピソードデータを収集 |
+| `optimize()` | L236 | 1 エポック分の学習（sample → PPO 更新） |
 
 **`design_opt/envs/pusher.py`**
 
@@ -257,21 +257,24 @@ train.py: for epoch in range(max_epoch):
 |---------|-----|------|
 | `PusherEnv` | L21 | pusher タスク環境クラス定義 |
 | `step()` | L119 | 設計フェーズ分岐 + 実行フェーズの報酬計算 |
-| `transit_execution()` | L201 | 設計フェーズ終了→実行フェーズへ移行 |
-| `reset_state()` | L328 | ロボット初期姿勢設定（`add_noise` で ±0.1 ノイズ） |
-| `reset_model()` | L347 | エピソードリセット |
+| `transit_execution()` | L205 | 設計フェーズ終了→実行フェーズへ移行（reset_state のみ、reload 不要） |
+| `reset_state()` | L348 | ロボット初期姿勢設定（`add_noise` で ±0.1 ノイズ） |
+| `reset_robot()` | L359 | ロボット再構築・モデル再ロード |
+| `reset_model()` | L367 | エピソードリセット（reset_robot → reset_state） |
+| `is_fixed_base` | L216 | プロパティ: ルートに free joint がなければ True（rrbot_arm 用） |
 
 **`khrylib/rl/envs/common/mujoco_env_choreonoid.py`**
 
 | クラス / メソッド | 行 | 説明 |
 |-----------------|-----|------|
-| `ChoreonoidSimWorld` | L407 | Choreonoid 操作ラッパークラス |
-| `_setup_world()` | L418 | アイテムツリー初期化（WorldItem・床・AISTSimulatorItem） |
-| `load_model()` | L437 | XML → URDF 変換・BodyItem ロード・シミュレーション開始 |
-| `reset()` | L487 | シミュレーション再起動・初期状態復元 |
-| `step()` | L505 | トルク書き込み・`tickRequest()` × frame_skip |
-| `set_state_cmd()` | L522 | 関節角度・角速度を直接指定 |
-| `ChoreonoidEnv` | L534 | MuJoCo 互換 API ラッパークラス |
-| `do_simulation()` | L653 | `ChoreonoidSimWorld.step()` の呼び出し口 |
-| `reload_sim_model()` | L657 | 形態変更時のモデル再ロード |
-| `get_body_com()` | L666 | リンクのワールド座標取得 |
+| `mujoco_xml_to_body()` | L270 | MuJoCo XML → Choreonoid .body YAML 変換（ネイティブ形式） |
+| `ChoreonoidSimWorld` | L770 | Choreonoid 操作ラッパークラス |
+| `_setup_world()` | L790 | アイテムツリー初期化（WorldItem・床・AISTSimulatorItem） |
+| `load_model()` | L809 | XML → .body 変換・BodyItem ロード・シミュレーション開始 |
+| `reset()` | L869 | シミュレーション再起動・初期状態復元 |
+| `step()` | L888 | トルク書き込み・`tickRequest()` × frame_skip |
+| `set_state_cmd()` | L906 | 関節角度・角速度を直接指定 |
+| `ChoreonoidEnv` | L917 | MuJoCo 互換 API ラッパークラス |
+| `do_simulation()` | L1036 | `ChoreonoidSimWorld.step()` の呼び出し口 |
+| `reload_sim_model()` | L1040 | 形態変更時のモデル再ロード |
+| `get_body_com()` | L1049 | リンクのワールド座標取得 |

@@ -92,3 +92,44 @@ Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
 | ハッシュ | 内容 |
 |---------|------|
 | `676c5cc` | **`mujoco_xml_to_urdf()` の `coordinate="global"` 座標変換バグを修正**。depth-2 以降のボディの関節位置・衝突形状・慣性がワールド座標のまま URDF に書き出されていた問題を修正。`process_body()` に親グローバル位置を伝播し、`add_link()` でボディローカル座標に変換するよう変更。`docs/choreonoid_migration.md` に「修正11」として原因・影響・経緯を記録。|
+
+---
+
+### 2026-06-17（MuJoCo 3.x 移行・rrbot 追加・.body 形式移行）
+
+| ハッシュ | 内容 |
+|---------|------|
+| `8893ecd` | **`mujoco-py` を廃止し `mujoco` 3.x パッケージへ移行**。`mujoco_env_gym.py` を mujoco 3.x API（`mujoco.MjModel.from_xml_path` 等）に書き直し。 |
+| `c29ab45` | **MuJoCo 2.x `coordinate="global"` → 3.x `coordinate="local"` 変換**。3.x では global 座標系が廃止されたため `xml_robot.py` の出力を local 座標に変換。 |
+| `a596be7` | **`xml_robot.py` の `compiler` 属性なし KeyError を修正**。`coordinate` 属性が存在しない場合の safe get 追加。 |
+| `9e4d895` | **永続ワーカープールによる MuJoCo 並列サンプリングを実装**。`worker_pool.py`（MuJoCo 用）を追加し、MuJoCo 環境でも spawn+Pipe 方式のマルチスレッドサンプリングを実現。 |
+| `e08a7aa` | **Choreonoid 学習用設定ファイルと rrbot データを追加**。`design_opt/conf/pusher_choreonoid.yaml`、`data/rrbot_description/rrbot_topology.json` を追加。 |
+| `1122486` | **MuJoCo 3.x 移行記録ドキュメントを追加**（`docs/移行記録/mujoco3_migration.md`）。 |
+| `139ad9a` | **勾配爆発クラッシュを修正**。`max_grad_norm=40→5`、`genesis_agent.py` に NaN グラジェント検出ガード追加、`bodygen_policy.py` に NaN forward 検出 RuntimeError 追加。 |
+| `3197f15` | **rrbot 2 関節アームを pusher タスク用に追加**。`assets/mujoco_envs/rrbot_arm.xml` 新規作成、xml_robot ロード確認済み。 |
+| `9c9d05f` | **ネイティブエンジン評価・比較レポートスクリプトを追加**。`scripts/eval_cross_env.py`（サブプロセス分離評価）、`scripts/generate_comparison_report.py`（Markdown/PNG レポート生成）。 |
+| `57dd8ad` | **進捗ドキュメントを更新**。`docs/進捗.md` を現状に合わせて改訂。 |
+| `5c80c95` | **MuJoCo XML → Choreonoid `.body` 変換関数を追加**。`mujoco_xml_to_body()` を `mujoco_env_choreonoid.py` に実装。URDF 経由から Choreonoid ネイティブ `.body` YAML 形式に移行。`joint_id` 必須・多ボディ構成・Capsule ネイティブ対応。 |
+
+---
+
+### 2026-06-18（固定根本アーム対応・バグ修正群）
+
+| ハッシュ | 内容 |
+|---------|------|
+| `f1f24f1` | **固定根本アーム（`rrbot_arm`）を pusher env に対応**。`is_fixed_base` プロパティ追加。`get_sim_obs()` で固定根本時は zeros(11) パディング。`model.jnt_dofadr` 非対応時 `jnt_qposadr` フォールバック追加。 |
+| `0e1f4d0` | **visual geom（box/cylinder）の bone_offset 同期を追加**（verification 2+3）。 |
+| `619acec` | **ROADMAP を大幅改訂**。6〜10月の全タスクに詳細説明・実装ポイント・バグ事後分析を追記。 |
+| `d749ec4` | **ROADMAP に Task 4（`.body` 動的再生成）を追加**。7月の Task 4→5 シフト。 |
+| `eec54eb` | **cube body pos バグを修正**。`<body name="cube" pos="0 0 0">` → `pos="1.0 0 0.15"` に変更。`get_body_com("cube")` が常に `[0,0,0]` を返していた問題（exec_R_eps=937 の誤学習）を解消。 |
+| `fc1bafe` | **固定根本時の接触報酬基準点を修正**。`get_body_com("0")`（基部、常に原点）→ `robot.bodies[-1].name`（末端ボディ）に変更。`get_sim_obs()` の `relative_dis` も同様に修正。 |
+| `fbe9fe0` | **ROADMAP Task 3 に固定根本アーム実装ノートとバグ事後分析を追記**。 |
+
+---
+
+### 2026-06-19（Choreonoid ハング修正・スモークテスト）
+
+| ハッシュ | 内容 |
+|---------|------|
+| `457ac6f` | **Choreonoid ハング修正とスモークテストを追加**。base sphere (r=0.1) がフロアに埋没する問題（base z=0 → z=0.15 で解消）。`jnt_dofadr` フォールバック修正。`scripts/smoke_test_cnoid.py` 新規追加。 |
+| `9709cdf` | **cube フロア接触による `tickRequest` デッドロックを修正**。cube を `pos="1.0 0 0.15"` → `pos="1.0 0 0.20"` に変更（底面 z=0.05 でフロア非接触）。`stopSimulation()` 後に `IU.processEvent()` を追加。`smoke_test_cnoid.py` の action 形状・`_check_finite`・`sys.exit` も修正。スモークテスト PASS (exec_reward=367〜624, 3ep完走)。 |
