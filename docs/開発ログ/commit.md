@@ -134,3 +134,21 @@ Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
 | `457ac6f` | **Choreonoid ハング修正とスモークテストを追加**。base sphere (r=0.1) がフロアに埋没する問題（base z=0 → z=0.15 で解消）。`jnt_dofadr` フォールバック修正。`scripts/smoke_test_cnoid.py` 新規追加。 |
 | `9709cdf` | **cube フロア接触による `tickRequest` デッドロックを修正**。cube を `pos="1.0 0 0.15"` → `pos="1.0 0 0.20"` に変更（底面 z=0.05 でフロア非接触）。`stopSimulation()` 後に `IU.processEvent()` を追加。`smoke_test_cnoid.py` の action 形状・`_check_finite`・`sys.exit` も修正。スモークテスト PASS (exec_reward=367〜624, 3ep完走)。 |
 | `edbe430` | **ドキュメント状態の同期**。全 Markdown ファイルを現在の実装状態に合わせて更新（`docs: sync all markdown files with current implementation state`）。 |
+
+---
+
+### 2026-06-19（NaN クラッシュ根本原因特定・fix_skeleton 導入）
+
+`RuntimeError: NaN in control_action_mean` (epoch 0 最適化クラッシュ) の根本原因を特定・修正した一連のコミット。
+
+**根本原因**: `fix_skeleton` フラグが config になく default False → スケルトン変換が毎エピソード関節を追加（3→4→5→6）→ 不安定な物理で `qpos` が 1e165〜1e300 に発散（`np.isfinite` は True のため既存ガードをすり抜け）→ `RunningNorm.update()` が `torch.var_mean(1e300値)` を計算 → `sum > float64 max (1.8e308)` → `mean = Inf` → 全観測の正規化結果が NaN → epoch 全体がクラッシュ。
+
+| ハッシュ | 内容 |
+|---------|------|
+| `700522d` | **`fix_skeleton` オプションを追加**（トポロジー固定学習に必須）。`design_opt/conf/config.yaml` に `fix_skeleton: false` を追加。`design_opt/utils/config.py` で `self.fix_skeleton = FLAG.get('fix_skeleton', False)` を読み込み。`design_opt/envs/pusher.py` と `ant.py` の `step()` に `fix_skeleton=true` 時はスケルトン変換ステージをスキップして即 attr_trans に遷移するブランチを追加。 |
+| `bd3773d` | **ワーカーサンプリングループに NaN ガードを追加**。`scripts/worker_sampler.py` の観測配列クランプ（`nan_to_num` → `clamp(±1e6)`）、`tensorfy` 前 NaN チェック、`policy.select_action` の `RuntimeError` try/except（ゼロアクションフォールバック）、`memory.push` 前の BAD STATE チェックを追加。 |
+| `4735d27` | **RunningNorm の極端値による破損を防止**。`khrylib/rl/core/running_norm.py` の `update()` に非有限行スキップを追加。`design_opt/agents/genesis_agent.py` の `normalize_observation()` に `±1e6` クランプと出力 NaN ガードを追加。 |
+| `7c3f7d8` | **BodyGenPolicy の全 Transformer ステージに NaN 検出を追加**。`design_opt/models/bodygen_policy.py` の `attr_action_mean`・`skel_logits`・`control_action_mean` に `torch.isnan()` チェック + `RuntimeError` を追加（既存の診断出力を強化）。 |
+| `1863cf3` | **`_get_model_info()` の init_qpos を実際の Choreonoid ボディ位置から構築**。`khrylib/rl/envs/common/mujoco_env_choreonoid.py` のハードコードゼロ初期化を廃止し、浮動ボディ姿勢＋関節 q 値から正確な初期姿勢を構築するよう変更。 |
+| `f795315` | **`smoke_test_cnoid.py` を最小構成の環境サニティチェックに簡略化**。184 行 → 31 行。学習前ヘルスチェックの本質（3 エピソードランダムアクション + NaN チェック）だけを残し、デバッグ用コードを削除。 |
+| `ae8fcaa` | **commit.md を更新**（本コミット群の記録、ただし内容は不完全）。 |
