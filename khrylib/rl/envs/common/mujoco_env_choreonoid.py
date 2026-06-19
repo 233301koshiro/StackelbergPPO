@@ -680,10 +680,22 @@ def _get_model_info(sim_body_list, actuators_map, timestep):
     actuator_names = [v['name'] for v in actuators_map.values()]
     ctrlrange      = [v['ctrlrange'] for v in actuators_map.values()]
 
-    init_qpos = [0.0] * nq_total
-    first_b   = sim_body_list[0].body()
-    if first_b.rootLink.jointType == first_b.rootLink.FreeJoint:
-        init_qpos[2] = 0.4  # robot initial z-height
+    # Build init_qpos from actual body positions (not zeros).
+    # Floating bodies (cube etc.) carry real world poses that must be preserved.
+    init_qpos = []
+    init_qvel = []
+    for sim_body in sim_body_list:
+        b    = sim_body.body()
+        root = b.rootLink
+        is_floating = (root.jointType == root.FreeJoint)
+        if is_floating:
+            p    = list(root.translation)
+            quat = _rot_to_quat_wxyz(np.asarray(root.rotation))
+            init_qpos += p + list(quat)
+            init_qvel += [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        for i in range(b.numJoints):
+            init_qpos.append(b.joint(i).q)
+            init_qvel.append(0.0)
 
     return {
         'nq': nq_total, 'nv': nv_total, 'timestep': timestep,
@@ -691,7 +703,7 @@ def _get_model_info(sim_body_list, actuators_map, timestep):
         'body_names': body_names,
         'body_jntadr': body_jntadr_all, 'body_jntnum': body_jntnum_all,
         'jnt_qposadr': jnt_qposadr,
-        'init_qpos': init_qpos, 'init_qvel': [0.0] * nv_total,
+        'init_qpos': init_qpos, 'init_qvel': init_qvel,
     }
 
 
