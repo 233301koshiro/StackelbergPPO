@@ -171,8 +171,13 @@ while True:
                         action = np.zeros((_n, _d), dtype=np.float64)
 
                 next_state, env_reward, termination, truncation, info = env.step(action)
+                if not np.isfinite(env_reward):
+                    print(f'[worker {WORKER_ID}] NaN/Inf reward={env_reward} stage={info.get("stage")} → replaced with 0', flush=True)
+                    env_reward = 0.0
                 reward   = env_reward
                 c_reward = info.get('reward_ctrl', 0)
+                if not np.isfinite(c_reward):
+                    c_reward = 0.0
 
                 if info['stage'] == 'execution':
                     reward += cfg.reward_shift
