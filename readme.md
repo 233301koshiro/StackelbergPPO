@@ -44,26 +44,33 @@ cd StackelbergPPO
 ### 基本（4スレッド推奨）
 
 ```bash
-USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
-  choreonoid --no-window --python scripts/choreonoid_train.py \
+nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
+  --no-window --python scripts/choreonoid_train.py \
   cfg=pusher num_threads=4 \
   hydra.run.dir=single_run/pusher_cnoid \
-  enable_wandb=false
+  enable_wandb=false \
+  > single_run/pusher_cnoid/stdout.log 2>&1 &
 ```
 
 `choreonoid --no-window --python` が必要な理由: シミュレータ（AISTSimulatorItem）は Choreonoid の Qt アプリコンテキストが必要なため、通常の `python3` では動かない。
+
+> **起動形式の注意（重要）**: `bash -c '...'` や `bash -c "..."` でコマンドをラップすると、
+> クォートの競合で `hydra.run.dir=...` が bash の `$0` 引数として解釈されてサイレントに無視される。
+> その結果チェックポイントがデフォルト（`single_run/${cfg}/`）に保存されてしまう。
+> 必ず上記の `nohup env VAR=val choreonoid ...` 形式で直接起動すること。
 
 **利用可能な環境**: cheetah, crawler, glider-hard, glider-medium, glider-regular, pusher, stepper-hard, stepper, swimmer, terraincrosser, walker-hard, walker-medium, walker-regular
 
 ### チェックポイントから再開
 
 ```bash
-USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
-  choreonoid --no-window --python scripts/choreonoid_train.py \
+nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
+  --no-window --python scripts/choreonoid_train.py \
   cfg=pusher num_threads=4 \
   hydra.run.dir=single_run/pusher_cnoid \
   +restore_dir=single_run/pusher_cnoid \
-  enable_wandb=false
+  enable_wandb=false \
+  > single_run/pusher_cnoid/stdout.log 2>&1 &
 ```
 
 チェックポイントは `{hydra.run.dir}/models/` に保存される。
@@ -73,13 +80,14 @@ USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
 ### 形態のみ引き継いでスクラッチ再学習（MuJoCo → Choreonoid 移行時）
 
 ```bash
-USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
-  choreonoid --no-window --python scripts/choreonoid_train.py \
+nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
+  --no-window --python scripts/choreonoid_train.py \
   cfg=pusher num_threads=4 \
   hydra.run.dir=single_run/pusher_cnoid_transfer \
   +restore_dir=single_run/pusher_mujoco \
   morph_prior=true reset_epoch=true \
-  enable_wandb=false
+  enable_wandb=false \
+  > single_run/pusher_cnoid_transfer/stdout.log 2>&1 &
 ```
 
 ---

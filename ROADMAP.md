@@ -18,11 +18,17 @@
 
 ### Task 2: 共通評価・レポート自動生成スクリプト (`eval_cross_env.py` 等) ✅ 完成・実行待ち
 
+> **方針変更（2026-06-19）**: 比較検証は**後回し**。両学習の収束後に実施する。
+> 理由: ①費用対効果が見合わない（エンジン差の原因調査は長期化する）、
+>       ②sim-to-sim 転送でエンジン等価性は証明できない（学習曲線の形状比較のみ有効）、
+>       ③システム構築（Task 3.5・4）を先に完成させる方が研究全体の進捗に寄与する。
+> → **今は実行しない。スクリプトは完成済みで準備は整っている。**
+
 * **なんのために:** 物理エンジン間の報酬絶対値のズレを無視し、「タスク成功率」という公平な指標で両者を比較・評価するため。
 * **何を作るか:** 各ポリシーをネイティブ物理エンジン（MuJoCo学習→MuJoCo評価、Choreonoid→Choreonoid）で評価するサブプロセス分離方式の集計スクリプト＋学習曲線グラフ・Markdownレポートの自動生成。
 * **難易度:** ★★★（高）
 * **理由:** `USE_CHOREONOID` が Python の import 時に固定されるため、1プロセス内でエンジンを切り替えできない。run ごとにサブプロセスを spawn して環境変数を分離する設計が必要で、実際にデバッグに手間がかかった。
-* **実行コマンド（MuJoCo学習完走後）:**
+* **実行コマンド（両学習収束後）:**
   ```bash
   python3 scripts/generate_comparison_report.py \
     --runs single_run/pusher_upstream single_run/pusher_cnoid_v3 \
@@ -56,11 +62,11 @@
   * `exec_R_eps` = 728〜748（epoch 0: 664 → 上昇中だったが Choreonoid 優先で停止）
   * `single_run/rrbot_arm/` に保存済み（再開可能）
 
-* **Choreonoid学習状況（2026-06-19 開始、第5回試行）:**
+* **Choreonoid学習状況（2026-06-19 開始）:**
   * 環境: `USE_CHOREONOID=1`, num_threads=4, `single_run/rrbot_arm_cnoid/`
-  * スモークテスト PASS 確認済み（exec_reward=367〜624, ハングなし）
-  * ハング原因と修正: cube 底面 (z=0) がフロアと完全接触 → z=0.20 に変更 + `stopSimulation()` 後に `IU.processEvent()` 追加
-  * 第1エポック完走待ち（T_sample 見込み: 数分〜30分）
+  * reward NaN ガード・`fix_skeleton=true` 適用済み（NaN クラッシュ修正版）
+  * 現在 epoch 4+（exec_R_eps=4273、継続中）、oscillation あり（-1300〜+4273 の範囲）
+  * ログ: `single_run/rrbot_arm_cnoid/stdout.log`
 
 
 
