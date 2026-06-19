@@ -98,6 +98,10 @@ print(f'[worker {WORKER_ID}] ready', flush=True)
 def normalize_obs(obs_norm, state_var):
     obs, edges, use_transform_action, num_nodes, body_ind, body_depths, body_heights, distances, lapPE = zip(*state_var)
     obs_cat  = torch.cat(obs)
+    # Clamp extreme/non-finite values to prevent RunningNorm overflow
+    if not torch.isfinite(obs_cat).all() or (obs_cat.abs() > 1e6).any():
+        obs_cat = torch.nan_to_num(obs_cat, nan=0.0, posinf=0.0, neginf=0.0)
+        obs_cat = torch.clamp(obs_cat, -1e6, 1e6)
     obs_norm_val = obs_norm(obs_cat)
     indices  = np.cumsum(num_nodes)
     obs_split = [obs_norm_val[start:end]
@@ -140,6 +144,12 @@ while True:
             logger.start_episode(env)
 
             while True:
+                # NaN guard: sanitize obs before tensorfy
+                _obs_arr = state[0]
+                if hasattr(_obs_arr, '__array__') and np.isnan(np.asarray(_obs_arr, dtype=float)).any():
+                    print(f'[worker {WORKER_ID}] NaN in obs! stage={state[2]} obs={np.asarray(_obs_arr)}', flush=True)
+                    state[0] = np.nan_to_num(np.asarray(_obs_arr, dtype=float), nan=0.0)
+
                 state_var = tensorfy([state])
 
                 if cfg.uni_obs_norm and obs_norm is not None:
@@ -150,8 +160,15 @@ while True:
                     torch.tensor([1 - noise_rate])).item()
 
                 with torch.no_grad():
-                    action = policy_net.select_action(
-                        state_var, use_mean).numpy().astype(np.float64)
+                    try:
+                        action = policy_net.select_action(
+                            state_var, use_mean).numpy().astype(np.float64)
+                    except RuntimeError as _e:
+                        print(f'[worker {WORKER_ID}] policy NaN fallback: {_e}', flush=True)
+                        # Use zero control action to allow episode to continue
+                        _n = len(env.robot.bodies)
+                        _d = env.control_action_dim + env.attr_design_dim + 1
+                        action = np.zeros((_n, _d), dtype=np.float64)
 
                 next_state, env_reward, termination, truncation, info = env.step(action)
                 reward   = env_reward
@@ -164,6 +181,13 @@ while True:
 
                 done = (termination or truncation)
                 exp  = 1 - use_mean
+
+                # Deep NaN/Inf check before storing in memory
+                _s0 = np.asarray(state[0], dtype=float)
+                if not np.all(np.isfinite(_s0)):
+                    _bad = np.where(~np.isfinite(_s0))
+                    print(f'[worker {WORKER_ID}] BAD STATE[0] stage={state[2]} indices={_bad[0][:5]} vals={_s0[_bad[0][:5]]}', flush=True)
+                    state[0] = np.nan_to_num(_s0, nan=0.0, posinf=0.0, neginf=0.0)
 
                 memory.push(state, action, termination, done,
                             next_state, reward, exp, c_reward)
