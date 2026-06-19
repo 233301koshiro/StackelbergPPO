@@ -68,6 +68,11 @@ t0 = time.time()
 env = env_dict[cfg.env_name](cfg, agent=None)
 print(f'[smoke] env built in {time.time()-t0:.1f}s', flush=True)
 
+# PusherEnv の step() は (n_bodies, ctrl+design+skel) の 2D アクションを期待する
+n_bodies   = len(env.robot.bodies)
+total_adim = env.control_action_dim + env.attr_design_dim + 1
+print(f'[smoke] action shape: ({n_bodies}, {total_adim})', flush=True)
+
 # --- 判定用集計 ------------------------------------------------------------
 N_EPISODES   = 3
 MAX_STEP_SEC = 30.0   # 1ステップがこれを超えたらハング判定
@@ -79,10 +84,19 @@ results = {
 }
 
 def _check_finite(val, label):
-    arr = np.atleast_1d(val)
-    if not np.all(np.isfinite(arr)):
-        results['nan_count'] += 1
-        results['errors'].append(f'NaN/Inf in {label}')
+    """_get_obs() はリスト形式を返すため、再帰的にフラット化してチェック"""
+    try:
+        def _flat(v):
+            if isinstance(v, (list, tuple)):
+                parts = [_flat(x) for x in v]
+                return np.concatenate([p for p in parts if p is not None and len(p) > 0])
+            return np.atleast_1d(v).ravel()
+        arr = _flat(val)
+        if not np.all(np.isfinite(arr)):
+            results['nan_count'] += 1
+            results['errors'].append(f'NaN/Inf in {label}')
+    except Exception:
+        pass
 
 # --- エピソードループ -------------------------------------------------------
 for ep in range(N_EPISODES):
@@ -96,7 +110,7 @@ for ep in range(N_EPISODES):
     stage_done = False
 
     while not stage_done:
-        action = env.action_space.sample() * 0.0   # ゼロアクション
+        action = np.zeros((n_bodies, total_adim), dtype=np.float32)  # ゼロアクション(2D: bodies x dims)
 
         t_step = time.time()
         obs, reward, term, trunc, info = env.step(action)
@@ -166,4 +180,5 @@ else:
     print('[smoke] ===  OVERALL: FAIL  ===', flush=True)
 print('='*50, flush=True)
 
-sys.exit(0 if all_pass else 1)
+import os as _os
+_os._exit(0 if all_pass else 1)
