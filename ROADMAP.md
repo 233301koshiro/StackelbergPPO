@@ -52,10 +52,15 @@
   1. **cube bodyの原点問題**: `<body name="cube" pos="0 0 0">` のままだと `get_body_com("cube")` が常に `[0,0,0]` を返し、接触報酬 `1/(1+|cube-base|)` が常に1.0になる。アームが何もしなくても満点近くになるため形態最適化の勾配がゼロ。→ body posを `"1.0 0 0.15"` に移動してgeom/joint側のローカルoffsetを削除。
   2. **接触報酬の基準点**: 固定根本ではbody "0"（基部）が常に原点のため、`get_body_com("0")`も常に`[0,0,0]`。→ 固定根本時は `robot.bodies[-1]`（末端ボディ）を基準に変更。`get_sim_obs()`の `relative_dis` も同様に修正。
 
-* **現在の状況（epoch 27, 2026-06-18時点）:**
-  * `exec_R_eps` = 733（epoch 0: 664 → 上昇中）
-  * キューブ面がx=0.85m、デフォルトリーチ0.55m → リーダーがbone_offsetを伸ばすと届く設計
-  * ETA: 約1日9時間
+* **MuJoCo学習状況（2026-06-18停止、epoch 33）:**
+  * `exec_R_eps` = 728〜748（epoch 0: 664 → 上昇中だったが Choreonoid 優先で停止）
+  * `single_run/rrbot_arm/` に保存済み（再開可能）
+
+* **Choreonoid学習状況（2026-06-19 開始、第5回試行）:**
+  * 環境: `USE_CHOREONOID=1`, num_threads=4, `single_run/rrbot_arm_cnoid/`
+  * スモークテスト PASS 確認済み（exec_reward=367〜624, ハングなし）
+  * ハング原因と修正: cube 底面 (z=0) がフロアと完全接触 → z=0.20 に変更 + `stopSimulation()` 後に `IU.processEvent()` 追加
+  * 第1エポック完走待ち（T_sample 見込み: 数分〜30分）
 
 
 

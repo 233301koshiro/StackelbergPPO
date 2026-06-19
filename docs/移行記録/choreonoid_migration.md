@@ -126,7 +126,7 @@ USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
 
 主要コンポーネント:
 
-- **`mujoco_xml_to_urdf()`**: MuJoCo XML → URDF 変換器（旧 `cnoid_sim_server.py` から移設）
+- **`mujoco_xml_to_body()`**: MuJoCo XML → URDF 変換器（旧 `cnoid_sim_server.py` から移設）
 - **`ChoreonoidSimWorld`**: WorldItem + AISTSimulatorItem の管理クラス（同上）
 - **`ChoreonoidEnv`**: `MujocoEnv` 互換クラス。`ChoreonoidSimWorld` を内部に持ち直接呼ぶ
 - **`_ModelProxy`, `_DataProxy`**: 既存 env コードが `self.model.nq` や `self.data.qpos` にアクセスする部分を透過補完
@@ -370,30 +370,27 @@ Worker N（同上）
 
 ## Choreonoid 起動・エピソードリセット時のログ解説
 
-`choreonoid --python` で GUI ビューアを動かすと、エピソードリセット（`env.reset()`）のたびに以下のメッセージが大量に出力される。1かたまりが1エピソードリセット分。
+`choreonoid --python` でヘッドレス起動すると、エピソードリセット（`env.reset()`）のたびに以下のメッセージが出力される。1かたまりが1エピソードリセット分。
 
 ```
-Loading Body "/tmp/tmp1d57gp00.urdf"
-Debug: link "world" has no inertial data.
-...
-Warning: 'dynamics' tag is currently not supported.
-...（関節数分繰り返し）
+Loading Body "/tmp/tmp1d57gp00.body"
+ -> ok!
+Loading Body "/tmp/tmpa8b2cx1f.body"
  -> ok!
 Simulation by AISTSimulator has finished at 0.02 [s].
-Computation time is 0.542 [s], computation time / simulation time = 27.1.
+Computation time is 0.026 [s], computation time / simulation time = 1.3.
 Simulation by AISTSimulator has started.
 ```
+
+**注**: URDF 経由（旧実装）では `Warning: 'dynamics' tag is currently not supported.` が関節数分繰り返されていたが、`.body` ネイティブ形式への移行後はこの警告はなくなった。
 
 ### 各メッセージの意味
 
 | メッセージ | 意味 | 問題か？ |
 |-----------|------|---------|
-| `Loading Body "/tmp/tmpXXXX.urdf"` | エピソードごとに MuJoCo XML → URDF 変換した一時ファイルをロード | 正常 |
-| `Debug: link "world" has no inertial/visual/collision data` | `world` リンクは固定参照フレームで質量・形状なしが正常 | 正常 |
-| `Debug: link "cube_virt0" has no inertial/visual/collision data` | cube の2本スライド関節をつなぐ仮想リンク（質量ゼロが意図的） | 正常 |
-| `Warning: 'dynamics' tag is currently not supported.` ×N | URDF の `<dynamics>` タグ（damping/friction）が Choreonoid パーサー未対応。関節数分繰り返される | 無害（API で別途設定済み）|
-| `-> ok!` | URDF ロード完了 | 正常 |
-| `Simulation by AISTSimulator has finished at 0.02 [s].` | 初期化用の極短いシミュレーション完了。初回は初期化コストで実時間の数十倍かかる | 正常 |
+| `Loading Body "/tmp/tmpXXXX.body"` | エピソードごとに MuJoCo XML → `.body` YAML 変換した一時ファイルをロード | 正常 |
+| `-> ok!` | .body ロード完了 | 正常 |
+| `Simulation by AISTSimulator has finished at 0.02 [s].` | 初期化用の極短いシミュレーション完了 | 正常 |
 | `Simulation by AISTSimulator has started.` | 本番エピソード開始 | 正常 |
 
 ### ボディ名の命名規則
@@ -420,11 +417,11 @@ pusher の `index_base = 5`（最大4子まで許容）はこの名前を5進数
 
 ---
 
-## 修正11: `mujoco_xml_to_urdf()` グローバル座標変換バグ（2026-06-09）
+## 修正11: `mujoco_xml_to_body()` グローバル座標変換バグ（2026-06-09）
 
 ### 問題
 
-`mujoco_env_choreonoid.py` の `mujoco_xml_to_urdf()` が、`coordinate="global"` の MuJoCo XML を URDF に変換するとき、ボディの `pos` と geom の `fromto`/`pos` をワールド座標のまま URDF の親相対オフセットとして使っていた。
+`mujoco_env_choreonoid.py` の `mujoco_xml_to_body()` が、`coordinate="global"` の MuJoCo XML を URDF に変換するとき、ボディの `pos` と geom の `fromto`/`pos` をワールド座標のまま URDF の親相対オフセットとして使っていた。
 
 URDF では `<joint>` の `<origin>` と `<link>` の geometry `<origin>` はすべて**親リンクローカル座標**で記述する必要がある。
 
@@ -465,6 +462,31 @@ def add_link(name, geom_el, density, body_global_pos=None):
 ### 経緯
 
 この修正以前に実施した **pusher_cnoid** と **crawler_cnoid (epoch 134 まで)** の学習結果は、depth-2 以降のボディが存在する場合に不正確な物理下での結果となっている。修正後は **crawler_cnoid_v2** として再学習を行い、正しい物理での結果と比較する。
+
+---
+
+---
+
+## 修正12: cube ボディのフロア接触による `tickRequest` デッドロック（2026-06-19）
+
+### 問題
+
+`rrbot_arm.xml` で cube の body を `pos="1.0 0 0.15"` に設定した結果、cube の底面（z=0.15 - half_size=0.15 = **z=0**）がChoreonoidフロア（surface at z=0）と完全接触した状態になっていた。
+
+`env.reset()` → `ChoreonoidSimWorld.reset()` 内の `stopSimulation() + startSimulation(doReset=True) + tickRequest(True)` のサイクルで AIST ソルバーが接触拘束を解こうとしてデッドロック。初回の `load_model()`（シミュレーション未起動状態）では `tickRequest(True)` が正常終了するため、env 初期化時（ワーカーが "ready" を出力するまで）は問題が顕在化せず、最初のエピソードリセット時にのみハングした。
+
+モバイルロボット（`pusher.xml`）の cube は z=1.02 で空中に浮いているため同じコードでハングしなかった。
+
+### 修正内容
+
+- `rrbot_arm.xml`: cube を `pos="1.0 0 0.20"` に変更 → 底面 z=0.05（フロア非接触）
+- `mujoco_env_choreonoid.py`: `stopSimulation()` の直後に `IU.processEvent()` を追加 → 停止シグナルを確実に処理してから再起動
+- `scripts/smoke_test_cnoid.py` 追加: 3エピソード完走・NaN/Inf なし・exec_reward > 0 を検証するヘルスチェックスクリプト（学習前の事前確認用）
+
+### 影響・補足
+
+- arm は z=0.15 のまま。cube（z=0.05〜0.35 の高さ範囲）の側面にアーム先端（z=0.15）が当たるため水平プッシュのジオメトリは維持。
+- cube は x/y スライド関節のみ（z自由度なし）なので、z=0.20 で初期化すれば重力で落下することはない。
 
 ---
 
