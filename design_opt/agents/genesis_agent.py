@@ -371,7 +371,24 @@ class BodyGenAgent(AgentPPO):
     def normalize_observation(self, x):
         obs, edges, use_transform_action, num_nodes, body_ind, body_depths, body_heights, distances, lapPE = zip(*x)
         obs_cat = torch.cat(obs)
+        # Guard: clamp extreme values before RunningNorm (prevents sum overflow → Inf mean → NaN)
+        # Non-finite (Inf/NaN) → 0; very large finite values → clamped to ±1e6
+        has_nonfinite = not torch.isfinite(obs_cat).all()
+        has_extreme = (obs_cat.abs() > 1e6).any() if not has_nonfinite else False
+        if has_nonfinite or has_extreme:
+            import sys
+            if has_nonfinite:
+                n_bad = (~torch.isfinite(obs_cat).all(dim=-1)).sum().item()
+                print(f"[normalize_obs] {n_bad}/{obs_cat.shape[0]} non-finite rows clamped", flush=True, file=sys.stderr)
+            elif has_extreme:
+                n_bad = (obs_cat.abs() > 1e6).any(dim=-1).sum().item()
+                print(f"[normalize_obs] {n_bad}/{obs_cat.shape[0]} extreme-value rows clamped", flush=True, file=sys.stderr)
+            obs_cat = torch.nan_to_num(obs_cat, nan=0.0, posinf=0.0, neginf=0.0)
+            obs_cat = torch.clamp(obs_cat, -1e6, 1e6)
         obs_norm = self.obs_norm(obs_cat)
+        # Guard: clamp any NaN that might emerge from normalization itself
+        if not torch.isfinite(obs_norm).all():
+            obs_norm = torch.nan_to_num(obs_norm, nan=0.0, posinf=0.0, neginf=0.0)
         indices = np.cumsum(num_nodes)
         obs_split = [obs_norm[start:end] for start, end in zip([0] + list(indices[:-1]), indices)]
         x = [list(item) for item in zip(obs_split, edges, use_transform_action, num_nodes, body_ind, body_depths, body_heights, distances, lapPE)]
@@ -584,6 +601,11 @@ class BodyGenAgent(AgentPPO):
             else:
                 value_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.value_net.parameters(), self.cfg.max_grad_norm)
+            # NaN guard: skip update if gradients are NaN (prevents corrupting value weights)
+            if any(p.grad is not None and torch.isnan(p.grad).any()
+                   for p in self.value_net.parameters()):
+                self.optimizer_value.zero_grad()
+                continue
             self.optimizer_value.step()
 
     def ppo_loss_stackelberg(self, L_states, L_actions, L_adv, L_fixlog, F_states, F_actions, F_adv, F_fixlog, flag_log=False):

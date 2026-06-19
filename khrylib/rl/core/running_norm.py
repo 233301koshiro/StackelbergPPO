@@ -20,6 +20,15 @@ class RunningNorm(nn.Module):
         self.register_buffer('std', torch.ones(dim))
 
     def update(self, x):
+        # Drop rows with any NaN/Inf so statistics stay finite
+        finite_mask = torch.isfinite(x).all(dim=-1)
+        if not finite_mask.all():
+            n_bad = (~finite_mask).sum().item()
+            import sys
+            print(f"[RunningNorm] skipping {n_bad}/{x.shape[0]} non-finite rows in update", flush=True, file=sys.stderr)
+            x = x[finite_mask]
+        if x.shape[0] == 0:
+            return
         var_x, mean_x = torch.var_mean(x, dim=0, unbiased=False)
         m = x.shape[0]
         w = self.n.to(x.dtype) / (m + self.n).to(x.dtype)
