@@ -123,6 +123,11 @@ class AntEnv(MujocoEnv, utils.EzPickle):
         self.cur_t += 1
         # skeleton transform stage
         if self.stage == 'skeleton_transform':
+            if getattr(self.cfg, 'fix_skeleton', False):
+                self.transit_attribute_transform()
+                ob = self._get_obs()
+                return ob, 0.0, False, False, {'use_transform_action': True, 'stage': 'skeleton_transform', 'reward_ctrl': 0.0}
+
             skel_a = a[:, -1]
             succ = self.apply_skel_action(skel_a)
             if not succ:

@@ -113,3 +113,4 @@ class Config:
         self.s_gradient_limit = FLAG.get('s_gradient_limit', -1)
         self.gradient_ratio_limit = FLAG.get('gradient_ratio_limit', -1)
         self.morph_prior = FLAG.get('morph_prior', False)
+        self.fix_skeleton = FLAG.get('fix_skeleton', False)

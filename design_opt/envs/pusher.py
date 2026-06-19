@@ -123,6 +123,11 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         self.cur_t += 1
         # skeleton transform stage
         if self.stage == 'skeleton_transform':
+            if getattr(self.cfg, 'fix_skeleton', False):
+                self.transit_attribute_transform()
+                ob = self._get_obs()
+                return ob, 0.0, False, False, {'use_transform_action': True, 'stage': 'skeleton_transform', 'reward_ctrl': 0.0}
+
             skel_a = a[:, -1]
             succ = self.apply_skel_action(skel_a)
             if not succ:
@@ -137,7 +142,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'skeleton_transform', 'reward_ctrl': 0.0}
         # attribute transform stage
         elif self.stage == 'attribute_transform':
-            design_a = a[:, self.control_action_dim:-1] 
+            design_a = a[:, self.control_action_dim:-1]
+            # Clamp NaN/Inf in action before applying (prevents design_cur_params corruption)
+            if not np.isfinite(design_a).all():
+                design_a = np.nan_to_num(design_a, nan=0.0, posinf=0.0, neginf=0.0)
             if self.abs_design:
                 design_params = design_a * self.cfg.robot_param_scale
             else:
