@@ -242,10 +242,13 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 qs, qe = get_single_body_qposaddr(self.model, body.name)
                 if qe - qs >= 1:
                     assert qe - qs == 1
-                    # Use jnt_dofadr for correct qvel index (accounts for free-joint qpos/qvel size mismatch)
+                    # jnt_dofadr accounts for free-joint qpos/qvel size mismatch (7 qpos vs 6 qvel).
+                    # Choreonoid _ModelProxy lacks jnt_dofadr; fall back to jnt_qposadr which
+                    # equals jnt_dofadr for fixed-base bodies (no free joint offset).
                     body_id = self.model._body_name2id[body.name]
                     jnt_adr = int(self.model.body_jntadr[body_id])
-                    vs = int(self.model.jnt_dofadr[jnt_adr])
+                    dof_adr = self.model.jnt_dofadr if hasattr(self.model, 'jnt_dofadr') else self.model.jnt_qposadr
+                    vs = int(dof_adr[jnt_adr])
                     obs_i = [np.zeros(15), self.data.qpos[qs:qe], qvel[vs:vs+1]]
                 else:
                     obs_i = [np.zeros(17)]
