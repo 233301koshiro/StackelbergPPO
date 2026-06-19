@@ -133,3 +133,4 @@ Choreonoid サーバー: port 5556〜5559 の 4 インスタンス
 |---------|------|
 | `457ac6f` | **Choreonoid ハング修正とスモークテストを追加**。base sphere (r=0.1) がフロアに埋没する問題（base z=0 → z=0.15 で解消）。`jnt_dofadr` フォールバック修正。`scripts/smoke_test_cnoid.py` 新規追加。 |
 | `9709cdf` | **cube フロア接触による `tickRequest` デッドロックを修正**。cube を `pos="1.0 0 0.15"` → `pos="1.0 0 0.20"` に変更（底面 z=0.05 でフロア非接触）。`stopSimulation()` 後に `IU.processEvent()` を追加。`smoke_test_cnoid.py` の action 形状・`_check_finite`・`sys.exit` も修正。スモークテスト PASS (exec_reward=367〜624, 3ep完走)。 |
+| `edbe430` | **ドキュメント状態の同期**。全 Markdown ファイルを現在の実装状態に合わせて更新（`docs: sync all markdown files with current implementation state`）。 |
