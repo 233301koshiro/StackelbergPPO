@@ -66,31 +66,29 @@ robot:
 
 ---
 
-## 2. コード追加で対応すること（推奨）
+## 2. コード追加で対応すること（✅ 実装済み）
 
-### 2-a. `fix_skeleton` フラグ（小変更）
+### 2-a. `fix_skeleton` フラグ（✅ 実装済み・2026-06-19）
 
-設定で無効化する方法は副作用（1 ステップの無駄な推論）があるため、明示的なフラグを追加する方が清潔。
+設定で無効化する方法は副作用（1 ステップの無駄な推論）があるため、明示的なフラグを追加する方が清潔。**このフラグは既に実装・運用中。**
 
-**`design_opt/utils/config.py`** に追加:
-```python
-self.fix_skeleton = FLAG.get('fix_skeleton', False)
+**実装箇所（参照用）**:
+- `design_opt/utils/config.py`: `self.fix_skeleton = FLAG.get('fix_skeleton', False)`
+- `design_opt/envs/pusher.py` の `step()` 内: `if self.cfg.fix_skeleton: self.transit_attribute_transform()`
+- `design_opt/conf/config.yaml`: `fix_skeleton: false`（デフォルト）
+
+**使い方（コマンドラインで上書き）**:
+```bash
+nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
+  --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher xml_name=rrbot_arm num_threads=4 enable_wandb=false \
+  fix_skeleton=true hydra.run.dir=single_run/rrbot_arm_attr_only \
+  > single_run/rrbot_arm_attr_only/stdout.log 2>&1 &
 ```
 
-**`design_opt/envs/pusher.py`**（および `ant.py`）の `step()` 内:
-```python
-if self.stage == 'skeleton_transform':
-    if self.cfg.fix_skeleton:
-        self.transit_attribute_transform()
-        ob = self._get_obs()
-        return ob, 0.0, False, False, {'use_transform_action': True, 'stage': 'skeleton_transform', 'reward_ctrl': 0.0}
-    # ... 既存の処理
-```
-
-設定:
-```yaml
-fix_skeleton: true
-```
+> **重要**: `fix_skeleton=false`（デフォルト）のままだと関節が 3→4→5→6 と増加し、
+> qpos が 1e165〜1e300 に発散 → RunningNorm 破損 → NaN クラッシュ。
+> rrbot_arm 等の固定トポロジー形状では必ず `fix_skeleton=true` を指定すること。
 
 ### 2-b. 関節可動域の最適化（中規模変更）
 
@@ -310,23 +308,20 @@ print(f"fromto 長さ: {length:.3f}m  半径: {radius:.3f}m")
 # 初期形状XMLを配置
 cp my_robot.xml assets/mujoco_envs/my_robot.xml
 
-# トポロジー固定・属性値のみ最適化
-USE_CHOREONOID=1 choreonoid --no-window --python scripts/choreonoid_train.py \
+# トポロジー固定・属性値のみ最適化（nohup env 形式で起動すること）
+nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
+  --no-window --python scripts/choreonoid_train.py \
   cfg=pusher num_threads=4 \
   xml_name=my_robot \
   fix_skeleton=true \
-  hydra.run.dir=single_run/my_robot_attr_only
+  hydra.run.dir=single_run/my_robot_attr_only \
+  > single_run/my_robot_attr_only/stdout.log 2>&1 &
 ```
 
-`fix_skeleton=true` が実装済みなら上記で動く。
-未実装の場合は yml に以下を追記して代替:
-
-```yaml
-skel_transform_nsteps: 1
-enable_remove: false
-add_body_condition:
-  max_nchild: 0
-```
+> **起動形式の注意**: `bash -c '...' ` や `bash -c "..."` 内でクォートしてコマンドを渡すと、
+> `hydra.run.dir=...` が `bash -c` の `$0` として解釈されてサイレントに無視され、
+> チェックポイントがデフォルトの `single_run/${cfg}/` に保存される。
+> 必ず `nohup env VAR=val command args...` の形式で直接起動すること。
 
 ---
 
@@ -352,7 +347,7 @@ add_body_condition:
 
 | 機能 | 難易度 | 内容 |
 |------|--------|------|
-| `fix_skeleton` フラグ | 小 | pusher.py / ant.py に 5 行追加 |
+| `fix_skeleton` フラグ | ✅ 実装済み | `config.py`・`pusher.py`・`config.yaml` に実装済み（2026-06-19）|
 | joint range 最適化 | 中 | Joint クラスに range get/set/sync を追加（上記 2-b）|
 | 3D メッシュ → XML 変換スクリプト | 中 | trimesh で capsule fitting、XML テンプレート生成 |
 | 関節位置の自動推定 | 大 | セグメント間の接触点 or ユーザー指定 |
