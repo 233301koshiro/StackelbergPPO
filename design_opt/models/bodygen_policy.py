@@ -185,6 +185,19 @@ class BodyGenPolicy(Policy):
             
             control_action_mean = self.control_action_mean(x)
             if torch.isnan(control_action_mean).any():
+                # Diagnose: find which stage in the pipeline first has NaN
+                import sys
+                _padded_obs = transformer_obs["padded_obs"]
+                _has_nan_obs = torch.isnan(_padded_obs).any()
+                _has_nan_x = torch.isnan(x).any()
+                print(
+                    f"[policy NaN diag] control_action_mean NaN shape={control_action_mean.shape}"
+                    f" | obs NaN={_has_nan_obs.item()} obs_range=[{_padded_obs.min():.3g},{_padded_obs.max():.3g}]"
+                    f" | transformer_out NaN={_has_nan_x.item()} x_range=[{x[~torch.isnan(x)].min() if not _has_nan_x else float('nan'):.3g},"
+                    f"{x[~torch.isnan(x)].max() if not _has_nan_x else float('nan'):.3g}]"
+                    f" | num_nodes={num_nodes}",
+                    flush=True, file=sys.stderr
+                )
                 raise RuntimeError(
                     f"NaN in control_action_mean (shape {control_action_mean.shape}). "
                     "Likely gradient explosion — lower max_grad_norm (currently check cfg)."
@@ -212,7 +225,8 @@ class BodyGenPolicy(Policy):
                 x = self.attr_mlp(x)
             
             attr_action_mean = self.attr_action_mean(x)
-                
+            if torch.isnan(attr_action_mean).any():
+                raise RuntimeError(f"NaN in attr_action_mean (shape {attr_action_mean.shape})")
             attr_action_std = self.attr_action_log_std.expand_as(attr_action_mean).exp()
             attr_dist = DiagGaussian(attr_action_mean, attr_action_std)
         else:
@@ -236,7 +250,8 @@ class BodyGenPolicy(Policy):
                 x = self.skel_mlp(x)
             
             skel_logits = self.skel_action_logits(x)
-                
+            if torch.isnan(skel_logits).any():
+                raise RuntimeError(f"NaN in skel_logits (shape {skel_logits.shape})")
             skel_dist = Categorical(logits=skel_logits, uniform_prob=self.skel_uniform_prob)
         else:
             num_nodes_cum_skel = None
