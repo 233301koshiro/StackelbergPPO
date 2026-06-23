@@ -1,0 +1,63 @@
+format: ChoreonoidBody
+format_version: 2.0
+angle_unit: degree
+name: 2-joint_serial_arm_r
+root_link: "0"
+links:
+  -
+    name: "0"
+    joint_type: fixed
+    translation: [ 0, 0, 0.15 ]
+    mass: 0.020944
+    center_of_mass: [ 0, 0, 0 ]
+    inertia: [
+      8.37758e-05, 0, 0,
+      0, 8.37758e-05, 0,
+      0, 0, 8.37758e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0, 0, 0 ]
+        geometry: { type: Sphere, radius: 0.1 }
+  -
+    name: "1"
+    parent: "0"
+    joint_name: 1_joint
+    joint_type: revolute
+    joint_id: 0
+    joint_axis: [ 0, 0, 1 ]
+    joint_range: [ -60, 60 ]
+    translation: [ 0, 0, 0 ]
+    mass: 0.014399
+    center_of_mass: [ 0.15, 0, 0 ]
+    inertia: [
+      0.000143437, 0, 0,
+      0, 1.79987e-05, 0,
+      0, 0, 0.000143437 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.15, 0, 0 ]
+        rotation: [ 0, 0, -1, 90 ]
+        geometry: { type: Capsule, radius: 0.05, height: 0.3 }
+  -
+    name: "11"
+    parent: "1"
+    joint_name: 11_joint
+    joint_type: revolute
+    joint_id: 1
+    joint_axis: [ 0, 0, 1 ]
+    joint_range: [ -90, 90 ]
+    translation: [ 0.3, 0, 0 ]
+    mass: 0.0076236
+    center_of_mass: [ 0.125, 0, 0 ]
+    inertia: [
+      5.23151e-05, 0, 0,
+      0, 6.09888e-06, 0,
+      0, 0, 5.23151e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.125, 0, 0 ]
+        rotation: [ 0, 0, -1, 90 ]
+        geometry: { type: Capsule, radius: 0.04, height: 0.25 }

@@ -1,0 +1,53 @@
+format: ChoreonoidBody
+format_version: 2.0
+angle_unit: degree
+name: cube
+root_link: "cube_fixed_root"
+links:
+  -
+    name: "cube_fixed_root"
+    joint_type: fixed
+    translation: [ 1, 0, 0.2 ]
+    mass: 0.001
+    center_of_mass: [ 0, 0, 0 ]
+    inertia: [
+      1e-06, 0, 0,
+      0, 1e-06, 0,
+      0, 0, 1e-06 ]
+  -
+    name: "cube_virt0"
+    parent: "cube_fixed_root"
+    joint_name: cube_slide
+    joint_type: prismatic
+    joint_id: 0
+    joint_axis: [ 1, 0, 0 ]
+    joint_range: [ -2, 200 ]
+    joint_damping: 2
+    translation: [ 0, 0, 0 ]
+    mass: 0.001
+    center_of_mass: [ 0, 0, 0 ]
+    inertia: [
+      1e-06, 0, 0,
+      0, 1e-06, 0,
+      0, 0, 1e-06 ]
+  -
+    name: "cube"
+    parent: "cube_virt0"
+    joint_name: cube_slide2
+    joint_type: prismatic
+    joint_id: 1
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -100, 100 ]
+    joint_damping: 2
+    translation: [ 0, 0, 0 ]
+    mass: 2.7
+    center_of_mass: [ 0, 0, 0 ]
+    inertia: [
+      0.0405, 0, 0,
+      0, 0.0405, 0,
+      0, 0, 0.0405 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0, 0, 0 ]
+        geometry: { type: Box, size: [ 0.3, 0.3, 0.3 ] }
