@@ -20,6 +20,8 @@
   USE_CHOREONOID は pusher.py の import 時に読まれるため、
   run ごとにサブプロセスを立てて環境変数を分離する。
   サブプロセスは --_worker モードで 1 run を評価して JSON を標準出力に返す。
+  Choreonoid の場合は cnoid モジュールを直接 import できないため、
+  choreonoid --no-window --python 経由でサブプロセスを起動する。
 """
 
 import os
@@ -30,18 +32,57 @@ import subprocess
 import tempfile
 import numpy as np
 
+# ─── Choreonoid --python 経由のワーカー起動 ──────────────────────────────────
+# choreonoid --no-window --python <script> で起動された場合、
+# Choreonoid が独自に argv を解析して --_worker 等のフラグをエラーにするため、
+# 引数は環境変数 _EVAL_* 経由で渡す。
+# この処理はモジュールレベルで実行され、メインの argparse より先に動作する。
+if os.environ.get('_EVAL_RESTORE_DIR'):
+    # 環境変数からパラメータを読んでワーカーとして直接実行
+    def _run_from_env():
+        _restore = os.environ['_EVAL_RESTORE_DIR']
+        _epoch   = os.environ.get('_EVAL_EPOCH', 'best')
+        _n_eps   = int(os.environ.get('_EVAL_N_EPISODES', '10'))
+        _thresh  = float(os.environ.get('_EVAL_THRESHOLD', '0.5'))
+        _out     = os.environ['_EVAL_TMPOUT']
+        # run_worker はこのファイル内で後に定義されるため、ここでは定義のみ
+        # 実際の呼び出しはモジュール末尾で行う
+    _CHOREONOID_ENV_MODE = True
+else:
+    _CHOREONOID_ENV_MODE = False
+
 
 # ─── 環境判定 ──────────────────────────────────────────────────────────────────
 
 def detect_engine(restore_dir: str) -> str:
-    """hydra config から学習に使った物理エンジンを判定する。"""
+    """学習に使った物理エンジンを判定する。
+
+    判定優先順位:
+    1. .hydra/config.yaml の cfg 名に 'cnoid' が含まれる
+    2. stdout.log / train.log の冒頭に Choreonoid 固有メッセージが含まれる
+    3. 上記いずれも該当しない場合は mujoco
+    """
     import yaml
+
     config_path = os.path.join(restore_dir, '.hydra', 'config.yaml')
-    if not os.path.exists(config_path):
-        return 'mujoco'
-    cfg = yaml.safe_load(open(config_path))
-    cfg_name = str(cfg.get('cfg', ''))
-    return 'choreonoid' if 'cnoid' in cfg_name.lower() else 'mujoco'
+    if os.path.exists(config_path):
+        cfg = yaml.safe_load(open(config_path))
+        cfg_name = str(cfg.get('cfg', ''))
+        if 'cnoid' in cfg_name.lower():
+            return 'choreonoid'
+
+    for log_name in ('stdout.log', 'train.log'):
+        log_path = os.path.join(restore_dir, log_name)
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r', errors='ignore') as f:
+                    header = f.read(1024)
+                if 'cnoid' in header.lower() or 'choreonoid' in header.lower():
+                    return 'choreonoid'
+            except OSError:
+                pass
+
+    return 'mujoco'
 
 
 # ─── ワーカーモード（サブプロセスから呼ばれる） ────────────────────────────────
@@ -131,6 +172,8 @@ def run_worker(restore_dir: str, epoch, n_episodes: int,
 
     disps   = [e['cube_disp_m'] for e in per_episode]
     rewards = [e['exec_reward']  for e in per_episode]
+    # NaN (数値発散エピソード) を除いて統計を計算
+    rewards_finite = [r for r in rewards if np.isfinite(r)]
 
     result = {
         'restore_dir':         restore_dir,
@@ -138,8 +181,8 @@ def run_worker(restore_dir: str, epoch, n_episodes: int,
         'engine':              engine,
         'n_episodes':          n_episodes,
         'success_threshold_m': success_threshold,
-        'mean_exec_reward':    float(np.mean(rewards)),
-        'std_exec_reward':     float(np.std(rewards)),
+        'mean_exec_reward':    float(np.mean(rewards_finite)) if rewards_finite else float('nan'),
+        'std_exec_reward':     float(np.std(rewards_finite))  if rewards_finite else float('nan'),
         'mean_cube_disp_m':    float(np.mean(disps)),
         'max_cube_disp_m':     float(np.max(disps)),
         'success_rate':        float(np.mean([e['success'] for e in per_episode])),
@@ -167,19 +210,38 @@ def eval_run_subprocess(restore_dir: str, label: str, epoch: str,
     env = os.environ.copy()
     env['USE_CHOREONOID'] = '1' if engine == 'choreonoid' else '0'
 
-    cmd = [
-        sys.executable, __file__,
-        '--_worker',
-        '--runs',       restore_dir,
-        '--labels',     label,
-        '--epochs',     epoch,
-        '--n_episodes', str(n_episodes),
-        '--threshold',  str(threshold),
-        '--_tmpout',    tmp_out,
-    ]
+    if engine == 'choreonoid':
+        # Choreonoid の cnoid モジュールは直接 python3 から import できないため
+        # choreonoid --no-window --python 経由で起動する。
+        # Choreonoid は argv の -- 付きフラグを自分の引数として解析してしまうため、
+        # パラメータは環境変数 _EVAL_* 経由で渡す。
+        env['_EVAL_RESTORE_DIR']  = restore_dir
+        env['_EVAL_EPOCH']        = str(epoch)
+        env['_EVAL_N_EPISODES']   = str(n_episodes)
+        env['_EVAL_THRESHOLD']    = str(threshold)
+        env['_EVAL_TMPOUT']       = tmp_out
+        env['_EVAL_LABEL']        = label
+        choreonoid_bin = '/choreonoid_ws/install/bin/choreonoid'
+        cmd = [choreonoid_bin, '--no-window', '--python', __file__]
+    else:
+        worker_args = [
+            '--_worker',
+            '--runs',       restore_dir,
+            '--labels',     label,
+            '--epochs',     epoch,
+            '--n_episodes', str(n_episodes),
+            '--threshold',  str(threshold),
+            '--_tmpout',    tmp_out,
+        ]
+        cmd = [sys.executable, __file__] + worker_args
+
     print(f"\n[eval] Spawning subprocess: engine={engine}  run={restore_dir}")
     ret = subprocess.run(cmd, env=env, cwd=os.getcwd())
-    if ret.returncode != 0:
+    if engine == 'choreonoid':
+        # choreonoid では sys.exit が TypeError になるため、exit code より JSON の存在で判定
+        if not os.path.exists(tmp_out):
+            raise RuntimeError(f"Worker failed (code {ret.returncode}, no output) for {restore_dir}")
+    elif ret.returncode != 0:
         raise RuntimeError(f"Worker failed (code {ret.returncode}) for {restore_dir}")
 
     with open(tmp_out, encoding='utf-8') as f:
@@ -256,6 +318,17 @@ def main():
               f"{r['mean_cube_disp_m']:>10.3f}m {r['success_rate']*100:>8.0f}%")
     print("=" * 65)
 
+
+# choreonoid --no-window --python 経由で起動された場合のエントリポイント
+# __name__ が '__main__' にならない場合もあるためトップレベルでチェック
+if _CHOREONOID_ENV_MODE:
+    _restore = os.environ['_EVAL_RESTORE_DIR']
+    _epoch   = os.environ.get('_EVAL_EPOCH', 'best')
+    _n_eps   = int(os.environ.get('_EVAL_N_EPISODES', '10'))
+    _thresh  = float(os.environ.get('_EVAL_THRESHOLD', '0.5'))
+    _out     = os.environ['_EVAL_TMPOUT']
+    run_worker(_restore, _epoch, _n_eps, _thresh, _out)
+    os._exit(0)  # choreonoid では sys.exit が TypeError になるため強制終了
 
 if __name__ == '__main__':
     main()
