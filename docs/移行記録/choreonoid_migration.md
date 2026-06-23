@@ -542,3 +542,50 @@ Choreonoid の優位性は「実機に近い物理精度」にある。ただし
 研究室の標準が Choreonoid であることは考慮しつつも、形態最適化の主実験（探索フェーズ）は MuJoCo で行い、有望な形状が絞られた段階で Choreonoid に移行するのが現実的。
 
 今回の Choreonoid 実装作業自体は「異なる物理エンジンで同じパイプラインを動かせるインフラ」として残しておく価値はある。
+
+---
+
+## ファイル変更一覧（元リポジトリとの差分）
+
+### 新規作成
+
+| ファイル | 概要 |
+|---------|------|
+| `khrylib/rl/envs/common/mujoco_env_choreonoid.py` | `mujoco_env_gym.py` と同 API の drop-in replacement。ZMQ → cnoid 直接呼び出しに全面書き直し |
+| `scripts/choreonoid_train.py` | `choreonoid --no-window --python` 用エントリポイント |
+| `scripts/worker_sampler.py` | 永続ワーカープロセスのサンプリングループ |
+| `design_opt/utils/worker_pool.py` | `ChoreonoidWorkerPool` クラス（spawn + Pipe 方式） |
+| `design_opt/conf/__init__.py` | Hydra 1.3 のモジュール解決に必要 |
+| `scripts/smoke_test_cnoid.py` | 3 エピソード完走・NaN なし・exec_reward > 0 の事前ヘルスチェック |
+| `scripts/eval_cnoid_numerical.py` | 数値評価（cube 変位・報酬・成功率） |
+| `scripts/eval_cnoid_visual.py` | matplotlib 3D アニメーション mp4 生成 |
+| `scripts/eval_cnoid_viewer.py` | Choreonoid GUI リアルタイムビューア |
+
+### 既存ファイルへの主な変更
+
+| ファイル | 変更内容 |
+|---------|---------|
+| `design_opt/envs/pusher.py`（他 7 env 共通） | `ctrl[aind] = body_a.item()`（NumPy 2.0 対応）|
+| `design_opt/envs/pusher.py`（固有） | `is_fixed_base`・接触報酬基準点・`jnt_dofadr` フォールバック（rrbot_arm 対応） |
+| `design_opt/agents/genesis_agent.py` | WorkerPool 統合・fork 廃止・`wandb` 条件付き import |
+| `design_opt/train.py` | Hydra `version_base="1.2"`・`env.close()`・`os._exit(0)` |
+| `design_opt/utils/config.py` | `_flags` 保存（WorkerPool での OmegaConf 直列化用） |
+| `scripts/cnoid_transfer.py` | ZMQ サーバー管理コードを全削除、`choreonoid --no-window --python` 方式に変更 |
+
+### 削除
+
+| ファイル | 理由 |
+|---------|------|
+| `khrylib/rl/envs/common/cnoid_sim_server.py` | ZMQ サーバー不要 |
+| `scripts/start_cnoid_server.py` | Jupyter カーネル起動スクリプト不要 |
+
+### 依存パッケージの変更
+
+| パッケージ | 旧 | 新 |
+|-----------|----|----|
+| Python | 3.9 | **3.12** |
+| Choreonoid バインディング | Python 3.8 専用 | Python 3.12 用に再ビルド |
+| PyTorch | 2.0.1 | **2.7.0+cu128**（RTX 5060 Ti 対応） |
+| hydra-core | 1.2.0 | 1.3.2 |
+| MuJoCo バイナリ | 必要 | **不要** |
+| ZMQ | 必要 | **不要** |
