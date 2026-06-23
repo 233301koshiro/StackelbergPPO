@@ -12,13 +12,15 @@
 * **何を作るか:** `USE_CHOREONOID=0` を指定して既存の学習コードを呼び出し、指定ディレクトリに保存する実行バッチスクリプト。
 * **難易度:** ★☆☆（低）
 * **理由:** 既存スクリプトへの引数渡しのみ。ただし学習自体が不安定で崩壊が起こりやすいという別の問題がある（アルゴリズム固有の挙動）。
-* **現状:** `upstream-vanilla` ブランチで元リポジトリのコードのまま epoch 0 から学習実行中（`single_run/pusher_upstream_stdout.log`）。
+* **現状:** epoch 1000 完走済み（`rrbot_arm` → v1 削除済み）。v2 (`rrbot_arm_mujoco`, fix_skeleton=true) で再学習中。
 
 
 
 ### Task 2: 共通評価・レポート自動生成スクリプト (`eval_cross_env.py` 等) ✅ 実行完了（2026-06-22）
 
-> **結果**: Choreonoid 80% 成功（10 エピソード中 8 成功）。MuJoCo は 0%（別問題）。  
+> ⚠️ **注意**: 実行時の Choreonoid 結果（80% 成功）は cube slide joint damping 欠落バグによる無効データ。  
+> MuJoCo は 0%（fix_skeleton=false による骨格増殖・cube 侵入）。  
+> `rrbot_arm_cnoid_v2`（damping 修正済み）と `rrbot_arm_mujoco`（fix_skeleton=true）の完走後に再評価予定。  
 > 詳細: `docs/移行記録/eval_findings_2026-06.md`
 
 * **なんのために:** 物理エンジン間の報酬絶対値のズレを無視し、「タスク成功率」という公平な指標で両者を比較・評価するため。
@@ -28,7 +30,7 @@
 * **実行コマンド（両学習収束後）:**
   ```bash
   python3 scripts/generate_comparison_report.py \
-    --runs single_run/pusher_upstream single_run/pusher_cnoid_v3 \
+    --runs single_run/rrbot_arm_mujoco single_run/rrbot_arm_cnoid_v2 \
     --labels MuJoCo Choreonoid --run_eval --n_episodes 20 \
     --output single_run/comparison/
   ```
@@ -55,15 +57,16 @@
   1. **cube bodyの原点問題**: `<body name="cube" pos="0 0 0">` のままだと `get_body_com("cube")` が常に `[0,0,0]` を返し、接触報酬 `1/(1+|cube-base|)` が常に1.0になる。アームが何もしなくても満点近くになるため形態最適化の勾配がゼロ。→ body posを `"1.0 0 0.15"` に移動してgeom/joint側のローカルoffsetを削除。
   2. **接触報酬の基準点**: 固定根本ではbody "0"（基部）が常に原点のため、`get_body_com("0")`も常に`[0,0,0]`。→ 固定根本時は `robot.bodies[-1]`（末端ボディ）を基準に変更。`get_sim_obs()`の `relative_dis` も同様に修正。
 
-* **MuJoCo学習状況（2026-06-18停止、epoch 33）:**
-  * `exec_R_eps` = 728〜748（epoch 0: 664 → 上昇中だったが Choreonoid 優先で停止）
-  * `single_run/rrbot_arm/` に保存済み（再開可能）
+* **MuJoCo学習状況（v2、2026-06-23 再開）:**
+  * v1 (`rrbot_arm`, fix_skeleton=false) は epoch 1000 完走済みだが骨格増殖バグにより削除。
+  * v2 (`rrbot_arm_mujoco`, fix_skeleton=true) で再学習中（damping=2.0、epoch ~8、exec_R_eps 上昇中）
+  * ログ: `single_run/rrbot_arm_mujoco_stdout.log`
 
-* **Choreonoid学習状況（2026-06-19 開始）:**
-  * 環境: `USE_CHOREONOID=1`, num_threads=4, `single_run/rrbot_arm_cnoid/`
-  * reward NaN ガード・`fix_skeleton=true` 適用済み（NaN クラッシュ修正版）
-  * 現在 epoch 4+（exec_R_eps=4273、継続中）、oscillation あり（-1300〜+4273 の範囲）
-  * ログ: `single_run/rrbot_arm_cnoid/stdout.log`
+* **Choreonoid学習状況（v2、2026-06-23 再開）:**
+  * v1 (`rrbot_arm_cnoid`) は cube damping 欠落バグにより結果無効・削除済み（exec_R_eps=4273 は無効値）。
+  * v2 (`rrbot_arm_cnoid_v2`) で damping=2.0 修正済みで再学習中（epoch ~24、exec_R_eps=624）
+  * 環境: `USE_CHOREONOID=1`, num_threads=4, fix_skeleton=true
+  * ログ: `single_run/rrbot_arm_cnoid_v2_stdout.log`
 
 
 
@@ -73,7 +76,9 @@
 
 **目的:** 手描きスケッチからPPO学習までのデータフローを、手動操作を許容しつつ1本の道として繋ぎ切る。
 
-### Task 1: プロンプト固定化と品質QAチェックリスト
+### Task 1: プロンプト固定化と品質QAチェックリスト ❌ 未着手（ユーザー側作業）
+
+> ⚠️ コーディング作業ではなく、ユーザー（研究者）によるトライ＆エラーが主体。
 
 * **なんのために:** Geminiの出力を安定させ、Tripoのメッシュが「穴あき・分離」するのを防ぐため。
 * **何を作るか:** 安定したGeminiプロンプトの決定と、目視確認用のマークダウンのチェックリスト。
@@ -82,7 +87,9 @@
 
 
 
-### Task 2: 手動セグメンテーションフローの確立
+### Task 2: 手動セグメンテーションフローの確立 ❌ 未着手（ユーザー側作業）
+
+> ⚠️ Blender 等の手動作業が主体。Task 1 完了後に実施。
 
 * **なんのために:** 自動分割の失敗によるスケジュール遅延を完全に排除するため。
 * **何を作るか:** Blender等を使って確実に3パーツに分割・保存するための手動オペレーション手順の固定化。
