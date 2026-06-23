@@ -6,7 +6,7 @@
 
 **目的:** 物理エンジンの整合性を証明し、生成モデルを強化学習に繋ぐ「爆発問題」の耐性とタスク適合性を最速でテストする。
 
-### Task 1: MuJoCo版再現学習スクリプト (`run_mujoco_pusher.sh`) 🔄 実行中
+### Task 1: MuJoCo版再現学習スクリプト (`run_mujoco_pusher.sh`) ✅ 完走
 
 * **なんのために:** Choreonoid環境と比較するための「正解データ（学習ログ）」を作るため。
 * **何を作るか:** `USE_CHOREONOID=0` を指定して既存の学習コードを呼び出し、指定ディレクトリに保存する実行バッチスクリプト。
@@ -16,13 +16,10 @@
 
 
 
-### Task 2: 共通評価・レポート自動生成スクリプト (`eval_cross_env.py` 等) ✅ 完成・実行待ち
+### Task 2: 共通評価・レポート自動生成スクリプト (`eval_cross_env.py` 等) ✅ 実行完了（2026-06-22）
 
-> **方針変更（2026-06-19）**: 比較検証は**後回し**。両学習の収束後に実施する。
-> 理由: ①費用対効果が見合わない（エンジン差の原因調査は長期化する）、
->       ②sim-to-sim 転送でエンジン等価性は証明できない（学習曲線の形状比較のみ有効）、
->       ③システム構築（Task 3.5・4）を先に完成させる方が研究全体の進捗に寄与する。
-> → **今は実行しない。スクリプトは完成済みで準備は整っている。**
+> **結果**: Choreonoid 80% 成功（10 エピソード中 8 成功）。MuJoCo は 0%（別問題）。  
+> 詳細: `docs/移行記録/eval_findings_2026-06.md`
 
 * **なんのために:** 物理エンジン間の報酬絶対値のズレを無視し、「タスク成功率」という公平な指標で両者を比較・評価するため。
 * **何を作るか:** 各ポリシーをネイティブ物理エンジン（MuJoCo学習→MuJoCo評価、Choreonoid→Choreonoid）で評価するサブプロセス分離方式の集計スクリプト＋学習曲線グラフ・Markdownレポートの自動生成。
@@ -38,7 +35,7 @@
 
 
 
-### Task 3: rrbotを用いたレベル0テスト（`rrbot_topology.json`） 🔄 学習実行中
+### Task 3: rrbotを用いたレベル0テスト（`rrbot_topology.json`） ✅ 両エンジン完走（2026-06-21）
 
 * **なんのために:** 生成AIのノイズがない綺麗なモデルを使って、「アーム形態でのPusherタスク」が本当に学習可能かを最速で検証するため。
 * **何を作るか:** rrbotの寸法（link1をルートとする）を手作業で記述した検証用JSON + MuJoCo XML + Choreonoid用 `.body` ファイル。
@@ -103,7 +100,7 @@
 
 
 
-### Task 3.5: トポロジーJSON → MuJoCo XML 変換スクリプト (`topology_to_xml.py`) ⚠️ 新規追加
+### Task 3.5: トポロジーJSON → MuJoCo XML 変換スクリプト (`topology_to_xml.py`) ✅ 実装完了（2026-06-22）
 
 * **なんのために:** `mesh_to_params.py` が出力するJSONを、そのままStackelberg PPOが読み込めるMuJoCo XMLに変換するため。このスクリプトがないとTask 3とTask 4がつながらない。
 * **何を作るか:** topology.jsonの `bodies`（bone_offset・geom・joint・actuator）を読み込み、`pusher.xml` のベース構造に body/geom/joint/actuator ノードを挿入してXMLを出力するスクリプト。
@@ -113,7 +110,7 @@
 
 
 
-### Task 4: 形態更新時の `.body` ファイル動的再生成ロジック (`dynamic_body_updater.py`) ⚠️ 新規追加
+### Task 4: 形態更新時の `.body` ファイル動的再生成ロジック (`dynamic_body_updater.py`) ✅ 実装完了（2026-06-22）
 
 * **なんのために:** Stackelberg PPOが学習中に `bone_offset`（リンク長）を更新した際、Choreonoid環境に正しく反映させるため。元リポジトリの MuJoCo は XML の `fromto` を書き換えるだけで済むが、Choreonoid + カスタムメッシュ環境ではこれに相当するロジックを独自に実装する必要がある。
 * **何を作るか:** 学習ループ内でPPOから新しいパラメータを受け取るたびに `.body` ファイルを動的に再生成してリロードする処理。形態更新ルールは「関節のオフセット距離だけを動かし、GLBメッシュは変形させずそのまま配置（パーツ間に隙間が空くことを許容）」。メモリリークなしで Choreonoid モデルを差し替えられる実装が必要。
@@ -123,12 +120,28 @@
 
 
 
-### Task 5: MVP学習実行スクリプト (`run_2axis_mvp.sh`)
+### Task 5: MVP学習実行スクリプト (`run_2axis_mvp.sh`) ✅ 実装完了（2026-06-23）
+
+> **実行確認**: `DRY_RUN=1 bash run_2axis_mvp.sh` でパイプライン通過確認済み  
+> topology.json → MuJoCo XML（--validate 通過）→ Choreonoid .body（2ファイル生成）
 
 * **なんのために:** 手描き由来の2軸アームでStackelberg PPOを回し、学習が停滞しないか確認するため。
 * **何を作るか:** ハイパラを固定して学習を実行するバッチスクリプト。
 * **難易度:** ★☆☆（低）
 * **理由:** Task 3・3.5・4が突破できていれば、回すだけです。
+* **使い方:**
+  ```bash
+  # Choreonoid で学習（デフォルト）
+  bash run_2axis_mvp.sh
+  # MuJoCo で学習
+  ENGINE=mujoco bash run_2axis_mvp.sh
+  # 両エンジン
+  ENGINE=both bash run_2axis_mvp.sh
+  # パイプライン確認のみ（学習なし）
+  DRY_RUN=1 bash run_2axis_mvp.sh
+  # 別の topology を使う場合
+  TOPOLOGY=path/to/sketch_arm.json bash run_2axis_mvp.sh
+  ```
 
 
 
