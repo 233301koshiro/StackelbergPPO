@@ -91,12 +91,24 @@
 
 
 
-### Task 3: メッシュパラメータ簡易抽出スクリプト (`mesh_to_params.py`)
+### Task 3: メッシュパラメータ簡易抽出スクリプト (`mesh_to_params.py`) ✅ 実装完了（2026-06-23）
 
 * **なんのために:** 手動分割された各GLBメッシュから、PPOが要求する物理パラメータ（骨格の長さや太さ）を逆算するため。
 * **何を作るか:** `trimesh`等で各パーツのOBB（境界ボックス）や重心を計算し、`bone_offset` と `geom.size` を算出してJSONを吐き出すスクリプト。
 * **難易度:** ★★★（高：7月最大の山場）
-* **理由:** 3Dメッシュのローカル座標からワールド座標への重心オフセット計算・URDF軸（Y軸）とプッシャータスク軸（Z軸）の変換・StackelbergPPOのsinマッピングへの逆算が複合的に絡む。rrbot対応時に軸の読み替えが実際に必要だった。
+* **実装概要:**
+  - OBBの最長辺 → bone_offset（タスク座標X軸にマッピング）
+  - OBBの短辺2本の平均半径 → geom.size（カプセル近似）
+  - `--validate` フラグで topology_to_xml.py → MuJoCo 10ステップ検証まで自動化
+  - rrbot 実寸ボックスメッシュで bone_offset/radius が正確に復元されることを確認済み
+* **使い方:**
+  ```bash
+  python3 scripts/mesh_to_params.py \
+    --parts upper_arm.glb forearm.glb \
+    --names upper_arm forearm \
+    --ranges '-60 60' '-90 90' --gears 150 100 \
+    --output data/my_robot/topology.json --validate
+  ```
 
 
 

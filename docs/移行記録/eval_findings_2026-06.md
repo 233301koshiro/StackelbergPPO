@@ -176,7 +176,24 @@ mean_exec_reward = float(np.mean(rewards_finite)) if rewards_finite else float('
 | フェーズ | 状態 |
 |---|---|
 | eval インフラ整備 | ✅ 完了（detect_engine・サブプロセス・NaN除外） |
-| v1 Choreonoid 学習 | ❌ 無効（damping バグ） |
+| v1 Choreonoid 学習 | ❌ 無効（damping バグ）→ 削除済み |
+| MuJoCo v1 (fix_skeleton=false) | ❌ 無効（骨格増殖・cube 侵入）→ 削除済み |
 | damping バグ修正 | ✅ 完了（mujoco_env_choreonoid.py + dynamic_body_updater.py） |
-| v2 Choreonoid 再学習 | 🔄 進行中（`single_run/rrbot_arm_cnoid_v2`） |
-| v2 eval | ⏳ v2 完走後に実施 |
+| MuJoCo v2 再学習 (fix_skeleton=true) | 🔄 進行中（`single_run/rrbot_arm_mujoco`） |
+| Choreonoid v2 再学習 | 🔄 進行中（`single_run/rrbot_arm_cnoid_v2`） |
+| 両エンジン eval | ⏳ 両学習完走後に実施 |
+
+## スケッチパイプライン状況（2026-06-23）
+
+7月 Task 3（`mesh_to_params.py`）完成により全ピースが揃った。
+
+```
+手描きスケッチ GLB
+  → mesh_to_params.py      (✅ 実装完了)
+  → topology.json
+  → topology_to_xml.py     (✅ 実装完了) → MuJoCo XML
+  → dynamic_body_updater.py (✅ 実装完了) → Choreonoid .body
+  → run_2axis_mvp.sh       (✅ 実装完了) → 学習実行
+```
+
+ボトルネック: 7月 Task 1〜2（Gemini プロンプト固定化・Blender セグメンテーション）はユーザー側の作業。
