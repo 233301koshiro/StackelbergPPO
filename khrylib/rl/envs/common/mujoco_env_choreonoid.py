@@ -416,7 +416,7 @@ def mujoco_xml_to_body(xml_str: str):
     _joint_id_ctr = [0]
 
     def add_link(name, parent, jtype, jname, jaxis, jrange_deg,
-                 translation, mass, com, inertia, shape):
+                 translation, mass, com, inertia, shape, damping=None):
         if jtype in ('revolute', 'prismatic'):
             jid = _joint_id_ctr[0]
             _joint_id_ctr[0] += 1
@@ -425,7 +425,7 @@ def mujoco_xml_to_body(xml_str: str):
         links.append(dict(name=name, parent=parent, jtype=jtype, jname=jname,
                           jaxis=jaxis, jrange=jrange_deg, translation=translation,
                           mass=mass, com=com, inertia=inertia, shape=shape,
-                          joint_id=jid))
+                          joint_id=jid, damping=damping))
 
     def process_one_joint(j_el, parent_name, child_name, translation,
                           mass, com, inr, shape):
@@ -446,8 +446,10 @@ def mujoco_xml_to_body(xml_str: str):
         elif jtype_mj in ('slide', 'prismatic'):
             axis    = parse_vec(j_el.get('axis', '1 0 0'))
             rng_raw = [float(x) for x in j_el.get('range', '-10 10').split()]
+            damping = float(j_el.get('damping', default_damping))
             add_link(child_name, parent_name, 'prismatic', jname,
-                     axis, rng_raw, translation, mass, com, inr, shape)
+                     axis, rng_raw, translation, mass, com, inr, shape,
+                     damping=damping)
 
     def process_body(body_el, parent_name, parent_global_pos=None):
         if parent_global_pos is None:
@@ -535,6 +537,8 @@ def mujoco_xml_to_body(xml_str: str):
                 out.append(f'    joint_axis: {fv(lk["jaxis"], 6)}')
             if lk['jrange'] is not None:
                 out.append(f'    joint_range: {fv(lk["jrange"], 6)}')
+            if lk.get('damping') is not None:
+                out.append(f'    joint_damping: {lk["damping"]:.6g}')
             out.append(f'    translation: {fv(lk["translation"])}')
             out.append(f'    mass: {lk["mass"]:.6g}')
             out.append(f'    center_of_mass: {fv(lk["com"])}')
@@ -818,21 +822,19 @@ class ChoreonoidSimWorld:
         self.sim_item.setRealtimeSyncMode(3)  # manual / non-realtime
         self.world_item.addChildItem(self.sim_item)
 
-    def load_model(self, xml_str: str, frame_skip: int) -> dict:
-        self.frame_skip = frame_skip
-
+    def _clear_bodies(self):
         for item in list(self.body_items.values()):
             item.detachFromParentItem()
         self.body_items.clear()
         self.sim_bodies.clear()
         self._sim_body_entries = []
 
-        body_defs, _all_order, actuators_map, timestep, joint_armatures = \
-            mujoco_xml_to_body(xml_str)
+    def _load_body_defs(self, body_defs: list, actuators_map: dict,
+                        timestep: float, joint_armatures: dict) -> dict:
+        """body_defs = [(name, yaml_str), ...] を Choreonoid にロードする共通処理。"""
         self.actuators_map = actuators_map
         self.sim_item.setTimeStep(timestep)
 
-        # Load each body def as a separate BodyItem ('robot' first, then extras)
         for i, (item_name, body_yaml) in enumerate(body_defs):
             body_key = 'robot' if i == 0 else f'extra_{i-1}'
 
@@ -873,10 +875,34 @@ class ChoreonoidSimWorld:
             self.sim_bodies[key] = sb
 
         self._build_sim_body_entries()
-        info = _get_model_info(
+        return _get_model_info(
             [e[0] for e in self._sim_body_entries], actuators_map, timestep
         )
-        return info
+
+    def load_model(self, xml_str: str, frame_skip: int) -> dict:
+        self.frame_skip = frame_skip
+        self._clear_bodies()
+
+        body_defs, _all_order, actuators_map, timestep, joint_armatures = \
+            mujoco_xml_to_body(xml_str)
+        return self._load_body_defs(body_defs, actuators_map, timestep, joint_armatures)
+
+    def load_model_from_body_defs(self, body_defs: list, frame_skip: int,
+                                   actuators_map: dict = None,
+                                   timestep: float = 0.01,
+                                   joint_armatures: dict = None) -> dict:
+        """
+        DynamicBodyUpdater.generate_body_defs() の出力を直接受け取ってロードする。
+        actuators_map: {joint_name: {ctrlrange, gear, name}} （省略可）
+        """
+        self.frame_skip = frame_skip
+        self._clear_bodies()
+        return self._load_body_defs(
+            body_defs,
+            actuators_map or {},
+            timestep,
+            joint_armatures or {},
+        )
 
     def reset(self) -> dict:
         self.sim_item.stopSimulation()
