@@ -155,9 +155,11 @@ cube_x_history = []   # 実行フェーズ最初の数ステップの cube x を
 
 while not done and step < 300:
     from design_opt.agents.genesis_agent import tensorfy
-    state_var = tensorfy([state], dtype, device)
+    state_var = tensorfy([state])
+    if agent.obs_norm is not None:
+        state_var = agent.normalize_observation(state_var)
     with torch.no_grad():
-        action = agent.policy_net.select_action(state_var, mean_action=True)[0][0]
+        action = agent.policy_net.select_action(state_var, mean_action=True)
     action = action.numpy().astype(np.float64)
 
     # 早期キューブ移動チェック用: 実行フェーズ開始後のみゼロアクションで観察
