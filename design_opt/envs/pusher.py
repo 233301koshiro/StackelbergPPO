@@ -179,8 +179,17 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             
             xposafter = self.get_body_com("cube")[0]
             yposafter = self.get_body_com("cube")[1]
-            
-            reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+
+            use_target = self.cfg.reward_specs.get('use_target_reward', False)
+            if use_target:
+                target_x = self.cfg.reward_specs.get('target_x', 1.5)
+                target_y = self.cfg.reward_specs.get('target_y', 0.0)
+                dist_to_target = np.linalg.norm(
+                    np.array([xposafter, yposafter]) - np.array([target_x, target_y]))
+                reward_fwd_cube = 1.0 / (1.0 + dist_to_target)
+            else:
+                reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+
             arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
             reward_fwd_contact = 1.0 / (1.0 + np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body)))
             reward_fwd = reward_fwd_cube + reward_fwd_contact
@@ -358,8 +367,27 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             qpos = self.init_qpos + self.np_random.uniform(low=-.1, high=.1, size=self.model.nq)
             qvel = self.init_qvel + self.np_random.uniform(low=-.1, high=.1, size=self.model.nv)
         else:
-            qpos = self.init_qpos
-            qvel = self.init_qvel
+            qpos = self.init_qpos.copy()
+            qvel = self.init_qvel.copy()
+
+        # Cube x-position offset + per-episode noise.
+        # Prevents penetration-impulse exploit: at qpos[cube_x]=0 the cube center is at
+        # world x=1.0m (body pos in rrbot_arm.xml) with half-size 0.15m → left face x=0.85m.
+        # Morphology optimization can grow the arm so the forearm passes through the cube
+        # at episode start (v2: elbow at x=0.830, forearm diagonal through cube interior),
+        # causing the physics engine to fire a separation impulse that launches the cube
+        # without any active arm control.
+        # cube_x_offset=0.5 → cube center at x=1.5m, left face at x=1.35m,
+        # well beyond default arm reach (~0.55m). Arm must actively grow and push.
+        # qpos layout (fix_skeleton=True, 2-joint arm + 2-joint cube): [j1, j11, cube_x, cube_y]
+        cube_x_offset = self.env_specs.get('cube_x_offset', 0.0)
+        cube_x_noise  = self.env_specs.get('cube_x_noise',  0.0)
+        if cube_x_offset != 0.0 or cube_x_noise != 0.0:
+            cube_x_idx = self.model.nq - 2
+            base      = float(self.init_qpos[cube_x_idx]) + cube_x_offset
+            extra     = self.np_random.uniform(-cube_x_noise, cube_x_noise) if add_noise else 0.0
+            qpos[cube_x_idx] = base + extra
+
         if self.env_specs.get('init_height', True) and not self.is_fixed_base:
             qpos[2] = 0.4
         self.set_state(qpos, qvel)

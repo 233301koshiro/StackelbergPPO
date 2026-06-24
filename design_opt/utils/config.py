@@ -91,6 +91,7 @@ class Config:
         self.done_condition = cfg.get('done_condition', dict())
         self.env_specs = cfg.get('env_specs', dict())
         self.reward_specs = cfg.get('reward_specs', dict())
+        self.reward_specs.update(FLAG.get('reward_specs', dict()) or {})
         self.add_body_condition = cfg.get('add_body_condition', dict())
         self.max_body_depth = cfg.get('max_body_depth', 4)
         self.min_body_depth = cfg.get('min_body_depth', 1)
