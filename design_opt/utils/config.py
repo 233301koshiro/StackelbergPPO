@@ -90,6 +90,7 @@ class Config:
         self.env_name = cfg.get('env_name', 'hopper')
         self.done_condition = cfg.get('done_condition', dict())
         self.env_specs = cfg.get('env_specs', dict())
+        self.env_specs.update(FLAG.get('env_specs', dict()) or {})
         self.reward_specs = cfg.get('reward_specs', dict())
         self.reward_specs.update(FLAG.get('reward_specs', dict()) or {})
         self.add_body_condition = cfg.get('add_body_condition', dict())
