@@ -355,6 +355,8 @@ def mujoco_xml_to_body(xml_str: str):
             return None
         bpos = np.asarray(body_global_pos, dtype=float)
         gtype = geom_el.get('type', 'sphere')
+        # per-geom density overrides the default (MuJoCo supports density per geom)
+        geom_density = float(geom_el.get('density', default_density))
 
         if gtype == 'capsule' and 'fromto' in geom_el.attrib:
             fv  = parse_vec(geom_el.get('fromto'))
@@ -366,7 +368,7 @@ def mujoco_xml_to_body(xml_str: str):
             diff   = p1 - p0
             length = float(np.linalg.norm(diff))
             radius = float(geom_el.get('size', '0.08'))
-            m, Iperp, Iaxial = capsule_inertia(length, radius, default_density)
+            m, Iperp, Iaxial = capsule_inertia(length, radius, geom_density)
             rot_axis, rot_angle = rot_y_to_vec(diff)
             return dict(type='capsule', center=center.tolist(), length=length,
                         radius=radius, rot_axis=rot_axis, rot_angle=rot_angle,
@@ -376,7 +378,7 @@ def mujoco_xml_to_body(xml_str: str):
             radius  = float(geom_el.get('size', '0.25'))
             pos_raw = np.array(parse_vec(geom_el.get('pos', '0 0 0')))
             pos_loc = (pos_raw - bpos) if is_global_coord else pos_raw
-            m, I    = sphere_inertia(radius, default_density)
+            m, I    = sphere_inertia(radius, geom_density)
             return dict(type='sphere', center=pos_loc.tolist(), radius=radius, mass=m, I=I)
 
         elif gtype == 'box':
@@ -384,7 +386,7 @@ def mujoco_xml_to_body(xml_str: str):
             pos_raw = np.array(parse_vec(geom_el.get('pos', '0 0 0')))
             pos_loc = (pos_raw - bpos) if is_global_coord else pos_raw
             sx, sy, sz_v = sz[0], sz[1], sz[2]
-            m   = default_density * 8 * sx * sy * sz_v
+            m   = geom_density * 8 * sx * sy * sz_v
             Ixx = m * (sy**2 + sz_v**2) / 12
             Iyy = m * (sx**2 + sz_v**2) / 12
             Izz = m * (sx**2 + sy**2)   / 12
@@ -793,6 +795,9 @@ class ChoreonoidSimWorld:
         self.actuators_map     = {}
         self.frame_skip        = 4
         self.is_running        = False
+        self._timestep         = 0.01
+        self._extra_joint_damping = {}  # {(body_key, joint_name): damping_Ns_per_m}
+        self._extra_joint_decay   = []  # [(joint_obj, decay_factor)] cached for step()
         self._setup_world()
 
     def _build_sim_body_entries(self):
@@ -802,6 +807,18 @@ class ChoreonoidSimWorld:
             is_floating = (b.rootLink.jointType == b.rootLink.FreeJoint)
             entries.append((sb, is_floating))
         self._sim_body_entries = entries
+        # Pre-compute (joint_obj, decay_factor) for extra bodies to avoid per-tick API overhead.
+        decay = []
+        for entry_idx, (sb, _) in enumerate(entries[1:], start=1):
+            body_key = f'extra_{entry_idx - 1}'
+            eb = sb.body()
+            total_m = max(1e-6, sum(eb.link(k).m for k in range(eb.numLinks)))
+            for j_idx in range(eb.numJoints):
+                j = eb.joint(j_idx)
+                dq = self._extra_joint_damping.get((body_key, j.jointName), 0.0)
+                if dq > 0:
+                    decay.append((j, math.exp(-dq / total_m * self._timestep)))
+        self._extra_joint_decay = decay
 
     def _setup_world(self):
         self.world_item = WorldItem()
@@ -833,10 +850,20 @@ class ChoreonoidSimWorld:
                         timestep: float, joint_armatures: dict) -> dict:
         """body_defs = [(name, yaml_str), ...] を Choreonoid にロードする共通処理。"""
         self.actuators_map = actuators_map
+        self._timestep = timestep
         self.sim_item.setTimeStep(timestep)
+        self._extra_joint_damping = {}
 
+        import re as _re
         for i, (item_name, body_yaml) in enumerate(body_defs):
             body_key = 'robot' if i == 0 else f'extra_{i-1}'
+            # Parse joint_damping values from YAML for extra bodies (AIST ignores them for prismatic).
+            if i > 0:
+                for blk in _re.split(r'\n  -\n', '\n  -\n' + body_yaml)[1:]:
+                    jnm = _re.search(r'joint_name:\s*(\S+)', blk)
+                    dq  = _re.search(r'joint_damping:\s*([\d.eE+\-]+)', blk)
+                    if jnm and dq:
+                        self._extra_joint_damping[(body_key, jnm.group(1))] = float(dq.group(1))
 
             with tempfile.NamedTemporaryFile(suffix='.body', mode='w', delete=False) as f:
                 f.write(body_yaml)
@@ -938,6 +965,10 @@ class ChoreonoidSimWorld:
         for _ in range(n_frames):
             self.sim_item.tickRequest(True)
             IU.processEvent()
+            # Choreonoid AIST ignores joint_damping for prismatic joints.
+            # _extra_joint_decay is pre-computed in _build_sim_body_entries.
+            for j, factor in self._extra_joint_decay:
+                j.dq *= factor
 
         return _get_state_dict(self._sim_body_entries)
 
