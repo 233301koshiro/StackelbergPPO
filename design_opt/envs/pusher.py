@@ -398,6 +398,17 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
 
         if self.env_specs.get('init_height', True) and not self.is_fixed_base:
             qpos[2] = 0.4
+
+        # Cube slide joints must start at rest regardless of add_noise.
+        # transit_execution() always calls reset_state(True), so ±0.1 velocity noise
+        # would be applied to cube_slide / cube_slide2 even in eval mode.
+        # With damping=10, τ=m/b=2.7/10=0.27s; initial velocity of 0.1 m/s takes
+        # ~1s to decay — clearly visible as drift. Cube has no actuator, so velocity
+        # noise provides zero exploration benefit.
+        cube_x_idx = self.model.nq - 2
+        qvel[cube_x_idx]     = 0.0  # cube_slide (x)
+        qvel[cube_x_idx + 1] = 0.0  # cube_slide2 (y)
+
         self.set_state(qpos, qvel)
 
     def reset_robot(self):
