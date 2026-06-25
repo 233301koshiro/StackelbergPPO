@@ -388,6 +388,14 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             extra     = self.np_random.uniform(-cube_x_noise, cube_x_noise) if add_noise else 0.0
             qpos[cube_x_idx] = base + extra
 
+        # Safe initial arm pose: set shoulder to π/2 so arm points in +y direction.
+        # Prevents penetration-impulse exploit when morphology optimizer grows arm toward
+        # +x (cube direction): at qpos[0]=π/2 the arm always starts pointing away from cube,
+        # so no initial overlap regardless of arm length.
+        # Requires shoulder joint range widened to ±90° in rrbot_arm.xml.
+        if self.env_specs.get('arm_safe_init', False):
+            qpos[0] = np.pi / 2
+
         if self.env_specs.get('init_height', True) and not self.is_fixed_base:
             qpos[2] = 0.4
         self.set_state(qpos, qvel)
