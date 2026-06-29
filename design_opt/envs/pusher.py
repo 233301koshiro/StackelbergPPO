@@ -55,6 +55,12 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         self.skel_num_action = 3 if cfg.enable_remove else 2
         self.sim_obs_dim = self.get_sim_obs().shape[-1]
         self.attr_fixed_dim = self.get_attr_fixed().shape[-1]
+        # Potential-based rewards: φ(s) = 1/(1+dist).
+        # Both potentials store φ at episode start; step() uses Δφ so static
+        # morphology/pose yields zero reward — preserving the Stackelberg coupling
+        # (Follower must actively move; Leader is rewarded for enabling that motion).
+        self.prev_contact_potential = None  # φ = 1/(1+dist(arm_tip, cube))
+        self.prev_cube_potential = None     # φ = 1/(1+dist(cube, target))  [use_target only]
 
     def allow_add_body(self, body):
         add_body_condition = self.cfg.add_body_condition
@@ -153,13 +159,18 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             succ = self.set_design_params(design_params)
             if not succ:
                 return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform', 'reward_ctrl': 0.0}
+            reward = 0.0
             if self.cur_t == self.cfg.skel_transform_nsteps + 1:
                 succ = self.transit_execution()
                 if not succ:
                     return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform', 'reward_ctrl': 0.0}
+                # R^L: one-shot leader-only bonus for a morphology whose reach
+                # annulus geometrically covers the cube (see タスク設計と報酬関数.md セクション8).
+                # Additive on top of the inherited follower return — does not
+                # touch execution-phase reward, preserving Stackelberg coupling.
+                reward = self.compute_reach_bonus()
 
             ob = self._get_obs()
-            reward = 0.0
             termination = truncation = False
             return ob, reward, termination, truncation, {'use_transform_action': True, 'stage': 'attribute_transform', 'reward_ctrl': 0.0}
         # execution stage
@@ -186,12 +197,29 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 target_y = self.cfg.reward_specs.get('target_y', 0.0)
                 dist_to_target = np.linalg.norm(
                     np.array([xposafter, yposafter]) - np.array([target_x, target_y]))
-                reward_fwd_cube = 1.0 / (1.0 + dist_to_target)
+                # PBRS: Δφ_cube so static cube yields zero reward, preserving
+                # the Stackelberg coupling (Follower must push to get reward).
+                curr_cube_potential = 1.0 / (1.0 + dist_to_target)
+                if self.prev_cube_potential is None:
+                    self.prev_cube_potential = curr_cube_potential
+                reward_fwd_cube = curr_cube_potential - self.prev_cube_potential
+                self.prev_cube_potential = curr_cube_potential
             else:
                 reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
 
+            # Potential-Based Reward Shaping: reward = φ(t+1) - φ(t), φ = 1/(1+dist).
+            # Static arm → Δφ = 0, no free reward.
+            # Arm approaching cube → Δφ > 0, exploration guided as before.
+            # Preserves design intent (morphology that enables fast approach = higher reward)
+            # while eliminating the static-proximity exploitation.
             arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
-            reward_fwd_contact = 1.0 / (1.0 + np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body)))
+            curr_dist = np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body))
+            curr_contact_potential = 1.0 / (1.0 + curr_dist)
+            if self.prev_contact_potential is None:
+                self.prev_contact_potential = curr_contact_potential
+            contact_weight = self.cfg.reward_specs.get('contact_weight', 1.0)
+            reward_fwd_contact = contact_weight * (curr_contact_potential - self.prev_contact_potential)
+            self.prev_contact_potential = curr_contact_potential
             reward_fwd = reward_fwd_cube + reward_fwd_contact
             reward_ctrl = - ctrl_cost_coeff * np.square(ctrl).mean()
             alive_bonus = self.cfg.reward_specs.get('alive_bonus', 0.0)
@@ -215,7 +243,33 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
             return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': reward_ctrl}
-    
+
+    def compute_reach_bonus(self):
+        """Leader-only design-phase bonus (R^L): reward morphologies whose 2-link
+        reach annulus [|L1-L2|, L1+L2] around the shoulder pivot geometrically
+        covers the cube's (already-sampled) position.
+
+        Uses body.bone_offset (design-space link length, exact) rather than
+        get_body_com, since get_body_com returns the *subtree* COM (includes
+        descendants) and so cannot isolate a single link's length. The shoulder
+        pivot is read via body_xpos (frame origin), not COM, for the same reason.
+        Both are pose-independent: a link's own length and its parent's frame
+        origin are unaffected by the current joint angles (arm_safe_init etc).
+        """
+        scale = self.cfg.reward_specs.get('reach_bonus_scale', 0.0)
+        if scale == 0.0 or not self.is_fixed_base or len(self.robot.bodies) < 3:
+            return 0.0
+        bodies = self.robot.bodies
+        L1 = float(np.linalg.norm(np.asarray(bodies[1].bone_offset, dtype=float)))
+        L2 = float(np.linalg.norm(np.asarray(bodies[-1].bone_offset, dtype=float)))
+        shoulder_xy = self.data.body_xpos[self.model._body_name2id[bodies[1].name]][:2]
+        cube_xy = self.get_body_com("cube")[:2]
+        d = np.linalg.norm(cube_xy - shoulder_xy)
+        reach_min, reach_max = abs(L1 - L2), L1 + L2
+        excess = max(0.0, reach_min - d, d - reach_max)
+        k = self.cfg.reward_specs.get('reach_bonus_k', 3.0)
+        return scale * np.exp(-k * excess)
+
     def transit_attribute_transform(self):
         self.stage = 'attribute_transform'
 
@@ -227,6 +281,19 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         except:
             print(self.cur_xml_str)
             return False
+        # Snapshot φ values at episode start so step() can compute Δφ.
+        arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
+        dist0 = np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body))
+        self.prev_contact_potential = 1.0 / (1.0 + dist0)
+        use_target = self.cfg.reward_specs.get('use_target_reward', False)
+        if use_target:
+            target_x = self.cfg.reward_specs.get('target_x', 1.5)
+            target_y = self.cfg.reward_specs.get('target_y', 0.0)
+            cube_pos = self.get_body_com("cube")[:2]
+            dist_cube0 = np.linalg.norm(cube_pos - np.array([target_x, target_y]))
+            self.prev_cube_potential = 1.0 / (1.0 + dist_cube0)
+        else:
+            self.prev_cube_potential = None
         return True
         
 
