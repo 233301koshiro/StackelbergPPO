@@ -31,3 +31,9 @@ except (ValueError, IndexError):
 
 from design_opt.train import main
 main()
+
+# choreonoid は --python スクリプト終了後も Qt イベントループが残り続け、プロセスが
+# 終了しないことがある（eval_cross_env.py / eval_cnoid_visual.py と同根の問題）。
+# 学習完了後に SIGABRT で落ちて呼び出し元（run_2axis_mvp.sh の set -e 等）に
+# 偽の失敗として伝播するのを防ぐため、明示的に正常終了させる。
+os._exit(0)

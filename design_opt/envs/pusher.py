@@ -165,7 +165,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 if not succ:
                     return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform', 'reward_ctrl': 0.0}
                 # R^L: one-shot leader-only bonus for a morphology whose reach
-                # annulus geometrically covers the cube (see タスク設計と報酬関数.md セクション8).
+                # annulus geometrically covers the cube (design rationale: タスク設計と
+                # 報酬関数.md セクション8、実装詳細: セクション9.2/9.7/9.8).
                 # Additive on top of the inherited follower return — does not
                 # touch execution-phase reward, preserving Stackelberg coupling.
                 reward = self.compute_reach_bonus()
@@ -180,8 +181,9 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             control_a = a[:, :self.control_action_dim]
             ctrl = self.action_to_control(control_a)
             ctrl_cost_coeff = self.cfg.reward_specs.get('ctrl_cost_coeff', 1e-4)
-            xposbefore = self.get_body_com("cube")[0]
-            yposbefore = self.get_body_com("cube")[1]
+            # v2 系（速度ベース報酬）専用だったため無効化（reward_fwd_cube の else 節とセット）。
+            # xposbefore = self.get_body_com("cube")[0]
+            # yposbefore = self.get_body_com("cube")[1]
             try:
                 self.do_simulation(ctrl, self.frame_skip)
             except:
@@ -205,7 +207,9 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 reward_fwd_cube = curr_cube_potential - self.prev_cube_potential
                 self.prev_cube_potential = curr_cube_potential
             else:
-                reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+                # v2 系（速度ベース / 野球バット戦術）は一旦保留。v5 の目標座標戦略に専念するため無効化。
+                # reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+                reward_fwd_cube = 0.0
 
             # Potential-Based Reward Shaping: reward = φ(t+1) - φ(t), φ = 1/(1+dist).
             # Static arm → Δφ = 0, no free reward.
@@ -247,28 +251,65 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
     def compute_reach_bonus(self):
         """Leader-only design-phase bonus (R^L): reward morphologies whose 2-link
         reach annulus [|L1-L2|, L1+L2] around the shoulder pivot geometrically
-        covers the cube's (already-sampled) position.
+        covers the cube's (already-sampled) position, AND whose pose at the
+        moment execution actually starts points toward the cube (案B: radius x
+        angle, see タスク設計と報酬関数.md セクション9.5/9.7/9.8).
 
-        Uses body.bone_offset (design-space link length, exact) rather than
+        Link length/shoulder pivot use body.bone_offset / body_xpos rather than
         get_body_com, since get_body_com returns the *subtree* COM (includes
-        descendants) and so cannot isolate a single link's length. The shoulder
-        pivot is read via body_xpos (frame origin), not COM, for the same reason.
-        Both are pose-independent: a link's own length and its parent's frame
-        origin are unaffected by the current joint angles (arm_safe_init etc).
+        descendants) and so cannot isolate a single link's geometry.
+
+        The angle term must reflect the REAL starting pose, not the design-space
+        zero-joint-angle pose: when arm_safe_init is on, reset_state() always
+        forces qpos[0] = pi/2 (shoulder rotated +90° from the design "rest"
+        direction, regardless of which way the Leader grew the arm — see
+        reset_state() and 進捗.md 2026-06-26 知見 "arm_safe_init と形態方向の
+        不一致"). Body "0" itself never rotates (no joint), so the shoulder pivot
+        (body_xpos(bodies[1])) is unaffected, but bo1+bo11 must be rotated by that
+        same +90° before comparing against the cube direction, or the bonus
+        rewards a "rest" direction that is never actually realized at runtime.
         """
         scale = self.cfg.reward_specs.get('reach_bonus_scale', 0.0)
         if scale == 0.0 or not self.is_fixed_base or len(self.robot.bodies) < 3:
             return 0.0
         bodies = self.robot.bodies
-        L1 = float(np.linalg.norm(np.asarray(bodies[1].bone_offset, dtype=float)))
-        L2 = float(np.linalg.norm(np.asarray(bodies[-1].bone_offset, dtype=float)))
+        bo1 = np.asarray(bodies[1].bone_offset, dtype=float)[:2]
+        bo11 = np.asarray(bodies[-1].bone_offset, dtype=float)[:2]
+        L1 = float(np.linalg.norm(bo1))
+        L2 = float(np.linalg.norm(bo11))
         shoulder_xy = self.data.body_xpos[self.model._body_name2id[bodies[1].name]][:2]
         cube_xy = self.get_body_com("cube")[:2]
+
+        # radius term: does the cube fall within the 2-link reach annulus?
         d = np.linalg.norm(cube_xy - shoulder_xy)
         reach_min, reach_max = abs(L1 - L2), L1 + L2
         excess = max(0.0, reach_min - d, d - reach_max)
         k = self.cfg.reward_specs.get('reach_bonus_k', 3.0)
-        return scale * np.exp(-k * excess)
+        radius_term = np.exp(-k * excess)
+
+        # angle term: does the REAL starting-pose direction point toward the cube?
+        # arm_safe_init forces qpos[0]=pi/2 regardless of design direction, so the
+        # actually-realized link-chain vector is (bo1+bo11) rotated by that same
+        # +90° about the (non-rotating) shoulder pivot.
+        eps = 1e-6
+        link_vec = bo1 + bo11
+        if self.env_specs.get('arm_safe_init', False):
+            theta = np.pi / 2
+            cos_t, sin_t = np.cos(theta), np.sin(theta)
+            rot = np.array([[cos_t, -sin_t], [sin_t, cos_t]])
+            link_vec = rot @ link_vec
+        rest_tip_xy = shoulder_xy + link_vec
+        to_cube = cube_xy - shoulder_xy
+        to_tip = rest_tip_xy - shoulder_xy
+        cos_angle = None
+        if np.linalg.norm(to_cube) < eps or np.linalg.norm(to_tip) < eps:
+            angle_term = 0.0
+        else:
+            cos_angle = np.dot(to_cube, to_tip) / (np.linalg.norm(to_cube) * np.linalg.norm(to_tip))
+            angle_power = self.cfg.reward_specs.get('reach_bonus_angle_power', 2.0)
+            angle_term = max(0.0, cos_angle) ** angle_power
+
+        return scale * radius_term * angle_term
 
     def transit_attribute_transform(self):
         self.stage = 'attribute_transform'

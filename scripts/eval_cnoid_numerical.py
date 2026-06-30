@@ -178,3 +178,7 @@ if args.plot and results[0]['cube_x_traj']:
         print(f"\n[eval] Plot saved: {out_path}")
     except Exception as e:
         print(f"[eval] Plot failed: {e}")
+
+# choreonoid は --python スクリプト終了後も Qt イベントループが残り続け、プロセスが
+# 終了しないことがある（eval_cross_env.py / eval_cnoid_visual.py と同根の問題）。
+os._exit(0)
