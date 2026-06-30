@@ -213,7 +213,7 @@ class BodyGenAgent(AgentPPO):
                     reward += self.cfg.reward_shift 
                 
                 # logging
-                logger.step(self.env, env_reward, c_reward, 0.0, info)
+                logger.step(self.env, env_reward, c_reward, info.get('reward_breakdown', np.array([0.0, 0.0])), info)
 
                 done = (termination or truncation)
                 exp = 1 - use_mean_action
@@ -762,6 +762,12 @@ class BodyGenAgent(AgentPPO):
         log_str = f'{epoch}\tT_sample {info["T_sample"]:.2f}\tT_update {info["T_update"]:.2f}\tT_eval {info["T_eval"]:.2f}\t'\
             f'ETA {get_eta_str(epoch, cfg.max_epoch_num, info["T_total"])}\ttrain_R {log.avg_reward:.2f}\ttrain_R_eps {log.avg_episode_reward:.2f}\t'\
             f'exec_R {log_eval.avg_exec_reward:.2f}\texec_R_eps {log_eval.avg_exec_episode_reward:.2f}\t{cfg.id}'
+        # Diagnostic only: per-component reward breakdown (pusher.py's 'reward_breakdown'
+        # info field, [reward_fwd_cube, reward_fwd_contact]). 0.00/0.00 for envs that
+        # don't set this field.
+        if log_eval.use_c_reward and hasattr(log_eval, 'avg_c_info'):
+            fwd_cube, fwd_contact = np.asarray(log_eval.avg_c_info).reshape(-1)[:2]
+            log_str += f'\tfwd_cube {fwd_cube:.4f}\tfwd_contact {fwd_contact:.4f}'
         logger.info(log_str)
 
         if log_eval.avg_exec_episode_reward > self.best_rewards:
