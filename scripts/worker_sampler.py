@@ -182,7 +182,7 @@ while True:
                 if info['stage'] == 'execution':
                     reward += cfg.reward_shift
 
-                logger.step(env, env_reward, c_reward, 0.0, info)
+                logger.step(env, env_reward, c_reward, info.get('reward_breakdown', np.array([0.0, 0.0])), info)
 
                 done = (termination or truncation)
                 exp  = 1 - use_mean

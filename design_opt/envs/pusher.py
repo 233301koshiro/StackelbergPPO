@@ -246,7 +246,11 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 termination = not (np.isfinite(s).all() and (height > min_height) and (height < max_height) and (abs(ang) < np.deg2rad(max_ang)))
             truncation = not (self.control_nsteps < max_nsteps)
             ob = self._get_obs()
-            return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': reward_ctrl}
+            # Diagnostic only: per-component reward breakdown, surfaced in log_train.txt
+            # via the c_info channel (see worker_sampler.py / genesis_agent.py). Does not
+            # affect the actual reward signal used for training.
+            reward_breakdown = np.array([reward_fwd_cube, reward_fwd_contact])
+            return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': reward_ctrl, 'reward_breakdown': reward_breakdown}
 
     def compute_reach_bonus(self):
         """Leader-only design-phase bonus (R^L): reward morphologies whose 2-link
