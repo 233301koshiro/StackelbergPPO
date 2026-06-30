@@ -158,3 +158,7 @@ except KeyboardInterrupt:
     print('\n[viewer] 停止しました')
 
 env.close()
+
+# choreonoid は --python スクリプト終了後も Qt イベントループが残り続け、プロセスが
+# 終了しないことがある（eval_cross_env.py / eval_cnoid_visual.py と同根の問題）。
+os._exit(0)

@@ -1,0 +1,55 @@
+<mujoco model="rrbot_arm2">
+  <asset>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1=".2 .3 .4" rgb2="0 0 0" width="800" height="800" mark="random" markrgb="1 1 1" />
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .1 .2" rgb2=".3 .2 .3" width="300" height="300" mark="edge" markrgb=".3 .2 .3" />
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2" />
+    <material name="self" rgba=".7 .5 .3 1" />
+    <material name="plain_white" rgba="1 1 1 1" specular="0" shininess="0" />
+  </asset>
+  <visual>
+    <headlight ambient=".4 .4 .4" diffuse=".8 .8 .8" specular="0 0 0" />
+    <map znear=".001" />
+    <quality shadowsize="16384" />
+  </visual>
+  <compiler angle="degree" />
+  <option integrator="RK4" timestep="0.01" />
+  <default>
+    <joint armature="1" damping="1" limited="true" />
+    <geom conaffinity="0" condim="3" density="5.0" friction="1.0 0.5 0.5" margin="0.01" rgba=".7 .5 .3 1" />
+  </default>
+  <worldbody>
+    <light cutoff="100" diffuse="1 1 1" dir="0.3 0 -1.3" directional="true" exponent="1" pos="-30 0 130" specular=".1 .1 .1" />
+    <geom conaffinity="1" condim="3" name="floor" pos="0 0 0" rgba="1 1 1 1" size="200 200 .125" type="plane" material="grid" />
+    <!-- rrbot_arm2: 報酬汎化テスト用バリアント。rrbot_arm.xml とタスク設定（cube位置・報酬関数）は
+         完全に同一だが、リンク長比率を反転させている: link1=0.15 (短い上腕), link2=0.45 (長い前腕)
+         vs rrbot_arm の link1=0.3, link2=0.25。デフォルト合計リーチは 0.60m とほぼ同じだが、
+         運動学的な「個性」（どちらの関節がどれだけ動かす必要があるか）が大きく異なる。
+         同じ報酬設計(PBRS + reach_bonus)がこの別比率アームでも追加チューニングなしで
+         機能するかを見るための並行実験（タスク設計と報酬関数.md セクション10参照）。 -->
+    <body name="0" pos="0 0 0.15">
+      <camera name="track" mode="trackcom" pos="0 -3 0.3" xyaxes="1 0 0 0 0 1" />
+      <geom pos="0 0 0" size="0.1" type="sphere" />
+      <!-- no free joint: base is fixed to world -->
+      <!-- shoulder: connects base to upper arm (短い: 0.15) -->
+      <body name="1" pos="0 0 0">
+        <joint axis="0 0 1" name="1_joint" pos="0 0 0" range="-90 90" type="hinge" />
+        <geom fromto="0 0 0 0.15 0 0" size="0.05" type="capsule" />
+        <!-- elbow: connects upper arm to forearm (長い: 0.45); pos is endpoint of upper arm geom -->
+        <body name="11" pos="0.15 0 0">
+          <joint axis="0 0 1" name="11_joint" pos="0 0 0" range="-90 90" type="hinge" />
+          <geom fromto="0 0 0 0.45 0 0" size="0.04" type="capsule" />
+        </body>
+      </body>
+    </body>
+    <!-- cube: rrbot_arm.xml と完全に同一設定（タスクを変えないため） -->
+    <body name="cube" pos="1.0 0 0.20">
+      <joint name="cube_slide" type="slide" axis="1 0 0" damping="10.0" range="-2 200" />
+      <joint name="cube_slide2" type="slide" axis="0 1 0" damping="10.0" range="-100 100" />
+      <geom name="cube_geom" type="box" size="0.15 0.15 0.15" rgba="0.8 0.2 0.2 1.0" friction="0.5 0.1 0.1" density="100" contype="1" conaffinity="1" />
+    </body>
+  </worldbody>
+  <actuator>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1_joint" gear="150" name="1_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint" gear="100" name="11_joint" />
+  </actuator>
+</mujoco>

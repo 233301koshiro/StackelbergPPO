@@ -636,3 +636,8 @@ ani_e.save(out_exec, writer=animation.FFMpegWriter(fps=args.fps, bitrate=1800))
 plt.close(fig_e)
 print(f"[visual] Saved execution: {out_exec}")
 print("[visual] Done.")
+
+# choreonoid は --python スクリプト終了後も Qt イベントループが残り続け、プロセスが
+# 終了しないことがある（eval_cross_env.py と同根の問題）。timeout コマンドの SIGTERM も
+# 効かずハングし続けるケースを確認済みのため、ここで明示的に強制終了する。
+os._exit(0)
