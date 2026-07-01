@@ -181,9 +181,9 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             control_a = a[:, :self.control_action_dim]
             ctrl = self.action_to_control(control_a)
             ctrl_cost_coeff = self.cfg.reward_specs.get('ctrl_cost_coeff', 1e-4)
-            # v2 系（速度ベース報酬）専用だったため無効化（reward_fwd_cube の else 節とセット）。
-            # xposbefore = self.get_body_com("cube")[0]
-            # yposbefore = self.get_body_com("cube")[1]
+            # Route B 対照実験用に速度ベース報酬を再有効化（use_target_reward=false 時のみ使用）。
+            xposbefore = self.get_body_com("cube")[0]
+            yposbefore = self.get_body_com("cube")[1]
             try:
                 self.do_simulation(ctrl, self.frame_skip)
             except:
@@ -207,9 +207,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 reward_fwd_cube = curr_cube_potential - self.prev_cube_potential
                 self.prev_cube_potential = curr_cube_potential
             else:
-                # v2 系（速度ベース / 野球バット戦術）は一旦保留。v5 の目標座標戦略に専念するため無効化。
-                # reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
-                reward_fwd_cube = 0.0
+                # Route B 対照実験: 速度ベース報酬（Δx/dt）。use_target_reward=false 時に有効。
+                reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
 
             # Potential-Based Reward Shaping: reward = φ(t+1) - φ(t), φ = 1/(1+dist).
             # Static arm → Δφ = 0, no free reward.
