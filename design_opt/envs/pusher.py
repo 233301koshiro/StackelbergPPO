@@ -317,6 +317,34 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
     def transit_attribute_transform(self):
         self.stage = 'attribute_transform'
 
+    def _check_initial_contact(self):
+        """arm_safe_init 後の先端位置が cube に接触しているか確認。
+        接触している場合 True を返してエピソードを打ち切る
+        （Leader が initial contact exploit を学習するのを防ぐ）。
+        check_init_contact=false で無効化可能。
+        """
+        if (not self.env_specs.get('check_init_contact', True)
+                or not self.is_fixed_base
+                or len(self.robot.bodies) < 3
+                or not self.env_specs.get('arm_safe_init', False)):
+            return False
+        bodies = self.robot.bodies
+        bo1  = np.asarray(bodies[1].bone_offset,  dtype=float)[:2]
+        bo11 = np.asarray(bodies[-1].bone_offset, dtype=float)[:2]
+        shoulder_xy = self.data.body_xpos[self.model._body_name2id[bodies[1].name]][:2]
+        # arm_safe_init (+90°回転) 補正後の実際の先端位置
+        theta = np.pi / 2
+        cos_t, sin_t = np.cos(theta), np.sin(theta)
+        link_vec  = np.array([[cos_t, -sin_t], [sin_t, cos_t]]) @ (bo1 + bo11)
+        tip_xy    = shoulder_xy + link_vec
+        cube_xy   = self.get_body_com("cube")[:2]
+        cube_half = 0.15   # rrbot_arm.xml: cube geom size=0.15
+        arm_rad   = 0.05   # 最大カプセル半径（body_1）
+        margin    = 0.03   # 安全マージン
+        thresh    = cube_half + arm_rad + margin
+        return (abs(tip_xy[0] - cube_xy[0]) < thresh and
+                abs(tip_xy[1] - cube_xy[1]) < thresh)
+
     def transit_execution(self):
         self.stage = 'execution'
         self.control_nsteps = 0
@@ -324,6 +352,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             self.reset_state(True)
         except:
             print(self.cur_xml_str)
+            return False
+        # 初期接触チェック: arm tip が cube に触れている形態はエピソードを打ち切る。
+        # Leader が「接触してインパルスで押す」exploit を学習するのを防ぐ。
+        if self._check_initial_contact():
             return False
         # Snapshot φ values at episode start so step() can compute Δφ.
         arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
