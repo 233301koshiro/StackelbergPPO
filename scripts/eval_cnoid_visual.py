@@ -338,7 +338,7 @@ def make_morph_figure(arm_rest, is_after, bl1_b, bl1_a, bl11_b, bl11_a, alpha=1.
     ax.axvline(x=1.50, color='red',    lw=1, ls=':', alpha=0.5, label='target x=1.50')
     ax.legend(fontsize=7.5, loc='upper left')
     view_label = 'After (Learned Morphology)' if is_after else 'Before (Default Morphology)'
-    ax.set_title(f'Top View (X-Y)  [{view_label}]', fontsize=11, fontweight='bold')
+    ax.set_title(f'Top View (X-Y)  [{view_label}]  [epoch={epoch}]', fontsize=11, fontweight='bold')
 
     # --- 右パネル: パラメータ表 ---
     ax2 = axes[1]
@@ -624,7 +624,7 @@ def draw_exec_frame(i):
     ax_e.set_xlabel('X'); ax_e.set_ylabel('Y'); ax_e.set_zlabel('Z')
     cube_info = f'  cube x={cp[0]:.2f}' if cp is not None else ''
     ax_e.set_title(
-        f"Step {i+1}/{len(exec_frames)}  r={frame['reward']:.3f}{cube_info}",
+        f"[epoch={epoch}]  Step {i+1}/{len(exec_frames)}  r={frame['reward']:.3f}{cube_info}",
         fontsize=10)
     ax_e.view_init(elev=30, azim=-55)
 
