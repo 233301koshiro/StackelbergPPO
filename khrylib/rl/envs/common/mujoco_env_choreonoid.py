@@ -443,8 +443,10 @@ def mujoco_xml_to_body(xml_str: str):
             axis    = parse_vec(j_el.get('axis', '0 0 1'))
             rng_raw = [float(x) for x in j_el.get('range', '-180 180').split()]
             rng_deg = rng_raw if angle_is_degree else [math.degrees(r) for r in rng_raw]
+            damping = float(j_el.get('damping', default_damping))
             add_link(child_name, parent_name, 'revolute', jname,
-                     axis, rng_deg, translation, mass, com, inr, shape)
+                     axis, rng_deg, translation, mass, com, inr, shape,
+                     damping=damping)
         elif jtype_mj in ('slide', 'prismatic'):
             axis    = parse_vec(j_el.get('axis', '1 0 0'))
             rng_raw = [float(x) for x in j_el.get('range', '-10 10').split()]
@@ -796,8 +798,15 @@ class ChoreonoidSimWorld:
         self.frame_skip        = 4
         self.is_running        = False
         self._timestep         = 0.01
-        self._extra_joint_damping = {}  # {(body_key, joint_name): damping_Ns_per_m}
-        self._extra_joint_decay   = []  # [(joint_obj, decay_factor)] cached for step()
+        # Choreonoid AIST ignores joint_damping and joint_range (revolute) under
+        # sustained torque/momentum, for EVERY body (not just "extra" ones — this
+        # used to be scoped to extra bodies only, missing the robot's own arm
+        # joints; see タスク設計と報酬関数.md / 進捗.md 2026-07-01 知見). Both are
+        # enforced explicitly in step() using these caches.
+        self._joint_damping = {}  # {(body_key, joint_name): damping_Ns_per_m}
+        self._joint_limits  = {}  # {(body_key, joint_name): (lower_rad, upper_rad)}
+        self._joint_decay            = []  # [(joint_obj, decay_factor)] cached for step()
+        self._joint_limits_compiled  = []  # [(body_obj, joint_obj, lower_rad, upper_rad)]
         self._setup_world()
 
     def _build_sim_body_entries(self):
@@ -807,18 +816,24 @@ class ChoreonoidSimWorld:
             is_floating = (b.rootLink.jointType == b.rootLink.FreeJoint)
             entries.append((sb, is_floating))
         self._sim_body_entries = entries
-        # Pre-compute (joint_obj, decay_factor) for extra bodies to avoid per-tick API overhead.
-        decay = []
-        for entry_idx, (sb, _) in enumerate(entries[1:], start=1):
-            body_key = f'extra_{entry_idx - 1}'
+        # Pre-compute (joint_obj, decay_factor) / (body, joint_obj, lower, upper)
+        # for ALL bodies (including the robot itself) to avoid per-tick API overhead.
+        decay  = []
+        limits = []
+        for entry_idx, (sb, _) in enumerate(entries):
+            body_key = 'robot' if entry_idx == 0 else f'extra_{entry_idx - 1}'
             eb = sb.body()
             total_m = max(1e-6, sum(eb.link(k).m for k in range(eb.numLinks)))
             for j_idx in range(eb.numJoints):
                 j = eb.joint(j_idx)
-                dq = self._extra_joint_damping.get((body_key, j.jointName), 0.0)
+                dq = self._joint_damping.get((body_key, j.jointName), 0.0)
                 if dq > 0:
                     decay.append((j, math.exp(-dq / total_m * self._timestep)))
-        self._extra_joint_decay = decay
+                rng = self._joint_limits.get((body_key, j.jointName))
+                if rng is not None:
+                    limits.append((eb, j, rng[0], rng[1]))
+        self._joint_decay           = decay
+        self._joint_limits_compiled = limits
 
     def _setup_world(self):
         self.world_item = WorldItem()
@@ -852,18 +867,31 @@ class ChoreonoidSimWorld:
         self.actuators_map = actuators_map
         self._timestep = timestep
         self.sim_item.setTimeStep(timestep)
-        self._extra_joint_damping = {}
+        self._joint_damping = {}
+        self._joint_limits  = {}
 
         import re as _re
         for i, (item_name, body_yaml) in enumerate(body_defs):
             body_key = 'robot' if i == 0 else f'extra_{i-1}'
-            # Parse joint_damping values from YAML for extra bodies (AIST ignores them for prismatic).
-            if i > 0:
-                for blk in _re.split(r'\n  -\n', '\n  -\n' + body_yaml)[1:]:
-                    jnm = _re.search(r'joint_name:\s*(\S+)', blk)
-                    dq  = _re.search(r'joint_damping:\s*([\d.eE+\-]+)', blk)
-                    if jnm and dq:
-                        self._extra_joint_damping[(body_key, jnm.group(1))] = float(dq.group(1))
+            # Parse joint_damping / joint_range from YAML for ALL bodies (including
+            # the robot) — AIST ignores both under sustained torque/momentum, so we
+            # enforce them ourselves in step(). joint_range is written in degrees
+            # for revolute joints (angle_unit: degree) but raw units (meters) for
+            # prismatic; only convert revolute ranges to radians.
+            for blk in _re.split(r'\n  -\n', '\n  -\n' + body_yaml)[1:]:
+                jnm = _re.search(r'joint_name:\s*(\S+)', blk)
+                if not jnm:
+                    continue
+                dq = _re.search(r'joint_damping:\s*([\d.eE+\-]+)', blk)
+                if dq:
+                    self._joint_damping[(body_key, jnm.group(1))] = float(dq.group(1))
+                rng = _re.search(r'joint_range:\s*\[\s*([\d.eE+\-]+)\s*,\s*([\d.eE+\-]+)\s*\]', blk)
+                if rng:
+                    jtype = _re.search(r'joint_type:\s*(\S+)', blk)
+                    lo, hi = float(rng.group(1)), float(rng.group(2))
+                    if jtype and jtype.group(1) == 'revolute':
+                        lo, hi = math.radians(lo), math.radians(hi)
+                    self._joint_limits[(body_key, jnm.group(1))] = (lo, hi)
 
             with tempfile.NamedTemporaryFile(suffix='.body', mode='w', delete=False) as f:
                 f.write(body_yaml)
@@ -965,10 +993,24 @@ class ChoreonoidSimWorld:
         for _ in range(n_frames):
             self.sim_item.tickRequest(True)
             IU.processEvent()
-            # Choreonoid AIST ignores joint_damping for prismatic joints.
-            # _extra_joint_decay is pre-computed in _build_sim_body_entries.
-            for j, factor in self._extra_joint_decay:
+            # Choreonoid AIST ignores joint_damping (all bodies) and joint_range
+            # (revolute joints) once a joint has nonzero residual velocity, even
+            # with zero commanded torque — confirmed via a controlled probe where
+            # an undamped shoulder joint span >400 rad (60+ full revolutions)
+            # despite a ±90° XML range (進捗.md 2026-07-01 知見). Both are
+            # enforced explicitly here; caches built in _build_sim_body_entries.
+            for j, factor in self._joint_decay:
                 j.dq *= factor
+            clamped_bodies = {}
+            for eb, j, lower, upper in self._joint_limits_compiled:
+                if j.q > upper:
+                    j.q, j.dq = upper, 0.0
+                    clamped_bodies[id(eb)] = eb
+                elif j.q < lower:
+                    j.q, j.dq = lower, 0.0
+                    clamped_bodies[id(eb)] = eb
+            for eb in clamped_bodies.values():
+                eb.calcForwardKinematics()
 
         return _get_state_dict(self._sim_body_entries)
 
