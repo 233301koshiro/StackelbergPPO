@@ -171,11 +171,12 @@ choreonoid --no-window --python scripts/choreonoid_train.py \
 |---------|------|
 | `docs/リポジトリ説明/システム概要.md` | Stackelberg PPO の仕組み・学習指標の説明 |
 | `docs/移行記録/choreonoid移行.md` | Choreonoid 移行の詳細（バグ修正・アーキテクチャ変遷）|
-| `docs/移行記録/choreonoid_gui_issue.md` | GUI（3D 描画）の問題と GLVND 解決策 |
 | `docs/研究応用/トポロジー固定最適化.md` | 初期形状の指定方法・トポロジー固定で属性値のみ最適化する方法 |
 | `docs/研究応用/メッシュXMLパイプライン.md` | 3D メッシュ → MuJoCo XML 変換パイプライン設計（爆発問題の対策）|
 | `docs/研究応用/メッシュ分割.md` | メッシュ分割手法の比較（スケルトン抽出・凹面・VLM 等）|
-| `移行レポート.md` | 作業レポート（現状の最終構成・学習進捗・評価結果）|
+| `移行レポート.md` | Choreonoid 移行の技術リファレンス（アーキテクチャ・バグ修正・起動方法）|
+| `docs/デバッグ戦記.md` | 発見したバグの記録・デバッグ方法論・対照実験ルート |
+| `docs/進捗.md` | 現在の学習状況・実験履歴・知見 |
 
 ---
 
