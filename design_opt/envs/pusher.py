@@ -318,24 +318,28 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         self.stage = 'attribute_transform'
 
     def _check_initial_contact(self):
-        """arm_safe_init 後の先端位置が cube に接触しているか確認。
+        """実行開始時のアーム先端位置が cube に接触しているか確認。
         接触している場合 True を返してエピソードを打ち切る
         （Leader が initial contact exploit を学習するのを防ぐ）。
-        check_init_contact=false で無効化可能。
+        check_init_contact=false で無効化可能。arm_safe_init の有無に依存しない。
+
+        先端位置は「reset_state() 後の実際のシミュレーション状態における
+        shoulder_xy + (arm_safe_init 回転があれば適用した) bo1+bo11」で計算する。
         """
         if (not self.env_specs.get('check_init_contact', True)
                 or not self.is_fixed_base
-                or len(self.robot.bodies) < 3
-                or not self.env_specs.get('arm_safe_init', False)):
+                or len(self.robot.bodies) < 3):
             return False
         bodies = self.robot.bodies
         bo1  = np.asarray(bodies[1].bone_offset,  dtype=float)[:2]
         bo11 = np.asarray(bodies[-1].bone_offset, dtype=float)[:2]
         shoulder_xy = self.data.body_xpos[self.model._body_name2id[bodies[1].name]][:2]
-        # arm_safe_init (+90°回転) 補正後の実際の先端位置
-        theta = np.pi / 2
-        cos_t, sin_t = np.cos(theta), np.sin(theta)
-        link_vec  = np.array([[cos_t, -sin_t], [sin_t, cos_t]]) @ (bo1 + bo11)
+        # arm_safe_init が有効な場合は回転を適用、無効な場合は現在の joint 状態を反映
+        link_vec = bo1 + bo11
+        if self.env_specs.get('arm_safe_init', False):
+            theta = np.pi / 2
+            cos_t, sin_t = np.cos(theta), np.sin(theta)
+            link_vec = np.array([[cos_t, -sin_t], [sin_t, cos_t]]) @ link_vec
         tip_xy    = shoulder_xy + link_vec
         cube_xy   = self.get_body_com("cube")[:2]
         cube_half = 0.15   # rrbot_arm.xml: cube geom size=0.15
