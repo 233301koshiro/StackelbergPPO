@@ -194,21 +194,25 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             yposafter = self.get_body_com("cube")[1]
 
             use_target = self.cfg.reward_specs.get('use_target_reward', False)
-            if use_target:
-                target_x = self.cfg.reward_specs.get('target_x', 1.5)
-                target_y = self.cfg.reward_specs.get('target_y', 0.0)
-                dist_to_target = np.linalg.norm(
-                    np.array([xposafter, yposafter]) - np.array([target_x, target_y]))
-                # PBRS: Δφ_cube so static cube yields zero reward, preserving
-                # the Stackelberg coupling (Follower must push to get reward).
-                curr_cube_potential = 1.0 / (1.0 + dist_to_target)
-                if self.prev_cube_potential is None:
-                    self.prev_cube_potential = curr_cube_potential
-                reward_fwd_cube = curr_cube_potential - self.prev_cube_potential
+            target_x = self.cfg.reward_specs.get('target_x', 1.5)
+            target_y = self.cfg.reward_specs.get('target_y', 0.0)
+            dist_to_target = np.linalg.norm(
+                np.array([xposafter, yposafter]) - np.array([target_x, target_y]))
+            curr_cube_potential = 1.0 / (1.0 + dist_to_target)
+            if self.prev_cube_potential is None:
                 self.prev_cube_potential = curr_cube_potential
+            target_pbrs = curr_cube_potential - self.prev_cube_potential
+            self.prev_cube_potential = curr_cube_potential
+
+            if use_target:
+                # 純粋な target PBRS（目標座標のみ）
+                reward_fwd_cube = target_pbrs
             else:
-                # Route B 対照実験: 速度ベース報酬（Δx/dt）。use_target_reward=false 時に有効。
-                reward_fwd_cube = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+                # 速度ベース報酬 + オプションで target PBRS を加算（組み合わせ報酬①）
+                # cube_target_weight > 0 のとき: vel_reward + weight * target_pbrs
+                vel_reward = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+                target_weight = self.cfg.reward_specs.get('cube_target_weight', 0.0)
+                reward_fwd_cube = vel_reward + target_weight * target_pbrs
 
             # Potential-Based Reward Shaping: reward = φ(t+1) - φ(t), φ = 1/(1+dist).
             # Static arm → Δφ = 0, no free reward.
@@ -365,15 +369,12 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
         dist0 = np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body))
         self.prev_contact_potential = 1.0 / (1.0 + dist0)
-        use_target = self.cfg.reward_specs.get('use_target_reward', False)
-        if use_target:
-            target_x = self.cfg.reward_specs.get('target_x', 1.5)
-            target_y = self.cfg.reward_specs.get('target_y', 0.0)
-            cube_pos = self.get_body_com("cube")[:2]
-            dist_cube0 = np.linalg.norm(cube_pos - np.array([target_x, target_y]))
-            self.prev_cube_potential = 1.0 / (1.0 + dist_cube0)
-        else:
-            self.prev_cube_potential = None
+        # target PBRS は use_target_reward=true と組み合わせ報酬①（cube_target_weight>0）の両方で必要
+        target_x = self.cfg.reward_specs.get('target_x', 1.5)
+        target_y = self.cfg.reward_specs.get('target_y', 0.0)
+        cube_pos = self.get_body_com("cube")[:2]
+        dist_cube0 = np.linalg.norm(cube_pos - np.array([target_x, target_y]))
+        self.prev_cube_potential = 1.0 / (1.0 + dist_cube0)
         return True
         
 
