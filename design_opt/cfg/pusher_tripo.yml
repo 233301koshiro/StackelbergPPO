@@ -1,0 +1,80 @@
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+  # body名のbase-5インデックスが最大1406（"21111"）のためEmbedding tableを拡張
+  # TransformerSimple の embedding_len（デフォルト256）が不足するため上書き
+  embedding_len: 1500
+  skel_shared_mlp:
+    hdims: [128, 128]
+    rescale_linear: true
+    max_index: 1500
+  control_shared_mlp:
+    hdims: [128, 128]
+    rescale_linear: true
+    max_index: 1500
+  attr_shared_mlp:
+    hdims: [128, 128]
+    rescale_linear: true
+    max_index: 1500
+
+value_specs:
+  htype: tanh
+  mlp: [512, 256]
+  design_flag_in_state: true
+  message_type: 'transformer'
+  embedding_len: 1500
+  transformer_specs:
+    pos_emb_type: index
+    block_depth: 3
+    hidden_dim: 64
+    norm_type: pre
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 6
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  
+  body_params:
+    offset:
+      type: 'xy'
+      lb: [-0.5, -0.5]
+      ub: [0.5, 0.5]
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      lb: 20
+      ub: 400
+  
+
