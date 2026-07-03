@@ -418,7 +418,7 @@ def mujoco_xml_to_body(xml_str: str):
     _joint_id_ctr = [0]
 
     def add_link(name, parent, jtype, jname, jaxis, jrange_deg,
-                 translation, mass, com, inertia, shape, damping=None):
+                 translation, mass, com, inertia, shape, damping=None, velocity=None):
         if jtype in ('revolute', 'prismatic'):
             jid = _joint_id_ctr[0]
             _joint_id_ctr[0] += 1
@@ -427,7 +427,7 @@ def mujoco_xml_to_body(xml_str: str):
         links.append(dict(name=name, parent=parent, jtype=jtype, jname=jname,
                           jaxis=jaxis, jrange=jrange_deg, translation=translation,
                           mass=mass, com=com, inertia=inertia, shape=shape,
-                          joint_id=jid, damping=damping))
+                          joint_id=jid, damping=damping, velocity=velocity))
 
     def process_one_joint(j_el, parent_name, child_name, translation,
                           mass, com, inr, shape):
@@ -444,9 +444,11 @@ def mujoco_xml_to_body(xml_str: str):
             rng_raw = [float(x) for x in j_el.get('range', '-180 180').split()]
             rng_deg = rng_raw if angle_is_degree else [math.degrees(r) for r in rng_raw]
             damping = float(j_el.get('damping', default_damping))
+            vel_str = j_el.get('velocity', '0')
+            velocity = float(vel_str) if float(vel_str) > 0 else None
             add_link(child_name, parent_name, 'revolute', jname,
                      axis, rng_deg, translation, mass, com, inr, shape,
-                     damping=damping)
+                     damping=damping, velocity=velocity)
         elif jtype_mj in ('slide', 'prismatic'):
             axis    = parse_vec(j_el.get('axis', '1 0 0'))
             rng_raw = [float(x) for x in j_el.get('range', '-10 10').split()]
@@ -543,6 +545,8 @@ def mujoco_xml_to_body(xml_str: str):
                 out.append(f'    joint_range: {fv(lk["jrange"], 6)}')
             if lk.get('damping') is not None:
                 out.append(f'    joint_damping: {lk["damping"]:.6g}')
+            if lk.get('velocity') is not None:
+                out.append(f'    joint_velocity: {lk["velocity"]:.6g}')
             out.append(f'    translation: {fv(lk["translation"])}')
             out.append(f'    mass: {lk["mass"]:.6g}')
             out.append(f'    center_of_mass: {fv(lk["com"])}')
@@ -818,8 +822,9 @@ class ChoreonoidSimWorld:
         self._sim_body_entries = entries
         # Pre-compute (joint_obj, decay_factor) / (body, joint_obj, lower, upper)
         # for ALL bodies (including the robot itself) to avoid per-tick API overhead.
-        decay  = []
-        limits = []
+        decay      = []
+        limits     = []
+        vel_limits = []
         for entry_idx, (sb, _) in enumerate(entries):
             body_key = 'robot' if entry_idx == 0 else f'extra_{entry_idx - 1}'
             eb = sb.body()
@@ -832,8 +837,12 @@ class ChoreonoidSimWorld:
                 rng = self._joint_limits.get((body_key, j.jointName))
                 if rng is not None:
                     limits.append((eb, j, rng[0], rng[1]))
-        self._joint_decay           = decay
-        self._joint_limits_compiled = limits
+                vel = self._joint_vel_limits.get((body_key, j.jointName))
+                if vel is not None:
+                    vel_limits.append((eb, j, vel))
+        self._joint_decay            = decay
+        self._joint_limits_compiled  = limits
+        self._joint_vel_limits_compiled = vel_limits
 
     def _setup_world(self):
         self.world_item = WorldItem()
@@ -867,8 +876,9 @@ class ChoreonoidSimWorld:
         self.actuators_map = actuators_map
         self._timestep = timestep
         self.sim_item.setTimeStep(timestep)
-        self._joint_damping = {}
-        self._joint_limits  = {}
+        self._joint_damping    = {}
+        self._joint_limits     = {}
+        self._joint_vel_limits = {}
 
         import re as _re
         for i, (item_name, body_yaml) in enumerate(body_defs):
@@ -892,6 +902,9 @@ class ChoreonoidSimWorld:
                     if jtype and jtype.group(1) == 'revolute':
                         lo, hi = math.radians(lo), math.radians(hi)
                     self._joint_limits[(body_key, jnm.group(1))] = (lo, hi)
+                vel = _re.search(r'joint_velocity:\s*([\d.eE+\-]+)', blk)
+                if vel:
+                    self._joint_vel_limits[(body_key, jnm.group(1))] = float(vel.group(1))
 
             with tempfile.NamedTemporaryFile(suffix='.body', mode='w', delete=False) as f:
                 f.write(body_yaml)
@@ -1002,6 +1015,11 @@ class ChoreonoidSimWorld:
             for j, factor in self._joint_decay:
                 j.dq *= factor
             clamped_bodies = {}
+            # 速度クランプ: joint limit より先にチェック（高速接触による impulse 防止）
+            for eb, j, max_vel in self._joint_vel_limits_compiled:
+                if abs(j.dq) > max_vel:
+                    j.dq = math.copysign(max_vel, j.dq)
+                    clamped_bodies[id(eb)] = eb
             for eb, j, lower, upper in self._joint_limits_compiled:
                 if j.q > upper:
                     j.q, j.dq = upper, 0.0
