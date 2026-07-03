@@ -342,7 +342,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             link_vec = np.array([[cos_t, -sin_t], [sin_t, cos_t]]) @ link_vec
         tip_xy    = shoulder_xy + link_vec
         cube_xy   = self.get_body_com("cube")[:2]
-        cube_half = 0.15   # rrbot_arm.xml: cube geom size=0.15
+        cube_half = self.env_specs.get('cube_half_size', 0.5)  # rrbot_arm.xml: 大きいcubeは0.5
         arm_rad   = 0.05   # 最大カプセル半径（body_1）
         margin    = 0.03   # 安全マージン
         thresh    = cube_half + arm_rad + margin
