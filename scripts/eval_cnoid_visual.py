@@ -133,22 +133,30 @@ def build_rest_arm(physics, base_world):
     }
 
 
-# ── Choreonoid からリンク位置取得 ─────────────────────────────────────────
+# ── シミュレーション live 状態からリンク位置取得 ──────────────────────────
 def collect_arm_skeleton(env):
-    """link.p + link.R から shoulder / elbow / tip を返す（実行中用）。"""
-    cnoid_body = env._world.body_items['robot'].body
-    root_link  = cnoid_body.rootLink
-    link_11    = cnoid_body.link('11')
-    if link_11 is None:
-        return None
+    """env._body_xpos / _body_xmat（シミュレーション live データ）から
+    shoulder / elbow / tip を返す。
 
-    shoulder = np.array(root_link.p)
-    elbow    = np.array(link_11.p)
-
-    # bone_offset から最新のリンク長を取得（set_design_params 後に更新済み）
+    以前は Choreonoid の body_items['robot'].body.link('11').p を使っていたが、
+    これは参照ボディ（静的）のため実行中に更新されず、動画でアームが静止して
+    見えるバグがあった。body_xpos は AISTSimulator から毎ステップ取得される
+    live データであり、MuJoCo body_xpos と一致することを確認済み。
+    """
+    bodies  = env.robot.bodies
     physics = get_body_physics(env.robot)
-    bo11 = physics.get('11', {}).get('bone_offset', np.array([0.25, 0.0, 0.0]))
-    R11  = np.array(link_11.R)
+
+    # body "0"（ベース）の world 位置 = shoulder
+    b0_name = bodies[0].name
+    shoulder = np.array(env._body_xpos.get(b0_name, np.zeros(3)))
+
+    # body "11"（前腕ジョイント）の world 位置 = elbow
+    b11_name = bodies[-1].name
+    elbow    = np.array(env._body_xpos.get(b11_name, np.zeros(3)))
+
+    # body "11" の回転行列で bone_offset を world 座標に変換 → tip
+    bo11 = physics.get(b11_name, {}).get('bone_offset', np.array([0.25, 0.0, 0.0]))
+    R11  = np.array(env._body_xmat.get(b11_name, np.eye(3)))
     tip  = elbow + R11 @ bo11
 
     return {'shoulder': shoulder, 'elbow': elbow, 'tip': tip}
@@ -192,8 +200,37 @@ while not done and exec_steps < args.max_exec_steps:
 
     if stage in ('skeleton_transform', 'attribute_transform'):
         morph_frames.append({'arm': arm, 'stage': stage})
+        # attribute_transform の最終ステップ内で transit_execution() が呼ばれ、
+        # env.stage がすでに 'execution' に変わっている。
+        # この時点でのアーム・cube 状態が「実行開始直前（step 0）」に相当するため、
+        # do_simulation() 前の静止状態を step 0 フレームとして記録する。
+        if getattr(env, 'stage', '') == 'execution' and after_physics is None:
+            after_physics  = get_body_physics(env.robot)
+            after_arm_rest = build_rest_arm(after_physics, shoulder_world)
+            print(f"[visual] Morphology captured at execution start.")
+            for bn in ['0', '1', '11']:
+                bo = after_physics.get(bn, {}).get('bone_offset', None)
+                if bo is not None:
+                    print(f"[visual] body_{bn} bone_offset: x={bo[0]:.4f}, y={bo[1]:.4f}")
+            for k in ('base','shoulder','elbow','tip'):
+                p = after_arm_rest[k]
+                print(f"[visual] rest arm {k}: x={p[0]:.4f}, y={p[1]:.4f}")
+            cube_pos_s0 = env.get_body_com('cube').copy() if 'cube' in env._body_names else None
+            nv = env.model.nv
+            qpos_s0 = env.data.qpos.copy()
+            vx_s0   = float(env.data.qvel[nv - 2])
+            print(f"[visual] Step 0 (before do_simulation): qpos0={qpos_s0[0]:.4f} qpos1={qpos_s0[1]:.4f} cube_x={cube_pos_s0[0] if cube_pos_s0 is not None else 0:.3f} cube_vx={vx_s0:.4f}")
+            exec_frames.append({
+                'arm': collect_arm_skeleton(env),
+                'cube_pos': cube_pos_s0,
+                'stage': 'execution',
+                'reward': 0.0,
+                'qpos': qpos_s0.copy(),
+                'cube_vx': vx_s0,
+                'step0': True,
+            })
     else:
-        # 実行フェーズに入った瞬間に「変換後」形態を記録
+        # 実行フェーズに入った瞬間に「変換後」形態を記録（フォールバック）
         if after_physics is None:
             after_physics  = get_body_physics(env.robot)
             after_arm_rest = build_rest_arm(after_physics, shoulder_world)
@@ -205,9 +242,12 @@ while not done and exec_steps < args.max_exec_steps:
             for k in ('base','shoulder','elbow','tip'):
                 p = after_arm_rest[k]
                 print(f"[visual] rest arm {k}: x={p[0]:.4f}, y={p[1]:.4f}")
+        nv = env.model.nv
         exec_frames.append({
             'arm': arm, 'cube_pos': cube_pos,
             'stage': stage, 'reward': reward,
+            'qpos': env.data.qpos.copy(),
+            'cube_vx': float(env.data.qvel[nv - 2]),
         })
         exec_steps += 1
 
@@ -623,9 +663,14 @@ def draw_exec_frame(i):
     ax_e.set_zlim(Z_MIN, Z_MAX)
     ax_e.set_xlabel('X'); ax_e.set_ylabel('Y'); ax_e.set_zlabel('Z')
     cube_info = f'  cube x={cp[0]:.2f}' if cp is not None else ''
+    qpos = frame.get('qpos', None)
+    cube_vx = frame.get('cube_vx', None)
+    step_label = '0 (before sim)' if frame.get('step0') else str(i)
+    qpos_str = f'  q0={qpos[0]:.3f} q1={qpos[1]:.3f}' if qpos is not None else ''
+    vx_str   = f'  vx={cube_vx:.3f}' if cube_vx is not None else ''
     ax_e.set_title(
-        f"[epoch={epoch}]  Step {i+1}/{len(exec_frames)}  r={frame['reward']:.3f}{cube_info}",
-        fontsize=10)
+        f"[epoch={epoch}]  Step {step_label}/{len(exec_frames)-1}{cube_info}{qpos_str}{vx_str}",
+        fontsize=8)
     ax_e.view_init(elev=30, azim=-55)
 
 
