@@ -1,0 +1,102 @@
+<mujoco model="tripo_arm">
+  <asset>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1=".2 .3 .4" rgb2="0 0 0" width="800" height="800" mark="random" markrgb="1 1 1" />
+    <texture name="grid" type="2d" builtin="checker" rgb1=".2 .1 .2" rgb2=".3 .2 .3" width="300" height="300" mark="edge" markrgb=".3 .2 .3" />
+    <material name="grid" texture="grid" texrepeat="1 1" texuniform="true" reflectance=".2" />
+  </asset>
+  <visual>
+    <headlight ambient=".4 .4 .4" diffuse=".8 .8 .8" specular="0 0 0" />
+    <map znear=".001" />
+  </visual>
+  <compiler angle="degree" />
+  <option integrator="RK4" timestep="0.01" />
+  <default>
+    <joint armature="1" damping="5" limited="true" />
+    <geom conaffinity="0" condim="3" density="5.0" friction="1.0 0.5 0.5" margin="0.01" rgba=".6 .4 .2 1" />
+  </default>
+  <worldbody>
+    <light cutoff="100" diffuse="1 1 1" dir="0.3 0 -1.3" directional="true" exponent="1" pos="-30 0 130" specular=".1 .1 .1" />
+    <geom conaffinity="1" condim="3" name="floor" pos="0 0 0" rgba="1 1 1 1" size="200 200 .125" type="plane" material="grid" />
+
+    <!-- tripo_arm: スケッチから AI 生成した 7 リンク・6 関節アーム。
+         ベースが床面に固定、アームが Z 方向に 1.0m 伸びる縦型構造。
+         joint_0（Y 軸回転）で前方（+X）に倒れて cube を押す。
+         各リンクは OBJ バウンディングボックスからの capsule 近似（fromto 形式）。
+         joint_4/5 は link_4 から分岐する先端パーツ（並列 branch）。
+         cube は x=0.6m, z=0.25m に配置（joint_0 を 30〜60° 傾けたリーチ範囲）。 -->
+
+    <!-- link_0: base, 4.79kg, capsule r=0.093m, z: 0→0.623m -->
+    <body name="0" pos="0 0 0">
+      <camera name="track" mode="trackcom" pos="2 -3 1.5" xyaxes="1 0 0 0 0.5 1" />
+      <geom fromto="0 0 0 0 0 0.623" size="0.093" type="capsule" />
+
+      <!-- joint_0: axis≈Y, z_offset=0.378m -->
+      <!-- link_1: 2.86kg, capsule r=0.085m, z: 0→0.218m -->
+      <body name="1" pos="0 0 0.378">
+        <joint axis="0.2826 0.9590 0.0204" name="1_joint" pos="0 0 0"
+               range="-90 90" type="hinge" damping="5" velocity="2.0" />
+        <geom fromto="0 0 0 0 0 0.218" size="0.085" type="capsule" />
+
+        <!-- joint_1: axis≈X, z_offset=0.198m -->
+        <!-- link_2: 1.15kg, capsule r=0.044m, z: 0→0.274m -->
+        <body name="11" pos="0 0 0.198">
+          <joint axis="0.8899 -0.4556 -0.0211" name="11_joint" pos="0 0 0"
+                 range="-90 90" type="hinge" damping="5" velocity="2.0" />
+          <geom fromto="0 0 0 0 0 0.274" size="0.044" type="capsule" />
+
+          <!-- joint_2: axis≈Y, z_offset=0.255m -->
+          <!-- link_3: 2.33kg, capsule r=0.080m, z: 0→0.203m -->
+          <body name="111" pos="0 0 0.255">
+            <joint axis="-0.4686 0.8821 -0.0474" name="111_joint" pos="0 0 0"
+                   range="-90 90" type="hinge" damping="5" velocity="2.0" />
+            <geom fromto="0 0 0 0 0 0.203" size="0.080" type="capsule" />
+
+            <!-- joint_3: axis=斜め, z_offset=0.183m -->
+            <!-- link_4: 0.83kg, capsule r=0.050m, z: 0→0.200m -->
+            <body name="1111" pos="0 0 0.183">
+              <joint axis="0.6807 -0.6410 -0.3547" name="1111_joint" pos="0 0 0"
+                     range="-90 90" type="hinge" damping="3" velocity="2.0" />
+              <geom fromto="0 0 0 0 0 0.200" size="0.050" type="capsule" />
+
+              <!-- joint_4: axis≈X, branch1 (link_5), z_offset=0.179m -->
+              <!-- link_5: 3.32kg, capsule r=0.091m, z: 0→0.402m -->
+              <body name="11111" pos="0 0 0.179">
+                <joint axis="0.9998 0.0036 -0.0208" name="11111_joint" pos="0 0 0"
+                       range="-28.6 28.6" type="hinge" damping="3" velocity="2.0" />
+                <geom fromto="0 0 0 0 0 0.402" size="0.091" type="capsule" />
+              </body>
+
+              <!-- joint_5: axis≈-X, branch2 (link_6), z_offset=0.181m -->
+              <!-- link_6: 3.63kg, capsule r=0.099m, z: 0→0.398m -->
+              <body name="21111" pos="0 0 0.181">
+                <joint axis="-0.9997 -0.0030 -0.0239" name="21111_joint" pos="0 0 0"
+                       range="-28.6 28.6" type="hinge" damping="3" velocity="2.0" />
+                <geom fromto="0 0 0 0 0 0.398" size="0.099" type="capsule" />
+              </body>
+
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+
+    <!-- cube: 1辺 1.0m (half=0.5), x=0.6m, z=0.25m（床面に接する高さ）
+         density=2.7 → mass=2.7kg (rrbot_arm と同一設定) -->
+    <body name="cube" pos="0.6 0 0.25">
+      <joint name="cube_slide"  type="slide" axis="1 0 0" damping="10.0" range="-2 200" />
+      <joint name="cube_slide2" type="slide" axis="0 1 0" damping="10.0" range="-100 100" />
+      <geom name="cube_geom" type="box" size="0.5 0.5 0.5"
+            rgba="0.8 0.2 0.2 1.0" friction="0.5 0.1 0.1"
+            density="2.7" contype="1" conaffinity="1" />
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1_joint"     gear="150" name="1_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint"    gear="120" name="11_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="111_joint"   gear="100" name="111_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1111_joint"  gear="80"  name="1111_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11111_joint" gear="60"  name="11111_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="21111_joint" gear="60"  name="21111_joint" />
+  </actuator>
+</mujoco>
