@@ -225,8 +225,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             # Arm approaching cube → Δφ > 0, exploration guided as before.
             # Preserves design intent (morphology that enables fast approach = higher reward)
             # while eliminating the static-proximity exploitation.
-            arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
-            curr_dist = np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body))
+            curr_dist = np.linalg.norm(self.get_body_com("cube") - self._arm_tip_pos)
             curr_contact_potential = 1.0 / (1.0 + curr_dist)
             if self.prev_contact_potential is None:
                 self.prev_contact_potential = curr_contact_potential
@@ -372,8 +371,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         if self._check_initial_contact():
             return False
         # Snapshot φ values at episode start so step() can compute Δφ.
-        arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
-        dist0 = np.linalg.norm(self.get_body_com("cube") - self.get_body_com(arm_ref_body))
+        dist0 = np.linalg.norm(self.get_body_com("cube") - self._arm_tip_pos)
         self.prev_contact_potential = 1.0 / (1.0 + dist0)
         # target PBRS は use_target_reward=true と組み合わせ報酬①（cube_target_weight>0）の両方で必要
         target_x = self.cfg.reward_specs.get('target_x', 1.5)
@@ -389,6 +387,19 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         root_joints = self.robot.bodies[0].joints
         return all(j.type != 'free' for j in root_joints)
 
+    @property
+    def _arm_tip_pos(self):
+        """Arm tip position for contact reward / obs. Falls back through bodies from
+        the tip to handle branched structures (e.g. tripo_arm) where the deepest
+        body may have NaN translation in Choreonoid's forward kinematics."""
+        if not self.is_fixed_base:
+            return self.get_body_com("0")
+        for body in reversed(self.robot.bodies):
+            pos = self._body_xpos.get(body.name)
+            if pos is not None and not np.any(np.isnan(pos)):
+                return np.asarray(pos)
+        return np.zeros(3)
+
     def if_use_transform_action(self):
         return ['skeleton_transform', 'attribute_transform', 'execution'].index(self.stage)
 
@@ -402,8 +413,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             if self.clip_qvel:
                 qvel = np.clip(qvel, -10, 10)
             if i == 0:
-                arm_ref_body = self.robot.bodies[-1].name if self.is_fixed_base else "0"
-                relative_dis = self.get_body_com("cube") - self.get_body_com(arm_ref_body)
+                relative_dis = self.get_body_com("cube") - self._arm_tip_pos
                 if self.is_fixed_base:
                     # fixed base: no free joint state; fill with zeros to keep 17-dim structure
                     obs_i = [np.zeros(11), relative_dis, np.zeros(3)]
