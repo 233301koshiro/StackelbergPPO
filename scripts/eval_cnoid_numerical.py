@@ -122,11 +122,13 @@ for ep in range(args.num_episodes):
         'cube_x_traj': cube_x_traj,
     })
 
+    final_x = cube_x_traj[-1] if cube_x_traj else 0.0
+    target_x = env.cfg.reward_specs.get('target_x', 1.5)
+    dist_to_target = abs(final_x - target_x)
     status = "✓ PUSHING" if moving_forward else "✗ NOT PUSHING"
     print(f"  Ep {ep:2d}: reward={ep_reward:7.2f}  "
-          f"cube_x Δ={cube_x_displacement:+.4f}m  "
-          f"cube_y dev={cube_y_deviation:.4f}m  "
-          f"exec_steps={len(cube_x_traj):3d}  {status}")
+          f"cube_x Δ={cube_x_displacement:+.4f}m  final_x={final_x:.3f}m  "
+          f"dist_to_target={dist_to_target:.3f}m  {status}")
 
 # ── サマリー ──────────────────────────────────────────────────────────────────
 print()
@@ -154,6 +156,8 @@ if args.plot and results[0]['cube_x_traj']:
             ax.plot(r['cube_x_traj'], label=f"ep{r['episode']} Δ={r['cube_x_disp']:+.3f}")
         ax.axhline(y=results[0]['cube_x_traj'][0] if results[0]['cube_x_traj'] else 0,
                    color='gray', linestyle='--', alpha=0.5, label='start x')
+        ax.axhline(y=env.cfg.reward_specs.get('target_x', 1.5),
+                   color='red', linestyle='--', alpha=0.7, label='target x')
         ax.set_xlabel('Execution step')
         ax.set_ylabel('cube x position (m)')
         ax.set_title('Cube x-position over execution steps\n(should increase → being pushed)')

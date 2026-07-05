@@ -210,7 +210,14 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 reward_fwd_cube = target_pbrs
             elif use_dense_target:
                 # Dense 報酬: vel_reward - λ * dist(cube, target)（毎ステップ勾配あり）
-                vel_reward = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+                # use_clipped_vel=true のとき vel は target を超えた分を加算しない
+                use_clipped_vel = self.cfg.reward_specs.get('use_clipped_vel', False)
+                if use_clipped_vel:
+                    clipped_after  = min(xposafter,  target_x)
+                    clipped_before = min(xposbefore, target_x)
+                    vel_reward = (clipped_after - clipped_before) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+                else:
+                    vel_reward = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
                 dense_weight = self.cfg.reward_specs.get('dense_target_weight', 0.1)
                 reward_fwd_cube = vel_reward - dense_weight * dist_to_target
             else:
