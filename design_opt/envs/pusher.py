@@ -204,9 +204,15 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             target_pbrs = curr_cube_potential - self.prev_cube_potential
             self.prev_cube_potential = curr_cube_potential
 
+            use_dense_target = self.cfg.reward_specs.get('use_dense_target', False)
             if use_target:
                 # 純粋な target PBRS（目標座標のみ）
                 reward_fwd_cube = target_pbrs
+            elif use_dense_target:
+                # Dense 報酬: vel_reward - λ * dist(cube, target)（毎ステップ勾配あり）
+                vel_reward = (xposafter - xposbefore) / self.dt - 0.1 * np.abs(yposafter - yposbefore) / self.dt
+                dense_weight = self.cfg.reward_specs.get('dense_target_weight', 0.1)
+                reward_fwd_cube = vel_reward - dense_weight * dist_to_target
             else:
                 # 速度ベース報酬 + オプションで target PBRS を加算（組み合わせ報酬①）
                 # cube_target_weight > 0 のとき: vel_reward + weight * target_pbrs
