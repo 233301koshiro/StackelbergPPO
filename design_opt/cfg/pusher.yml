@@ -32,6 +32,7 @@ robot:
   body_params:
     offset:
       type: 'xy'
+      rel: true
       lb: [-0.5, -0.5]
       ub: [0.5, 0.5]
 
