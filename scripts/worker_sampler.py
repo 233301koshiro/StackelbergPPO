@@ -172,8 +172,15 @@ while True:
 
                 next_state, env_reward, termination, truncation, info = env.step(action)
                 if not np.isfinite(env_reward):
-                    print(f'[worker {WORKER_ID}] NaN/Inf reward={env_reward} stage={info.get("stage")} → replaced with 0', flush=True)
-                    env_reward = 0.0
+                    stage = info.get('stage', '')
+                    if stage == 'execution':
+                        # exec フェーズの NaN は「制御破綻」= 最大ペナルティを与える。
+                        # 0 に置換すると policy が NaN を積極的に引き起こすようになる(偽収束)。
+                        nan_penalty = -cfg.reward_specs.get('nan_penalty', 1000.0)
+                        print(f'[worker {WORKER_ID}] NaN reward in exec → penalty {nan_penalty:.0f}', flush=True)
+                        env_reward = nan_penalty
+                    else:
+                        env_reward = 0.0
                 reward   = env_reward
                 c_reward = info.get('reward_ctrl', 0)
                 if not np.isfinite(c_reward):

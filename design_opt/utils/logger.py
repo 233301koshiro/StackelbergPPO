@@ -15,16 +15,20 @@ class LoggerRLV1(LoggerRL):
     def start_episode(self, env):
         super().start_episode(env)
         self.exec_episode_reward = 0
+        self._exec_steps_this_ep = 0
 
     def step(self, env, reward, c_reward, c_info, info):
         super().step(env, reward, c_reward, c_info, info)
         if info['stage'] == 'execution':
             self.stats_loggers['exec_reward'].log(reward)
             self.exec_episode_reward += reward
+            self._exec_steps_this_ep += 1
 
     def end_episode(self, env):
         super().end_episode(env)
-        self.stats_loggers['exec_episode_reward'].log(self.exec_episode_reward)
+        # exec フェーズが 1 ステップ以上あったエピソードのみ集計
+        if self._exec_steps_this_ep > 0:
+            self.stats_loggers['exec_episode_reward'].log(self.exec_episode_reward)
 
     def end_sampling(self):
         super().end_sampling()
