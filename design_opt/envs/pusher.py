@@ -418,13 +418,21 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
     def _arm_tip_pos(self):
         """Arm tip position for contact reward / obs. Falls back through bodies from
         the tip to handle branched structures (e.g. tripo_arm) where the deepest
-        body may have NaN translation in Choreonoid's forward kinematics."""
+        body may have NaN translation in Choreonoid's forward kinematics.
+        For the last body (no children), adds bone_offset rotated by body_xmat to
+        return the physical tip rather than the joint origin (elbow)."""
         if not self.is_fixed_base:
             return self.get_body_com("0")
         for body in reversed(self.robot.bodies):
             pos = self._body_xpos.get(body.name)
             if pos is not None and not np.any(np.isnan(pos)):
-                return np.asarray(pos)
+                pos = np.asarray(pos)
+                if len(body.child) == 0 and body.bone_offset is not None:
+                    mat = np.asarray(self._body_xmat.get(body.name, np.eye(3))).reshape(3, 3)
+                    tip = pos + mat @ body.bone_offset
+                    if np.all(np.isfinite(tip)):
+                        return tip
+                return pos
         return np.zeros(3)
 
     def if_use_transform_action(self):
