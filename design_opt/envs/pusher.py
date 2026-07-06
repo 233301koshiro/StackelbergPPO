@@ -156,6 +156,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 design_params = design_a * self.cfg.robot_param_scale
             else:
                 design_params = self.design_cur_params + design_a * self.cfg.robot_param_scale
+            design_params = np.clip(design_params, -1.0, 1.0)
             succ = self.set_design_params(design_params)
             if not succ:
                 return self._get_obs(), 0.0, True, False, {'use_transform_action': True, 'stage': 'attribute_transform', 'reward_ctrl': 0.0}
@@ -204,8 +205,27 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             target_pbrs = curr_cube_potential - self.prev_cube_potential
             self.prev_cube_potential = curr_cube_potential
 
+            use_reach = self.cfg.reward_specs.get('use_reach', False)
             use_dense_target = self.cfg.reward_specs.get('use_dense_target', False)
-            if use_target:
+            if use_reach:
+                # Reach タスク: arm tip を 3D 目標点に近づける。シンプルな dense 報酬。
+                # cube は不要（XML に残しても可）。reward_fwd_contact も無効化。
+                target_z = self.cfg.reward_specs.get('target_z', 0.2)
+                target_3d = np.array([target_x, target_y, target_z])
+                reach_dist = np.linalg.norm(self._arm_tip_pos - target_3d)
+                reward_fwd_cube = -reach_dist
+                reward_fwd_contact = 0.0
+                reward_fwd = reward_fwd_cube
+                reward_ctrl = - ctrl_cost_coeff * np.square(ctrl).mean()
+                alive_bonus = self.cfg.reward_specs.get('alive_bonus', 0.0)
+                reward = (reward_fwd + reward_ctrl + alive_bonus) * self.cfg.reward_specs.get('exec_reward_scale', 1.0)
+                s = self.state_vector()
+                termination = not np.isfinite(s).all()
+                truncation = not (self.control_nsteps < self.cfg.done_condition.get('max_nsteps', 1000))
+                ob = self._get_obs()
+                reward_breakdown = np.array([reward_fwd_cube, reward_fwd_contact])
+                return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': reward_ctrl, 'reward_breakdown': reward_breakdown}
+            elif use_target:
                 # 純粋な target PBRS（目標座標のみ）
                 reward_fwd_cube = target_pbrs
             elif use_dense_target:
