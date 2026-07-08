@@ -23,14 +23,14 @@
       <camera name="track" mode="trackcom" pos="0 -3 0.3" xyaxes="1 0 0 0 0 1"/>
       <geom pos="0 0 0" size="0.1" type="sphere"/>
       <body name="1" pos="0.000000 0.000000 0.000000">
-        <joint name="1_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-60.0 60.0"/>
-        <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.433600 0.000000 0.000000" size="0.0987"/>
-        <body name="11" pos="0.433600 0.000000 0.000000">
+        <joint name="1_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-90.0 90.0"/>
+        <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.432600 0.000000 0.000000" size="0.0987"/>
+        <body name="11" pos="0.432600 0.000000 0.000000">
           <joint name="11_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-90.0 90.0"/>
-          <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.350700 0.000000 0.000000" size="0.0578"/>
-          <body name="111" pos="0.350700 0.000000 0.000000">
-            <joint name="111_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-45.0 45.0"/>
-            <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.225200 0.000000 0.000000" size="0.0417"/>
+          <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.351900 0.000000 0.000000" size="0.0578"/>
+          <body name="111" pos="0.351900 0.000000 0.000000">
+            <joint name="111_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-90.0 90.0"/>
+            <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.224900 0.000000 0.000000" size="0.0416"/>
           </body>
         </body>
       </body>
@@ -42,8 +42,8 @@
     </body>
   </worldbody>
   <actuator>
-    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1_joint" gear="150.0" name="1_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1_joint" gear="100.0" name="1_joint"/>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint" gear="100.0" name="11_joint"/>
-    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="111_joint" gear="80.0" name="111_joint"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="111_joint" gear="100.0" name="111_joint"/>
   </actuator>
 </mujoco>
