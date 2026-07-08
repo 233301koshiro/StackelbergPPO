@@ -711,17 +711,24 @@ class BodyGenAgent(AgentPPO):
         
         if_strict = True
         if cfg.morph_prior:
+            # Leader のみ転用 (skel_ + attr_)
             prefix_include = ("skel_", "attr_")
+            new_policy_dict = self.filter_keys(new_policy_dict, prefix_include=prefix_include)
+            new_value_dict = self.filter_keys(new_value_dict,  prefix_include=prefix_include)
+            if_strict = False
+        elif cfg.control_prior:
+            # Follower のみ転用 (control_)
+            prefix_include = ("control_",)
             new_policy_dict = self.filter_keys(new_policy_dict, prefix_include=prefix_include)
             new_value_dict = self.filter_keys(new_value_dict,  prefix_include=prefix_include)
             if_strict = False
 
         self.policy_net.load_state_dict(new_policy_dict, strict=if_strict)
         self.value_net.load_state_dict(new_value_dict, strict=if_strict)
-        
+
         self.loss_iter = model_cp['loss_iter']
         self.best_rewards = model_cp.get('best_rewards', self.best_rewards)
-        if model_cp['obs_norm'] is not None and cfg.uni_obs_norm and not cfg.morph_prior and not cfg.reset_obs_norm:
+        if model_cp['obs_norm'] is not None and cfg.uni_obs_norm and not cfg.morph_prior and not cfg.control_prior and not cfg.reset_obs_norm:
             self.obs_norm.load_state_dict(model_cp['obs_norm'])
     
     def filter_keys(self, sd, prefix_exclude=None, prefix_include=None):
