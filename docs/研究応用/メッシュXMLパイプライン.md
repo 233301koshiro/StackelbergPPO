@@ -552,3 +552,76 @@ joint_params:
   → joint_params に ±30° の軸最適化を追加し、G/H 系実験で比較
   → --mode color の精度が確認できてから検討
 ```
+
+---
+
+## 8. 実証済みパイプライン（Tripo3D → RL 学習、2026-07-08）
+
+### 概要
+
+Tripo3D で生成した 3 関節アームメッシュを使って、**プロンプト → RL 学習まで一直線に通す**フルパイプラインを初めて実証した。
+
+### 実行コマンド（再現手順）
+
+```bash
+# Step 1: GLB を空間分割して link-local STL を生成（joint 位置は GLB 内の magenta マーカーから取得）
+python3 scripts/spatial_split_urdf.py \
+  --glb data/tripo_arm_colorful/mechanical_joystick_3d_model.glb \
+  --topology data/tripo_arm_colorful/tripo_arm.urdf          # ← URDF も同時生成（Choreonoid 可視化用）
+
+# Step 2: STL → topology.json（Stackelberg 形式）
+python3 scripts/mesh_to_params.py \
+  --parts data/tripo_arm_colorful/meshes/link_0.stl \
+          data/tripo_arm_colorful/meshes/link_1.stl \
+          data/tripo_arm_colorful/meshes/link_2.stl \
+  --names upper_arm forearm hand \
+  --ranges '-60 60' '-90 90' '-45 45' \
+  --gears 150 100 80 \
+  --output data/tripo_arm_colorful/tripo_topology.json \
+  --validate
+
+# Step 3: topology.json → MuJoCo XML
+python3 scripts/topology_to_xml.py \
+  --topology data/tripo_arm_colorful/tripo_topology.json \
+  --output assets/mujoco_envs/tripo_arm.xml \
+  --validate
+
+# Step 4: RL 学習（Choreonoid + StackelbergPPO）
+choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher xml_name=tripo_arm \
+  max_epoch_num=2 num_threads=4 enable_wandb=false fix_skeleton=true \
+  +robot_param_scale=1 hydra.run.dir=single_run/tripo_arm_smoke
+```
+
+### 抽出されたパラメータ
+
+| リンク | bone_offset [m] | capsule radius [m] | joint range | gear |
+|---|---|---|---|---|
+| upper_arm (link_0) | 0.4336 | 0.0987 | ±60° | 150 |
+| forearm (link_1) | 0.3507 | 0.0578 | ±90° | 100 |
+| hand (link_2) | 0.2252 | 0.0417 | ±45° | 80 |
+
+### 学習結果（スモークテスト）
+
+```
+Evaluation: [body_0, body_1, body_11, body_111]   ← 3 関節 + root を自動認識
+EP-FILTER: dropped 3 episodes（2 関節時の 61 から激減）
+ep0: exec_R_eps = -0.15  （ランダム初期値）
+ep1: exec_R_eps = +0.80  （1 epoch で cube 方向への動きを学習し始めた）
+training done!
+```
+
+### 確認された事実
+
+- **Transformer は関節数変化に自動対応**: `[body_111]`（3 関節目）を追加ノードとして透過的に扱い、コード変更ゼロで学習が動いた
+- **OBB による bone_offset 抽出は現実的な精度**: 最長辺を自動的にリンク長として採用し、rrbot と同じオーダーの値（0.23〜0.43m）が得られた
+- **STL → `mesh_to_params.py`**: GLB 専用と見えたが STL もそのまま動く（`trimesh.load` が吸収）
+- **スケールは 1.0 でそのまま**: Tripo3D 出力は m 単位に近い値が出力されており補正不要だった
+
+### 残課題
+
+| 課題 | 内容 |
+|---|---|
+| **capsule 半径が大きい** | upper_arm の radius=0.099m は rrbot（0.05m）の 2 倍。関節干渉が起きやすい可能性 |
+| **magenta マーカー再テスト** | 今回は gold 時代の STL を使用。新たに magenta で Tripo3D 再投入して `skeleton_extract.py` の自動検出を検証 |
+| **本格学習** | スモークテスト（2ep）のみ。実際に形態変化が発生するか確認するには scale=1 で 200ep 以上必要 |
