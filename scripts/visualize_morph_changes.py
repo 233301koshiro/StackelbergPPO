@@ -44,6 +44,10 @@ output_path = os.environ.get('EVAL_OUTPUT',
 
 # ── 設定読み込み ──────────────────────────────────────────────────────────
 FLAGS = OmegaConf.create(yaml.safe_load(open(f'{restore_dir}/.hydra/config.yaml')))
+# 訓練時の restore_dir (引き継ぎ元) が消えている場合でも動くよう除去してから Config を作る
+flags_dict = OmegaConf.to_container(FLAGS, resolve=True)
+flags_dict.pop('restore_dir', None)
+FLAGS = OmegaConf.create(flags_dict)
 cfg = Config(FLAGS, project_path, restore_dir)
 cfg.restore_dir = restore_dir
 torch.set_default_dtype(torch.float64)
