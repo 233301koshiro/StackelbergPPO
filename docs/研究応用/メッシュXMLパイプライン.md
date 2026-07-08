@@ -455,7 +455,7 @@ python scripts/mesh_to_xml/pipeline.py \
 
 | 落とし穴 | 対策 |
 |---------|------|
-| Tripo3D が複数パーツを 1 メッシュとして出力する | 手動セグメンテーション or SAM2 等でパーツ分割してから入力 |
+| Tripo3D が複数パーツを 1 メッシュとして出力する | Gemini でリンク色分け済み画像を生成し `skeleton_extract.py --mode color` で自動分割（[メッシュ分割.md §1-c](メッシュ分割.md) 参照） |
 | OBB がメッシュ全体の向きにフィットしない（凹凸が大きい） | 凸包（convex hull）に対して OBB を計算する |
 | カプセルが StackelbergPPO の size 範囲（0.03〜0.10m）外になる | `clamp()` 後、元メッシュとの乖離を警告する |
 | ジョイント位置がユーザー指定できない | `topology.json` の `offset_from_parent` で手動指定（自動推定は難しい） |
@@ -541,12 +541,14 @@ joint_params:
 ### 実装ロードマップ
 
 ```
-今すぐ: 案2（タスク別デフォルト軸）をスケルトン抽出の出力に上書きする処理を追加
-  → skeleton_extract.py に --task-axis オプションを追加（pusher → Y軸固定など）
+✅ 完了: 案2（タスク別デフォルト軸）
+  → skeleton_extract.py --task-axis pusher/reach/x/y/z で全関節軸を上書き（実装済み）
 
-Tripo3D パイプライン統合時: 案1（PCA 平面法線）を実装
-  → スケッチの形状からアームの張る平面を自動推定
+✅ 完了: Tripo3D パイプライン統合
+  → skeleton_extract.py --mode color で色ベースセグメンテーション + --task-axis で軸固定
+  → 案1（PCA 平面法線）は --mode color では不要（色が形状に依存しないため）
 
-安定性確認後: 案3（限定 PPO 軸最適化）を実験
+⬜ 将来: 案3（限定 PPO 軸最適化）
   → joint_params に ±30° の軸最適化を追加し、G/H 系実験で比較
+  → --mode color の精度が確認できてから検討
 ```
