@@ -21,7 +21,7 @@ color-coded ロボット画像（リンク=単色, 関節球=マゼンタ #FF00F
 GLB ファイル（Y-up 座標系, color-textured）
   ↓ skeleton_extract.py --mode color
 topology.json + per-link GLB（mine/robot_segments/）
-  ↓ spatial_split_urdf.py（↓参照）
+  ↓ scripts/glb_to_links.py（↓参照。プロトタイプは mine/spatial_split_urdf.py）
 URDF + per-link STL（data/tripo_arm_colorful/）
   ↓ Choreonoid で読み込み
 3DOF アーム可視化（根本Z回転 + 2関節揺動）
@@ -73,22 +73,26 @@ python3 mine/skeleton_extract.py \
 
 出力される `topology.json` の `_position_world`（Y-up 座標）がジョイント位置として後段で使われる。
 
-### 4. URDF + STL 生成（spatial_split_urdf.py）
+### 4. URDF + STL 生成（scripts/glb_to_links.py）
 
 色クラスタの K-means によるセグメントは**全高さにまたがる**ため、視覚的に正しくない。
 代わりに**ジョイント位置 Z 座標で空間分割**する。
 
 ```bash
-python3 mine/spatial_split_urdf.py
+python3 scripts/glb_to_links.py \
+  --glb data/tripo_arm_colorful/mechanical_joystick_3d_model.glb \
+  --out-dir data/tripo_arm_colorful/meshes \
+  --urdf data/tripo_arm_colorful/tripo_arm.urdf \
+  --joints -0.070 0.277   # マゼンタマーカー付き GLB なら省略可（自動検出）
 ```
 
 スクリプトの処理内容:
-1. `topology.json` からジョイント Z 座標を取得（Y-up → Z-up 変換）
+1. ジョイント Z 座標を取得（マゼンタマーカー `--joint-color` 自動検出 or `--joints` 手動指定。Y-up → Z-up 変換）
 2. 全体 GLB を Z 境界で面ごとに分割 → link_0 / link_1 / link_2
 3. 各リンク STL を**リンクローカル座標**にシフト（フレーム原点が各リンクの親ジョイント位置）
 4. URDF joint origins を正しく計算して出力
 
-> `topology.json` と GLB パス・出力先はスクリプト冒頭の定数で変更する。
+> プロトタイプ `mine/spatial_split_urdf.py`（パスをスクリプト冒頭の定数で指定）を CLI 化したものが `scripts/glb_to_links.py`。以降はリポジトリ版を使うこと。
 
 ### 5. Choreonoid で読み込み
 
@@ -177,6 +181,6 @@ print(centroids.astype(int))
 
 ## 今後の TODO
 
-- [x] `spatial_split_urdf.py` を `mine/` に恒久スクリプトとして移動済み
+- [x] `mine/spatial_split_urdf.py`（プロトタイプ）を `scripts/glb_to_links.py` として CLI 化・リポジトリに恒久化
 - [ ] マゼンタで再度 Tripo3D に入稿し、ジョイント自動検出が通るか検証
-- [ ] MuJoCo XML への変換（`メッシュXMLパイプライン.md` との接続）
+- [x] MuJoCo XML への変換 → RL 学習まで実証済み（2026-07-08、`メッシュXMLパイプライン.md` §8 参照）
