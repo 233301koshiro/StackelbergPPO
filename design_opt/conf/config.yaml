@@ -25,6 +25,7 @@ s_gradient_limit: -1
 gradient_ratio_limit: 1.0
 project_path: null
 morph_prior: false
+control_prior: false  # Follower のみ転用（control_ 系の重みだけ restore）
 reset_epoch: false    # if true, reset epoch counter to 0 when loading a checkpoint (for MuJoCo→Choreonoid transfer)
 reset_obs_norm: false # if true, discard obs_norm from checkpoint and re-learn from scratch
 fix_skeleton: true    # トポロジー固定が本線。false にすると関節数が爆発的に増加してクラッシュするリスクがある（トポロジー固定最適化.md 参照）
