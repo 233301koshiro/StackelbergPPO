@@ -27,7 +27,7 @@ project_path: null
 morph_prior: false
 reset_epoch: false    # if true, reset epoch counter to 0 when loading a checkpoint (for MuJoCo→Choreonoid transfer)
 reset_obs_norm: false # if true, discard obs_norm from checkpoint and re-learn from scratch
-fix_skeleton: false   # if true, skip skeleton transform stage (keep robot topology fixed)
+fix_skeleton: true    # トポロジー固定が本線。false にすると関節数が爆発的に増加してクラッシュするリスクがある（トポロジー固定最適化.md 参照）
 
 hydra:
   run:
