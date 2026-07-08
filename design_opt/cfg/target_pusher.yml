@@ -1,0 +1,69 @@
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+  use_body_depth_height: true
+  use_shortest_distance: true
+  use_position_encoding: true
+max_body_depth: 4
+
+add_body_condition:
+  max_nchild: 2
+
+# Target Pusher: cube を target_x にぴったり止める
+# 報酬 = PBRS (potential-based): Δφ = φ(cube→target 距離) の差分
+# オーバーシュートすると報酬がマイナスになるため bat tactic が抑制される
+reward_specs:
+  use_target_reward: true
+  target_x: 2.0    # cube 初期位置 x=1.0m から 1.0m 先が目標
+  target_y: 0.0
+  contact_weight: 0.5  # アームが cube に近づく探索ボーナス（bat tactic を助長しないよう低減）
+
+env_specs:
+  arm_safe_init: true          # 初期姿勢を +y 向きに固定（penetration exploit 防止）
+  check_init_contact: true     # 初期接触 exploit 防止
+  cube_x_offset: 0.0           # cube は XML デフォルト位置 x=1.0m のまま
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+
+  body_params:
+    offset:
+      type: 'xy'
+      rel: true
+      lb: [-0.5, -0.5]
+      ub: [0.5, 0.5]
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      lb: 20
+      ub: 400
