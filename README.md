@@ -94,7 +94,7 @@ nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreono
 
 ## 評価
 
-コマンド・環境変数・出力ディレクトリ構成の詳細は [`docs/リポジトリ説明/eval.md`](docs/リポジトリ説明/eval.md) を参照。
+コマンド・環境変数・出力ディレクトリ構成の詳細は [`docs/リポジトリ説明/評価スクリプト.md`](docs/リポジトリ説明/評価スクリプト.md) を参照。
 
 ```bash
 # 数値評価（成功率・報酬を数値で確認）
@@ -177,6 +177,31 @@ choreonoid --no-window --python scripts/choreonoid_train.py \
 | `移行レポート.md` | Choreonoid 移行の技術リファレンス（アーキテクチャ・バグ修正・起動方法）|
 | `docs/デバッグ戦記.md` | 発見したバグの記録・デバッグ方法論・対照実験ルート |
 | `docs/進捗.md` | 現在の学習状況・実験履歴・知見 |
+
+---
+
+## コンテナ管理
+
+### Claude Code の会話履歴・メモリのバックアップ
+
+`/root/.claude/`（会話履歴・プロジェクトメモリ）はコンテナのオーバーレイ層にあり、コンテナを**削除して再作成**すると消える。
+`/userdir/` はホストの NVMe から直接マウントされているため、コンテナ操作に関わらず永続する。
+
+```bash
+# バックアップ（コンテナ削除前に実施）
+cp -r /root/.claude /userdir/.claude_backup
+
+# 復元（コンテナ再作成後に実施）
+cp -r /userdir/.claude_backup /root/.claude
+```
+
+`docker restart`（同じコンテナを再起動するだけ）であればオーバーレイ層は保持されるためバックアップ不要。
+
+### ゾンビプロセスについて
+
+Choreonoid の学習ワーカーは終了後にゾンビプロセスとして残ることがある。
+PID 1 が `sleep`（Docker デフォルト）のためゾンビの自動回収が行われない。
+`docker restart` でリセットされる。長期稼働後に新プロセスが起動できなくなる前に再起動を検討すること。
 
 ---
 
