@@ -59,7 +59,9 @@ nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreono
 > その結果チェックポイントがデフォルト（`single_run/${cfg}/`）に保存されてしまう。
 > 必ず上記の `nohup env VAR=val choreonoid ...` 形式で直接起動すること。
 
-**利用可能な環境**: cheetah, crawler, glider-hard, glider-medium, glider-regular, pusher, stepper-hard, stepper, swimmer, terraincrosser, walker-hard, walker-medium, walker-regular
+**利用可能な環境**: cheetah, crawler, glider-hard, glider-medium, glider-regular, pusher, **target_pusher**（cube を目標位置に止める・本研究の追加タスク）, stepper-hard, stepper, swimmer, terraincrosser, walker-hard, walker-medium, walker-regular
+
+> Reach タスクは独立 cfg ではなく `cfg=pusher +reward_specs.use_reach=true +reward_specs.target_x=... +reward_specs.target_z=0.15` で指定する。
 
 ### チェックポイントから再開
 
