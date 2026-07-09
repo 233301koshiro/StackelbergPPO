@@ -28,17 +28,26 @@ max_body_depth: 4
 add_body_condition:
   max_nchild: 2
 
-# Target Pusher: cube を target_x にぴったり止める
+# Target Pusher: cube を target_x にぴったり止める（Phase 3 第3タスク、2026-07-09 採用）
 # 報酬 = PBRS (potential-based): Δφ = φ(cube→target 距離) の差分
 # オーバーシュートすると報酬がマイナスになるため bat tactic が抑制される
+# 前提条件（方針レビュー2026-07-08・target_pusher評価）:
+#   - contact_weight=0: contact PBRS は telescoping 合計 φ_T−φ_0 の φ_0 が形態依存で
+#     「cube から遠い形態ほど報酬の伸び代が大きい」= Leader の形態比較を歪める
+#     （v2-3/v5-2 の「cube 逆方向成長」の原因）。探索の立ち上げは control_prior 転用で賄う
+#   - arm_safe_init=false: §15 の教訓（OFF が突破口・初めて肩が動いた）。
+#     初期接触 exploit は check_init_contact 側で防ぐ
+#   - 起動は +restore_dir=<Pusher学習済みrun> control_prior=true reset_epoch=true を推奨
+#     （純 target PBRS はスクラッチ bootstrap 失敗の前歴 = D2）
 reward_specs:
   use_target_reward: true
   target_x: 2.0    # cube 初期位置 x=1.0m から 1.0m 先が目標
   target_y: 0.0
-  contact_weight: 0.5  # アームが cube に近づく探索ボーナス（bat tactic を助長しないよう低減）
+  contact_weight: 0.0
+  ctrl_cost_coeff: 0.2  # 論文水準（0.1×sum ≡ 2関節で 0.2×mean）。L 系と統一
 
 env_specs:
-  arm_safe_init: true          # 初期姿勢を +y 向きに固定（penetration exploit 防止）
+  arm_safe_init: false
   check_init_contact: true     # 初期接触 exploit 防止
   cube_x_offset: 0.0           # cube は XML デフォルト位置 x=1.0m のまま
 
