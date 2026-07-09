@@ -68,10 +68,27 @@ python3 scripts/glb_to_links.py "${STEP1_ARGS[@]}"
 echo ""
 echo "[Step 2] STL → topology.json"
 
-# link_0.stl, link_1.stl, ... を名前順に渡す
-PARTS=$(ls "$OUT_DIR/meshes"/link_*.stl 2>/dev/null | sort)
-if [ -z "$PARTS" ]; then
-  echo "ERROR: $OUT_DIR/meshes に link_*.stl が見つかりません" >&2
+# mesh_to_params の parts は「可動リンクのみ」（各 part に関節が1つ対応する）。
+# FIXED_BASE=1 のとき、最下段セグメント（固定台座）を Step 2 から除外する。
+# LINK_NAMES 指定時は Step 1 の STL が <name>.stl で出力されるため、その順序を使う。
+MP_NAMES=""
+if [ -n "$LINK_NAMES" ]; then
+  read -ra NAME_ARR <<< "$LINK_NAMES"
+  START=0
+  [ "${FIXED_BASE:-0}" = "1" ] && START=1
+  PARTS=""
+  for ((i=START; i<${#NAME_ARR[@]}; i++)); do
+    PARTS+=" $OUT_DIR/meshes/${NAME_ARR[i]}.stl"
+    MP_NAMES+=" ${NAME_ARR[i]}"
+  done
+else
+  PARTS=$(ls "$OUT_DIR/meshes"/link_*.stl 2>/dev/null | sort) || true
+  if [ "${FIXED_BASE:-0}" = "1" ]; then
+    PARTS=$(echo "$PARTS" | tail -n +2)
+  fi
+fi
+if [ -z "${PARTS// /}" ]; then
+  echo "ERROR: $OUT_DIR/meshes に STL が見つかりません" >&2
   exit 1
 fi
 
@@ -80,7 +97,7 @@ STEP2_ARGS=(
   --output   "$OUT_DIR/topology.json"
   --validate
 )
-[ -n "$LINK_NAMES" ] && STEP2_ARGS+=(--names $LINK_NAMES)
+[ -n "$MP_NAMES" ] && STEP2_ARGS+=(--names $MP_NAMES)
 [ -n "$GEARS"      ] && STEP2_ARGS+=(--gears $GEARS)
 
 # --ranges は "lo hi lo hi ..." を "lo hi" "lo hi" ... に変換

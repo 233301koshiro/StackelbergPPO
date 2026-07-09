@@ -37,15 +37,27 @@ _R_YUP_ZUP = np.array([[1, 0, 0],
                          [0, 1, 0]], dtype=float)
 
 
+def _bake_vertex_colors(m: trimesh.Trimesh) -> trimesh.Trimesh:
+    """TextureVisuals (UV テクスチャ) を頂点色 (ColorVisuals) に変換する。
+    Tripo3D の GLB はテクスチャ形式のため、mesh.visual.vertex_colors に
+    依存する下流処理（関節マーカー検出）の前に必須。"""
+    try:
+        if m.visual.kind != 'vertex':
+            m.visual = m.visual.to_color()
+    except Exception:
+        pass
+    return m
+
+
 def _load_concat(glb_path: str) -> trimesh.Trimesh:
     scene_or_mesh = trimesh.load(glb_path)
     if isinstance(scene_or_mesh, trimesh.Scene):
-        parts = list(scene_or_mesh.geometry.values())
+        parts = [_bake_vertex_colors(p) for p in scene_or_mesh.geometry.values()]
         if not parts:
             raise ValueError(f"{glb_path}: geometry が空です")
         mesh = trimesh.util.concatenate(parts)
     else:
-        mesh = scene_or_mesh
+        mesh = _bake_vertex_colors(scene_or_mesh)
     if not isinstance(mesh, trimesh.Trimesh):
         raise ValueError(f"{glb_path}: Trimesh に変換できません (type={type(mesh)})")
     return mesh
@@ -56,10 +68,15 @@ def _apply_yup_zup(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     return mesh
 
 
-def _detect_joint_z(mesh: trimesh.Trimesh, color_rgb=(255, 0, 255), tol=40, gap=0.05):
+def _detect_joint_z(mesh: trimesh.Trimesh, color_rgb=(255, 0, 255), tol=40, gap=0.05,
+                    min_frac=0.02):
     """
     magenta マーカーの頂点から関節 Z 位置を検出する。
     Returns sorted list of float (Z-up frame).
+
+    min_frac: クラスタとして採用する最小頂点数の割合（マーカー頂点総数比）。
+    テクスチャの色滲みによる迷い頂点（実測: パドル先端に1頂点）が
+    偽クラスタを作るのを防ぐ。
     """
     try:
         vc = mesh.visual.vertex_colors[:, :3].astype(int)
@@ -81,6 +98,9 @@ def _detect_joint_z(mesh: trimesh.Trimesh, color_rgb=(255, 0, 255), tol=40, gap=
             cur = []
         cur.append(z)
     clusters.append(cur)
+
+    min_count = max(10, int(min_frac * mask.sum()))
+    clusters = [c for c in clusters if len(c) >= min_count]
 
     return sorted(float(np.mean(c)) for c in clusters)
 
