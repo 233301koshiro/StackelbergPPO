@@ -628,6 +628,67 @@ training done!
 
 | 課題 | 内容 |
 |---|---|
-| **capsule 半径が大きい** | upper_arm の radius=0.099m は rrbot（0.05m）の 2 倍。関節干渉が起きやすい可能性 |
-| **magenta マーカー再テスト** | 今回は gold 時代の STL を使用。新たに magenta で Tripo3D 再投入して `glb_to_links.py` / `skeleton_extract.py --mode color` の自動検出を検証 |
+| ~~**capsule 半径が大きい**~~ | ✅ §8-2 で解消（マゼンタ版は 0.045m） |
+| ~~**magenta マーカー再テスト**~~ | ✅ §8-2 で完了（3関節すべて自動検出） |
 | **本格学習** | スモークテスト（2ep）のみ。実際に形態変化が発生するか確認するには scale=1 で 200ep 以上必要 |
+
+---
+
+## 8-2. 第2回実走: マゼンタ版・関節自動検出の完全自動パイプライン（2026-07-09）
+
+### 概要
+
+改訂版プロンプト A（マゼンタ球3個、メッシュ分割.md §Gemini プロンプト集）で生成した画像を Tripo3D に投入し、
+**`--joints` 手動指定なし（マーカー自動検出）で画像 → GLB → XML → RL 学習まで人手ゼロ**で通すことに初めて成功した。
+§8（第1回）で残っていた「関節位置は人間がメッシュを測って指定」という工程が消えた。
+
+### 実行コマンド（再現手順）
+
+```bash
+JOINT_COLOR="211 75 169" JOINT_TOL=60 \
+LINK_NAMES="base upper_arm forearm hand" FIXED_BASE=1 \
+RANGES="-60 60 -90 90 -45 45" GEARS="150 100 80" \
+bash scripts/run_tripo_pipeline.sh \
+  "data/tripo_arm_colorful2/colorful stacking rod 3d model.glb" \
+  data/tripo_arm_colorful2 tripo_arm_v2
+
+# スモーク学習
+choreonoid --no-window --python scripts/choreonoid_train.py \
+  cfg=pusher xml_name=tripo_arm_v2 max_epoch_num=2 num_threads=4 \
+  enable_wandb=false fix_skeleton=true +robot_param_scale=1 \
+  hydra.run.dir=single_run/tripo_arm_v2_smoke
+```
+
+### 検出・抽出結果
+
+- **関節自動検出: 3/3 成功**（Z = -0.298 / 0.001 / 0.298、各マーカー球 2600〜3500 頂点）
+- 4リンク分割: base（固定台座、Step 2 から除外）/ upper_arm / forearm / hand
+
+| リンク | bone_offset [m] | capsule radius [m] | joint range | gear |
+|---|---|---|---|---|
+| upper_arm | 0.3037 | **0.0450** | ±60° | 150 |
+| forearm | 0.2991 | 0.0326 | ±90° | 100 |
+| hand | 0.2034 | 0.0320 | ±45° | 80 |
+
+§8 の残課題だった capsule 半径（0.099m）は 0.045m に解消（マゼンタ球がリンクと分離して抽出されるため OBB が太らない）。
+
+### スモーク学習結果
+
+```
+ep0: exec_R_eps = 0.51 (fwd_cube 0.0005)
+ep1: exec_R_eps = 7.01 (fwd_cube 0.0070)   ← 1 epoch で cube 方向の動きを学習開始
+training done!（fwd_contact も正常値・nan なし）
+```
+
+### 得られた知見
+
+1. **Tripo3D はマゼンタを ≈RGB[211,75,169] に暗色化する**が、本体色（赤[216,61,54]・青[63,46,184]）とは明確に分離した独立クラスタ（22.1%）として残る。金色版の「本体色と同化」問題は再発しない。純 #FF00FF からの距離 ≈122 のため、**`--joint-color 211 75 169 --joint-tol 60`（実測色指定）が必要**
+2. **自動検出パスの初実走で潜在バグ3件が露出・修正**（コミット `3e1b0d4`）: ①GLB のテクスチャ形式（TextureVisuals）に未対応で頂点色が常に空 → `to_color()` bake を追加、②テクスチャ滲みの迷い頂点1個が偽関節クラスタを生成 → 最小頂点数フィルタ追加、③`run_tripo_pipeline.sh` Step 2 の glob が `LINK_NAMES` 指定と不整合 + 固定台座を可動リンクとして渡していた → `FIXED_BASE=1` 対応
+3. プロンプト改訂（関節を場所で列挙・個数チェック指示）は一発で機能した（メッシュ分割.md 改訂履歴参照）
+
+### 残課題
+
+| 課題 | 内容 |
+|---|---|
+| **マーカー色の自動キャリブレーション** | 現状は実測色 [211,75,169] の手動指定。マゼンタ hue 近傍の支配クラスタを自動検出すれば人手ゼロが完全になる |
+| **本格学習** | tripo_arm_v2 で scale=1・200ep 以上（GPU 空き待ち、L 系・target_pusher の後） |
