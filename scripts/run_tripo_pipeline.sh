@@ -59,6 +59,13 @@ STEP1_ARGS=(
 )
 [ -n "$JOINTS"     ] && STEP1_ARGS+=(--joints     $JOINTS)
 [ -n "$LINK_NAMES" ] && STEP1_ARGS+=(--names       $LINK_NAMES)
+# LINK_ROT="name1 deg1 [name2 deg2 ...]" 形式（例: LINK_ROT="hand 90"）
+if [ -n "${LINK_ROT:-}" ]; then
+  read -ra LR_VALS <<< "$LINK_ROT"
+  for ((i=0; i<${#LR_VALS[@]}; i+=2)); do
+    STEP1_ARGS+=(--link-rot "${LR_VALS[i]}" "${LR_VALS[i+1]}")
+  done
+fi
 
 python3 scripts/glb_to_links.py "${STEP1_ARGS[@]}"
 
