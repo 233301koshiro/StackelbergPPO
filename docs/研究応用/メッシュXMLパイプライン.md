@@ -647,6 +647,7 @@ training done!
 ```bash
 JOINT_COLOR="211 75 169" JOINT_TOL=60 \
 LINK_NAMES="base upper_arm forearm hand" FIXED_BASE=1 \
+LINK_ROT="hand 90" \
 RANGES="-60 60 -90 90 -45 45" GEARS="150 100 80" \
 bash scripts/run_tripo_pipeline.sh \
   "data/tripo_arm_colorful2/colorful stacking rod 3d model.glb" \
@@ -686,9 +687,21 @@ training done!（fwd_contact も正常値・nan なし）
 2. **自動検出パスの初実走で潜在バグ3件が露出・修正**（コミット `3e1b0d4`）: ①GLB のテクスチャ形式（TextureVisuals）に未対応で頂点色が常に空 → `to_color()` bake を追加、②テクスチャ滲みの迷い頂点1個が偽関節クラスタを生成 → 最小頂点数フィルタ追加、③`run_tripo_pipeline.sh` Step 2 の glob が `LINK_NAMES` 指定と不整合 + 固定台座を可動リンクとして渡していた → `FIXED_BASE=1` 対応
 3. プロンプト改訂（関節を場所で列挙・個数チェック指示）は一発で機能した（メッシュ分割.md 改訂履歴参照）
 
+### 発見・対処した設計課題: エンドエフェクタの向き（チョップ問題、2026-07-09）
+
+生成メッシュのヘラは**面法線が Y（スイング平面と垂直）**で、Y 軸関節のスイング（先端は X 方向に動く）に対して
+**薄い側面が先行する「チョップ」向き**だった（Choreonoid 可視化で発見。刃の実測: X 0.066 幅 / Y 0.020 厚み）。
+
+- **対処（実施済み）**: `glb_to_links.py --link-rot hand 90`（リンクをローカル Z=ボーン軸周りに回転）を実装し、
+  面法線を X に向けた（回転後: X 0.020 厚み / Y 0.066 幅）。`run_tripo_pipeline.sh` は `LINK_ROT="hand 90"` で指定
+- **注意**: RL 用 XML は capsule 近似のため現状の学習結果には影響しない。効くのは可視化・将来のメッシュ衝突・スケッチ忠実性
+- **恒久対策（未実施）**: プロンプト A に「パドルの面は正面（押す方向）を向ける」仕様を追加（Tripo3D 再生成コストがあるため次回生成時に）。
+  さらに将来は OBB 最小辺 = 面法線の自動整列（§7 の軸推定のエンドエフェクタ版）
+
 ### 残課題
 
 | 課題 | 内容 |
 |---|---|
 | **マーカー色の自動キャリブレーション** | 現状は実測色 [211,75,169] の手動指定。マゼンタ hue 近傍の支配クラスタを自動検出すれば人手ゼロが完全になる |
+| **エンドエフェクタ向きの恒久対策** | プロンプト A への向き仕様追加（次回 Tripo3D 生成時）・OBB ベース自動整列（メッシュ衝突を使う段階で） |
 | **本格学習** | tripo_arm_v2 で scale=1・200ep 以上（GPU 空き待ち、L 系・target_pusher の後） |

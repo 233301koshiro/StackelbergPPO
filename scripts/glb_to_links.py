@@ -226,6 +226,11 @@ def main():
                    help='手動指定 関節 Z 位置 [m]（Z-up）。--joints を省略すると magenta 自動検出')
     p.add_argument('--names', nargs='+', default=None,
                    help='リンク名（デフォルト: link_0, link_1, ...）')
+    p.add_argument('--link-rot', nargs=2, action='append', default=None,
+                   metavar=('NAME', 'DEG'),
+                   help='指定リンクをローカル Z 軸（ボーン軸）周りに回転 [deg]。'
+                        '例: --link-rot hand 90 — エンドエフェクタの面の向き修正用'
+                        '（生成メッシュのヘラ面がスイング平面と平行=チョップ向きの場合に使う）')
     args = p.parse_args()
 
     print(f"[glb_to_links] 読み込み: {args.glb}")
@@ -270,8 +275,20 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    link_rots = {n: float(d) for n, d in (args.link_rot or [])}
+    for n in link_rots:
+        if n not in names:
+            p.error(f'--link-rot のリンク名 "{n}" が --names に存在しません: {names}')
+
     for name, seg, fo in zip(names, segments, frame_origins):
-        local = trimesh.Trimesh(vertices=seg.vertices - fo, faces=seg.faces, process=False)
+        verts = np.asarray(seg.vertices) - fo
+        if name in link_rots:
+            th = np.deg2rad(link_rots[name])
+            c, s = np.cos(th), np.sin(th)
+            rz = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+            verts = verts @ rz.T
+            print(f"  [{name}] ローカル Z 軸周りに {link_rots[name]:.1f}° 回転")
+        local = trimesh.Trimesh(vertices=verts, faces=seg.faces, process=False)
         stl_path = out_dir / f'{name}.stl'
         local.export(str(stl_path))
         ext = local.bounding_box.extents
