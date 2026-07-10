@@ -182,7 +182,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 # 初期接触形態: 物理を進めず 1 ステップだけペナルティを返して終了。
                 # follower=1 となり EP-FILTER を通過 → Leader に負の勾配が渡る。
                 self._init_contact_penalty_pending = False
-                penalty = self.cfg.reward_specs.get('init_contact_penalty', 1.0)
+                penalty = self.cfg.reward_specs.get('init_contact_penalty', 50.0)
                 reward_breakdown = np.array([0.0, 0.0])
                 return self._get_obs(), -penalty, True, False, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': 0.0, 'reward_breakdown': reward_breakdown}
             assert np.all(a[:, self.control_action_dim:] == 0)
@@ -403,16 +403,20 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         # 初期接触チェック: arm tip が cube に触れている形態への対処。
         # Leader が「接触してインパルスで押す」exploit を学習するのを防ぐ。
         #
-        # init_contact_penalty > 0（デフォルト 1.0）: エピソードを「1 exec ステップ +
+        # init_contact_penalty > 0（デフォルト 50.0）: エピソードを「1 exec ステップ +
         #   ペナルティ報酬」として成立させる。follower>0 になるため EP-FILTER を通過し、
         #   Leader がこの形態の悪さを勾配として学習できる（物理は進めないので exploit 不可）。
         #   旧挙動（棄却→ EP-FILTER 落ち）は Leader に勾配が渡らず、設計分布が棄却領域に
         #   はまると全エピソード棄却 →「All episodes are filtered」で assert 死する
         #   欠陥があった（F4・L2・TP1 の3回再現、デバッグ戦記 Bug 9）。
+        # ペナルティの大きさの原則: 「正直に1エピソード動いたときの最悪リターン」より
+        #   確実に悪いこと。ctrl_cost=0.2 の学習初期は正直なエピソードが ≈-16 になるため、
+        #   当初のデフォルト 1.0 では「接触即終了(-1)の方が得」となり Leader が接触形態に
+        #   収束した（2026-07-10 L2/TP1 再走 ep10 で実測）。50 ≈ ctrl コスト満額 + マージン。
         # init_contact_penalty <= 0: 旧挙動（棄却）。
         self._init_contact_penalty_pending = False
         if self._check_initial_contact():
-            if self.cfg.reward_specs.get('init_contact_penalty', 1.0) > 0:
+            if self.cfg.reward_specs.get('init_contact_penalty', 50.0) > 0:
                 self._init_contact_penalty_pending = True
             else:
                 return False
