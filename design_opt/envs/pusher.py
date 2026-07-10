@@ -178,6 +178,13 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         # execution stage
         else:
             self.control_nsteps += 1
+            if getattr(self, '_init_contact_penalty_pending', False):
+                # 初期接触形態: 物理を進めず 1 ステップだけペナルティを返して終了。
+                # follower=1 となり EP-FILTER を通過 → Leader に負の勾配が渡る。
+                self._init_contact_penalty_pending = False
+                penalty = self.cfg.reward_specs.get('init_contact_penalty', 1.0)
+                reward_breakdown = np.array([0.0, 0.0])
+                return self._get_obs(), -penalty, True, False, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': 0.0, 'reward_breakdown': reward_breakdown}
             assert np.all(a[:, self.control_action_dim:] == 0)
             control_a = a[:, :self.control_action_dim]
             ctrl = self.action_to_control(control_a)
@@ -393,10 +400,22 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         except:
             print(self.cur_xml_str)
             return False
-        # 初期接触チェック: arm tip が cube に触れている形態はエピソードを打ち切る。
+        # 初期接触チェック: arm tip が cube に触れている形態への対処。
         # Leader が「接触してインパルスで押す」exploit を学習するのを防ぐ。
+        #
+        # init_contact_penalty > 0（デフォルト 1.0）: エピソードを「1 exec ステップ +
+        #   ペナルティ報酬」として成立させる。follower>0 になるため EP-FILTER を通過し、
+        #   Leader がこの形態の悪さを勾配として学習できる（物理は進めないので exploit 不可）。
+        #   旧挙動（棄却→ EP-FILTER 落ち）は Leader に勾配が渡らず、設計分布が棄却領域に
+        #   はまると全エピソード棄却 →「All episodes are filtered」で assert 死する
+        #   欠陥があった（F4・L2・TP1 の3回再現、デバッグ戦記 Bug 9）。
+        # init_contact_penalty <= 0: 旧挙動（棄却）。
+        self._init_contact_penalty_pending = False
         if self._check_initial_contact():
-            return False
+            if self.cfg.reward_specs.get('init_contact_penalty', 1.0) > 0:
+                self._init_contact_penalty_pending = True
+            else:
+                return False
         # Snapshot φ values at episode start so step() can compute Δφ.
         dist0 = np.linalg.norm(self.get_body_com("cube") - self._arm_tip_pos)
         self.prev_contact_potential = 1.0 / (1.0 + dist0)

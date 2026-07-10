@@ -443,7 +443,18 @@ class BodyGenAgent(AgentPPO):
             follower_idx_ep = [follower_idx_ep[i] for i in valid]
             print(f"[EP-FILTER] dropped {dropped} episodes "
                 f"(rule: leader_len >= {self.leader_step}, follower>0)")
-            assert len(episodes) > 0, "All episodes are filtered"
+            if len(episodes) == 0:
+                # 旧: assert 即死（F4・L2・TP1 で再現）。全滅エポックは更新をスキップして
+                # 続行し、連続で続く場合のみ異常終了する（設計分布の縮退が疑われるため）。
+                self._all_filtered_epochs = getattr(self, '_all_filtered_epochs', 0) + 1
+                print(f"[EP-FILTER] WARNING: all episodes filtered "
+                      f"({self._all_filtered_epochs} consecutive) — skipping update")
+                if self._all_filtered_epochs >= 10:
+                    raise RuntimeError(
+                        "All episodes filtered for 10 consecutive epochs — aborting. "
+                        "design 分布が棄却領域に縮退している可能性（デバッグ戦記 Bug 9 参照）")
+                return {"L_surr_loss": 0.0, "L_approx_kl": 0.0, "F_approx_kl": 0.0}
+        self._all_filtered_epochs = 0
 
         Fmat = self.ep_planner.make_Fmat(follower_idx_ep)
         
