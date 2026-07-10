@@ -91,6 +91,9 @@ def get_morph_metrics(agent, env):
                 'bone_length': float(np.linalg.norm(bo)),
                 'bone_offset': bo[:2].copy()
             }
+        gears = [float(j.actuator.gear) for j in b.joints if j.actuator]
+        if gears:
+            metrics.setdefault(b.name, {})['gear'] = gears[0]
     # rest_tip (arm_safe_init 補正前)
     shoulder_xy = env.data.body_xpos[env.model._body_name2id[bodies[1].name]][:2]
     bo1  = np.asarray(bodies[1].bone_offset, dtype=float)[:2]
@@ -131,7 +134,10 @@ for ep in sampled:
         bl1 = m.get('1', {}).get('bone_length', 0)
         bl11= m.get('11',{}).get('bone_length', 0)
         tip = m['_actual_tip']
+        g1  = m.get('1', {}).get('gear', 0)
+        g11 = m.get('11', {}).get('gear', 0)
         print(f'  epoch={ep:5d}: L0={bl0:.3f} L1={bl1:.3f} L11={bl11:.3f} '
+              f'gear=({g1:.0f},{g11:.0f}) '
               f'actual_tip=({tip[0]:.3f},{tip[1]:.3f})')
     except Exception as e:
         print(f'  epoch={ep}: SKIP ({e})')
@@ -144,7 +150,8 @@ if has_best:
         records.append(m)
         print(f'  best: L0={m.get("0",{}).get("bone_length",0):.3f} '
               f'L1={m.get("1",{}).get("bone_length",0):.3f} '
-              f'L11={m.get("11",{}).get("bone_length",0):.3f}')
+              f'L11={m.get("11",{}).get("bone_length",0):.3f} '
+              f'gear=({m.get("1",{}).get("gear",0):.0f},{m.get("11",{}).get("gear",0):.0f})')
     except Exception as e:
         print(f'  best: SKIP ({e})')
 
@@ -156,9 +163,9 @@ if not records:
 eps_num = [r['epoch'] for r in records if r['epoch'] != 'best']
 best_rec = next((r for r in records if r['epoch'] == 'best'), None)
 
-fig = plt.figure(figsize=(14, 10))
+fig = plt.figure(figsize=(14, 14))
 fig.suptitle(f'Morphology Changes: {Path(restore_dir).name}', fontsize=13, fontweight='bold')
-gs = gridspec.GridSpec(2, 2, figure=fig, hspace=0.4, wspace=0.35)
+gs = gridspec.GridSpec(3, 2, figure=fig, hspace=0.45, wspace=0.35)
 
 # --- 左上: リンク長の推移 ---
 ax1 = fig.add_subplot(gs[0, 0])
@@ -210,6 +217,22 @@ ax4.axhline(0, color='gray', ls=':', alpha=0.3)
 ax4.axvline(0, color='gray', ls=':', alpha=0.3)
 ax4.set_xlabel('X (push方向)'); ax4.set_ylabel('Y')
 ax4.set_title('Tip方向の変化（X-Y 平面）'); ax4.legend(fontsize=7); ax4.grid(True, alpha=0.2)
+
+# --- 3段目左: gear の推移（J1 崩壊容疑の gear drift 監視用） ---
+ax5 = fig.add_subplot(gs[2, 0])
+for bname, color, label in [('1','#2196F3','gear1 (shoulder)'), ('11','#FF5722','gear2 (elbow)')]:
+    vals = [r.get(bname, {}).get('gear', np.nan) for r in records if r['epoch'] != 'best']
+    ax5.plot(eps_num, vals, '-o', color=color, label=label, ms=4)
+if best_rec:
+    for bname, color in [('1','#2196F3'), ('11','#FF5722')]:
+        gv = best_rec.get(bname, {}).get('gear')
+        if gv is not None:
+            ax5.axhline(gv, color=color, ls='--', alpha=0.5)
+ax5.axhline(20,  color='gray', ls=':', alpha=0.7, label='bounds [20,400]')
+ax5.axhline(400, color='gray', ls=':', alpha=0.7)
+ax5.set_xlabel('epoch'); ax5.set_ylabel('gear')
+ax5.set_title('Gear over Training')
+ax5.legend(fontsize=8); ax5.grid(True, alpha=0.3)
 
 os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 fig.savefig(output_path, dpi=120, bbox_inches='tight')
