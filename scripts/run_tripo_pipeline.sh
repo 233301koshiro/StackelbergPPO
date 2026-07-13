@@ -17,8 +17,8 @@
 #   assets/mujoco_envs/<XML_NAME>.xml               (RL 学習用)
 #
 # オプション環境変数:
-#   JOINT_COLOR="255 0 255"   マーカー色 RGB（デフォルト: magenta）
-#   JOINT_TOL=40              色検出 tolerance
+#   JOINT_COLOR="255 0 255"   マーカー色 RGB（未指定なら自動キャリブレーション --auto-color）
+#   JOINT_TOL=40              色検出 tolerance（JOINT_COLOR 指定時のみ有効）
 #   JOINTS=""                 手動関節 Z 位置（例: "-0.07 0.277"）
 #   LINK_NAMES=""             リンク名（例: "upper_arm forearm hand"）
 #   RANGES=""                 関節可動域（例: "-60 60 -90 90 -45 45"）
@@ -30,7 +30,7 @@ GLB="${1:?第1引数に GLB ファイルパスを指定してください}"
 OUT_DIR="${2:?第2引数に出力ディレクトリを指定してください}"
 XML_NAME="${3:-tripo_arm}"
 
-JOINT_COLOR="${JOINT_COLOR:-255 0 255}"
+JOINT_COLOR="${JOINT_COLOR:-}"     # 空 = 自動キャリブレーション
 JOINT_TOL="${JOINT_TOL:-40}"
 JOINTS="${JOINTS:-}"
 LINK_NAMES="${LINK_NAMES:-}"
@@ -54,8 +54,7 @@ STEP1_ARGS=(
   --glb        "$GLB"
   --out-dir    "$OUT_DIR/meshes"
   --urdf       "$OUT_DIR/${XML_NAME}.urdf"
-  --joint-color $JOINT_COLOR
-  --joint-tol  "$JOINT_TOL"
+  $(if [ -n "$JOINT_COLOR" ]; then echo "--joint-color $JOINT_COLOR --joint-tol $JOINT_TOL"; else echo "--auto-color"; fi)
 )
 [ -n "$JOINTS"     ] && STEP1_ARGS+=(--joints     $JOINTS)
 [ -n "$LINK_NAMES" ] && STEP1_ARGS+=(--names       $LINK_NAMES)

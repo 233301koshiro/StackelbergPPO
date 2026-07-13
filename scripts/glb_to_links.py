@@ -68,6 +68,51 @@ def _apply_yup_zup(mesh: trimesh.Trimesh) -> trimesh.Trimesh:
     return mesh
 
 
+def _auto_calibrate_joint_color(mesh: trimesh.Trimesh,
+                                hue_lo=285.0, hue_hi=345.0, sat_min=0.30,
+                                val_min=80.0, min_frac=0.005):
+    """マーカー色の自動キャリブレーション。
+
+    Tripo3D は入力画像の純マゼンタ #FF00FF を暗色化する（実測 ≈[211,75,169]）ため、
+    固定の目標色では世代・生成ごとの色ズレに追従できない。ここではマゼンタの
+    色相域（hue 285–345°）かつ十分な彩度を持つ頂点クラスタを探し、その中央値を
+    目標色、色の広がりから許容幅を決定する。
+
+    Returns: (color_rgb tuple, tol int) / 見つからなければ (None, None)
+    """
+    try:
+        vc = mesh.visual.vertex_colors[:, :3].astype(float)
+    except Exception:
+        return None, None
+    mx = vc.max(axis=1)
+    mn = vc.min(axis=1)
+    delta = mx - mn
+    sat = np.where(mx > 0, delta / np.maximum(mx, 1e-9), 0.0)
+    r, g, b = vc[:, 0], vc[:, 1], vc[:, 2]
+    hue = np.zeros(len(vc))
+    m = (delta > 0) & (mx == r)
+    hue[m] = (60.0 * ((g[m] - b[m]) / delta[m])) % 360.0
+    m = (delta > 0) & (mx == g)
+    hue[m] = 60.0 * ((b[m] - r[m]) / delta[m]) + 120.0
+    m = (delta > 0) & (mx == b)
+    hue[m] = 60.0 * ((r[m] - g[m]) / delta[m]) + 240.0
+
+    # val_min: 暗い頂点（影・黒地）は彩度式の上ではマゼンタ色相に入りうるため明度で除外
+    mask = (hue >= hue_lo) & (hue <= hue_hi) & (sat >= sat_min) & (mx >= val_min)
+    n = int(mask.sum())
+    if n < max(50, int(min_frac * len(vc))):
+        return None, None
+    cluster = vc[mask]
+    color = tuple(int(round(c)) for c in np.median(cluster, axis=0))
+    # 許容幅: クラスタ内の各チャネル 99 パーセンタイル偏差 + マージン（30〜80 に制限）
+    dev = np.percentile(np.abs(cluster - np.median(cluster, axis=0)), 99, axis=0).max()
+    tol = int(np.clip(dev + 15, 30, 80))
+    frac = 100.0 * n / len(vc)
+    print(f"  [auto-color] マゼンタ色相域クラスタ: {n} 頂点 ({frac:.1f}%) "
+          f"→ 目標色 {color}, tol={tol}")
+    return color, tol
+
+
 def _detect_joint_z(mesh: trimesh.Trimesh, color_rgb=(255, 0, 255), tol=40, gap=0.05,
                     min_frac=0.02):
     """
@@ -222,6 +267,10 @@ def main():
     p.add_argument('--joint-color', nargs=3, type=int, default=[255, 0, 255],
                    metavar=('R', 'G', 'B'))
     p.add_argument('--joint-tol', type=int, default=40)
+    p.add_argument('--auto-color', action='store_true',
+                   help='マーカー色をメッシュから自動キャリブレーション'
+                        '（マゼンタ色相域 285-345° の支配クラスタを検出。'
+                        'Tripo3D の暗色化 #FF00FF→≈[211,75,169] に自動追従）')
     p.add_argument('--joints', nargs='+', type=float, default=None,
                    help='手動指定 関節 Z 位置 [m]（Z-up）。--joints を省略すると magenta 自動検出')
     p.add_argument('--names', nargs='+', default=None,
@@ -241,12 +290,21 @@ def main():
     mesh = _apply_yup_zup(mesh)
 
     color_rgb = tuple(args.joint_color)
+    joint_tol = args.joint_tol
+    if args.auto_color and not args.joints:
+        print("[glb_to_links] マーカー色の自動キャリブレーション...")
+        auto_c, auto_t = _auto_calibrate_joint_color(mesh)
+        if auto_c is not None:
+            color_rgb, joint_tol = auto_c, auto_t
+        else:
+            print("  [auto-color] マゼンタ色相域クラスタなし → 指定色にフォールバック "
+                  f"{color_rgb} (tol={joint_tol})")
     if args.joints:
         joint_z_vals = sorted(args.joints)
         print(f"[glb_to_links] 関節 Z（手動）: {joint_z_vals}")
     else:
-        print(f"[glb_to_links] magenta マーカー検出 (tol={args.joint_tol})...")
-        joint_z_vals = _detect_joint_z(mesh, color_rgb, args.joint_tol)
+        print(f"[glb_to_links] マーカー検出 color={color_rgb} (tol={joint_tol})...")
+        joint_z_vals = _detect_joint_z(mesh, color_rgb, joint_tol)
         if not joint_z_vals:
             p.error(
                 "magenta マーカーが見つかりません。\n"
