@@ -80,7 +80,7 @@ for ep in range(num_episodes):
         if agent.obs_norm is not None:
             state_var = agent.normalize_observation(state_var)
         with torch.no_grad():
-            action = agent.policy_net.select_action(state_var, mean_action=True).numpy().astype(np.float64)
+            action = agent.policy_net.select_action(state_var, mean_action=(os.environ.get('EVAL_STOCHASTIC') != '1')).numpy().astype(np.float64)
         state, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
         if info.get('stage') == 'execution':
