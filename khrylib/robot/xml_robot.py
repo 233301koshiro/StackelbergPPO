@@ -480,7 +480,12 @@ class Body:
         for joint in self.joints:
             joint.get_params(param_list, get_name, pad_zeros)
         if pad_zeros and len(self.joints) == 0:
-            param_list.append(np.zeros(1))
+            # root（無関節ボディ）のプレースホルダは「関節ボディが実際に寄与する次元数」に
+            # 合わせる。固定の zeros(1) だと、actuator_params から gear を外した設定
+            # （M 系 ablation）で関節ボディの寄与が 0 になり np.stack が行長不一致で落ちる
+            n_joint_dims = (2 if 'axis' in self.cfg['joint_params'] else 0)                          + (1 if 'gear' in self.cfg['actuator_params'] else 0)
+            if n_joint_dims > 0:
+                param_list.append(np.zeros(n_joint_dims))
 
         for geom in self.geoms:
             geom.get_params(param_list, get_name, pad_zeros)
