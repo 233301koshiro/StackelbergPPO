@@ -31,6 +31,10 @@ def extract_morphology(run_dir: str, label: str) -> dict:
     OmegaConf.update(FLAGS, 'restore_dir', rel_run)
 
     cfg = Config(FLAGS, PROJECT, run_dir)
+    # Bug 10 対策（2026-07-15）: 完走 run 自身の checkpoint 再評価では転用フィルタを無効化。
+    # true のままだと Leader/Follower の一方と obs_norm が読み込まれず形態がアーティファクトになる
+    cfg.control_prior = False
+    cfg.morph_prior = False
     torch.set_default_dtype(torch.float64)
     set_global_seed(cfg.seed)
 

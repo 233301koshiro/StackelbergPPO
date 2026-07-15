@@ -39,6 +39,12 @@ flags_dict.pop('restore_dir', None)
 FLAGS = OmegaConf.create(flags_dict)
 cfg = Config(FLAGS, project_path, restore_dir)
 cfg.restore_dir = restore_dir
+# 完走 run 自身の checkpoint を再評価する際は転用フィルタを無効化する。
+# control_prior/morph_prior が true のままだと load_checkpoint が Leader/Follower の
+# 一方と obs_norm を読み込まず、ランダム初期化ネットで形態・行動が再現される
+# （2026-07-15 発覚。デバッグ戦記 Bug 10）。
+cfg.control_prior = False
+cfg.morph_prior = False
 torch.set_default_dtype(torch.float64)
 set_global_seed(cfg.seed)
 

@@ -51,6 +51,12 @@ FLAGS = OmegaConf.create(yaml.safe_load(open(train_config_path)))
 OmegaConf.update(FLAGS, 'restore_dir', restore_dir)
 cfg = Config(FLAGS, project_path, restore_dir)
 cfg.restore_dir = restore_dir
+# 完走 run 自身の checkpoint を再評価する際は転用フィルタを無効化する。
+# control_prior/morph_prior が true のままだと load_checkpoint が Leader/Follower の
+# 一方と obs_norm を読み込まず、ランダム初期化ネットで形態・行動が再現される
+# （2026-07-15 発覚。デバッグ戦記 Bug 10）。
+cfg.control_prior = False
+cfg.morph_prior = False
 
 if not cfg.reward_specs.get('use_reach', False):
     print(f"Error: {restore_dir} は Reach run ではありません (use_reach=false)")
