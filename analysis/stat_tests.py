@@ -2,6 +2,11 @@
 """Compute simple comparisons between runs using per-epoch exec_R_eps series.
 
 Usage: python3 analysis/stat_tests.py
+
+CAUTION (2026-07-15 review): エポック系列は自己相関があり独立サンプルではないため、
+bootstrap の p 値は「seed 差の統計的有意性」を意味しない（エポック間分散に対する平均差の指標）。
+記述統計の要約としてのみ使用し、論文で「有意」とは主張しないこと（修論の限界節と整合させる）。
+学習途中の run や max_epoch の異なる run の全期間平均比較は交絡があり不適（形態比較.md V5）。
 """
 import re
 import os
