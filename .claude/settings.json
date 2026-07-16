@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk *)",
+      "Bash(bash scripts/audit_runs.sh *)",
+      "Bash(bash /userdir/StackelbergPPO/scripts/audit_runs.sh *)",
+      "Bash(nvidia-smi *)"
+    ]
+  }
+}
