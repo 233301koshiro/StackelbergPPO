@@ -37,7 +37,10 @@ add_body_condition:
 #     （v2-3/v5-2 の「cube 逆方向成長」の原因）。探索の立ち上げは control_prior 転用で賄う
 #   - arm_safe_init=false: §15 の教訓（OFF が突破口・初めて肩が動いた）。
 #     初期接触 exploit は check_init_contact 側で防ぐ
-#   - 起動は +restore_dir=<Pusher学習済みrun> control_prior=true reset_epoch=true を推奨
+#   - 起動: コールドスタートで成立する（TP2/TP2_s2 が 0.450/0.490 を達成、離陸は ep100 前後）。
+#     旧記述の「control_prior 転用推奨」は Bug 12（epoch=best 欠落で転用が無言で無効）により
+#     一度も実際には転用されておらず、上記成績はコールドスタートの実測。転用を試すなら
+#     +restore_dir=<run> epoch=best control_prior=true reset_epoch=true（epoch=best 必須）
 #     （純 target PBRS はスクラッチ bootstrap 失敗の前歴 = D2）
 reward_specs:
   use_target_reward: true
