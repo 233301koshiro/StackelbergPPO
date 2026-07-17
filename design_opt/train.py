@@ -31,6 +31,15 @@ def main_loop(FLAGS, job_dir):
 
     # load_epoch: which checkpoint file to load (0 = none, int = epoch_NNNN.p, str = <str>.p)
     load_epoch = int(FLAGS.epoch) if isinstance(FLAGS.epoch, str) and FLAGS.epoch.isnumeric() else FLAGS.epoch
+    # Bug 12 ガード: restore_dir を指定したのに epoch=0（デフォルト）だと checkpoint は
+    # ロードされず、転用フラグが全て無言の no-op になる。過去の転用実験(I/K/TP系)が
+    # 全てこれで無効化された。転用の意図があるなら epoch=best を明示すること。
+    if FLAGS.get('restore_dir', None) is not None and load_epoch == 0:
+        raise ValueError(
+            "restore_dir is set but epoch=0 (default): checkpoint would NOT be loaded "
+            "and restore_dir/control_prior/morph_prior would silently do nothing (Bug 12). "
+            "Pass epoch=best (or an epoch number) to actually load the checkpoint."
+        )
     # start_epoch: where the training loop begins
     # reset_epoch=true: load the checkpoint but restart the counter from 0 (MuJoCo→Choreonoid transfer)
     if getattr(FLAGS, 'reset_epoch', False):
