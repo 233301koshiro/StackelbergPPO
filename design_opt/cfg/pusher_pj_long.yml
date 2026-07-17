@@ -1,0 +1,57 @@
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 4
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+
+  # PJ 長腕条件（前向き判定テスト、2026-07-16）:
+  # デフォルトXML = link1:0.3m, link2:0.25m（合計最大到達 0.55m）
+  # 本設定: rel=true で offset を [+0.27,+0.33] × [+0.12,+0.18] に制限
+  # → link1 ≈ 0.57〜0.63m, link2 ≈ 0.37〜0.43m, 合計最大到達 ≈ 0.94〜1.06m
+  # 目的: Reach タスク目標 0.8m を確実に届くアーム形状を「入力スケッチ」として固定
+  body_params:
+    offset:
+      type: 'xy'
+      rel: true
+      lb: [0.27, -0.03]
+      ub: [0.33, 0.03]
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      lb: 20
+      ub: 400
