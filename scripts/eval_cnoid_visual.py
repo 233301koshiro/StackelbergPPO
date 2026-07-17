@@ -172,20 +172,17 @@ def collect_arm_skeleton(env):
     bodies  = env.robot.bodies
     physics = get_body_physics(env.robot)
 
-    # body "0"（ベース）の world 位置 = shoulder
-    b0_name = bodies[0].name
-    shoulder = np.array(env._body_xpos.get(b0_name, np.zeros(3)))
+    # 全ボディの world 位置を連ねた polyline（任意関節数のチェーンに対応）。
+    # 末尾ボディはジョイント位置なので、その bone_offset を回転して先端を足す。
+    points = [np.array(env._body_xpos.get(b.name, np.zeros(3))) for b in bodies]
+    b_last = bodies[-1].name
+    bo_last = physics.get(b_last, {}).get('bone_offset', np.array([0.25, 0.0, 0.0]))
+    R_last  = np.array(env._body_xmat.get(b_last, np.eye(3)))
+    tip = points[-1] + R_last @ bo_last
+    points.append(tip)
 
-    # body "11"（前腕ジョイント）の world 位置 = elbow
-    b11_name = bodies[-1].name
-    elbow    = np.array(env._body_xpos.get(b11_name, np.zeros(3)))
-
-    # body "11" の回転行列で bone_offset を world 座標に変換 → tip
-    bo11 = physics.get(b11_name, {}).get('bone_offset', np.array([0.25, 0.0, 0.0]))
-    R11  = np.array(env._body_xmat.get(b11_name, np.eye(3)))
-    tip  = elbow + R11 @ bo11
-
-    return {'shoulder': shoulder, 'elbow': elbow, 'tip': tip}
+    # 旧2関節コードとの互換キー（shoulder=根本, elbow=末尾ジョイント, tip=先端）
+    return {'shoulder': points[0], 'elbow': points[-2], 'tip': tip, 'points': points}
 
 
 # ── エピソード実行 ───────────────────────────────────────────────────────
@@ -663,16 +660,26 @@ def draw_exec_frame(i):
     xx, yy = np.meshgrid([X_MIN, X_MAX], [Y_MIN, Y_MAX])
     ax_e.plot_surface(xx, yy, np.zeros_like(xx), alpha=0.12, color='gray', zorder=0)
 
-    # アーム
+    # アーム（'points' があれば全リンクの polyline、なければ旧2関節描画）
     if arm is not None:
-        s, e, t = arm['shoulder'], arm['elbow'], arm['tip']
-        ax_e.plot([s[0], e[0]], [s[1], e[1]], [s[2], e[2]],
-                  'b-', lw=3.5, alpha=0.9, zorder=4)
-        ax_e.plot([e[0], t[0]], [e[1], t[1]], [e[2], t[2]],
-                  color='cornflowerblue', lw=2.5, alpha=0.9, zorder=4)
-        ax_e.scatter(*s, c='navy',      s=120, zorder=5, depthshade=False)
-        ax_e.scatter(*e, c='royalblue', s=100, zorder=5, depthshade=False)
-        ax_e.scatter(*t, c='steelblue', s=80,  zorder=5, depthshade=False)
+        pts = arm.get('points')
+        if pts is not None and len(pts) >= 2:
+            P = np.asarray(pts)
+            ax_e.plot(P[:, 0], P[:, 1], P[:, 2], 'b-', lw=3.0, alpha=0.9, zorder=4)
+            ax_e.scatter(P[0, 0], P[0, 1], P[0, 2], c='navy', s=120, zorder=5, depthshade=False)
+            if len(P) > 2:
+                ax_e.scatter(P[1:-1, 0], P[1:-1, 1], P[1:-1, 2],
+                             c='royalblue', s=90, zorder=5, depthshade=False)
+            ax_e.scatter(P[-1, 0], P[-1, 1], P[-1, 2], c='steelblue', s=80, zorder=5, depthshade=False)
+        else:
+            s, e, t = arm['shoulder'], arm['elbow'], arm['tip']
+            ax_e.plot([s[0], e[0]], [s[1], e[1]], [s[2], e[2]],
+                      'b-', lw=3.5, alpha=0.9, zorder=4)
+            ax_e.plot([e[0], t[0]], [e[1], t[1]], [e[2], t[2]],
+                      color='cornflowerblue', lw=2.5, alpha=0.9, zorder=4)
+            ax_e.scatter(*s, c='navy',      s=120, zorder=5, depthshade=False)
+            ax_e.scatter(*e, c='royalblue', s=100, zorder=5, depthshade=False)
+            ax_e.scatter(*t, c='steelblue', s=80,  zorder=5, depthshade=False)
 
     # キューブ（HIDE_CUBE=True のとき非表示。Reach では報酬に関与しないため）
     if cp is not None and not HIDE_CUBE:
