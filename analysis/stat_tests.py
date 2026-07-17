@@ -80,7 +80,7 @@ def main():
     pairs = [
         ('single_run/rrbot_arm_reach_L1','single_run/rrbot_arm_reach_L1_s2'),
         ('single_run/rrbot_arm_pusher_L2','single_run/rrbot_arm_pusher_L2_s2'),
-        ('single_run/rrbot_arm_targetpusher_TP1','single_run/rrbot_arm_targetpusher_TP2_s2'),
+        ('single_run/rrbot_arm_targetpusher_TP2','single_run/rrbot_arm_targetpusher_TP2_s2'),
     ]
     results = []
     for a,b in pairs:
