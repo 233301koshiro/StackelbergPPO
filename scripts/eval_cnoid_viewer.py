@@ -76,6 +76,9 @@ train_cfg_path = os.path.join(project_path, args.restore_dir, '.hydra', 'config.
 FLAGS = OmegaConf.create(yaml.safe_load(open(train_cfg_path)))
 cfg = Config(FLAGS, project_path, args.restore_dir)
 cfg.restore_dir = args.restore_dir
+# 転用起動 run の再評価時に転用フィルタが残ると重みが読み込まれない（Bug 10）。
+cfg.control_prior = False
+cfg.morph_prior = False
 
 dtype = torch.float64
 torch.set_default_dtype(dtype)
