@@ -56,6 +56,11 @@ class args:
     output_exec    = os.environ.get('EVAL_OUTPUT_EXEC', None)
     fps            = int(os.environ.get('EVAL_FPS', '20'))
     max_exec_steps = int(os.environ.get('EVAL_MAX_EXEC_STEPS', '200'))
+    # EVAL_HIDE_CUBE: '1'=常に消す / '0'=常に描く / 'auto'(デフォルト)=Reach 系
+    # （reward_specs.use_reach=true の run）なら消して代わりに目標点を描く。
+    # cube はタスク間の交絡排除のため XML には残しているが、Reach では報酬に
+    # 一切関与しないため、動画上は紛らわしいだけ（2026-07-17 ユーザー要望）。
+    hide_cube      = os.environ.get('EVAL_HIDE_CUBE', 'auto')
 
 if not args.restore_dir:
     print("Error: EVAL_RESTORE_DIR is required.")
@@ -77,6 +82,21 @@ cfg.restore_dir = args.restore_dir
 # （2026-07-15 発覚。デバッグ戦記 Bug 10。本スクリプトは修正5本から漏れていた）。
 cfg.control_prior = False
 cfg.morph_prior = False
+
+# EVAL_HIDE_CUBE の解決: 'auto' は Reach 系（use_reach=true）のとき cube を隠す
+_is_reach = bool(cfg.reward_specs.get('use_reach', False))
+if args.hide_cube == 'auto':
+    HIDE_CUBE = _is_reach
+else:
+    HIDE_CUBE = args.hide_cube == '1'
+# Reach のときは cube の代わりに目標点を描く
+REACH_TARGET = None
+if _is_reach:
+    REACH_TARGET = (float(cfg.reward_specs.get('target_x', 1.5)),
+                    float(cfg.reward_specs.get('target_y', 0.0)),
+                    float(cfg.reward_specs.get('target_z', 0.2)))
+print(f"[visual] hide_cube={HIDE_CUBE} (mode={args.hide_cube}, use_reach={_is_reach})"
+      + (f" reach_target={REACH_TARGET}" if REACH_TARGET else ""))
 
 dtype = torch.float64
 torch.set_default_dtype(dtype)
@@ -380,8 +400,13 @@ def make_morph_figure(arm_rest, is_after, bl1_b, bl1_a, bl11_b, bl11_a, alpha=1.
     ax.set_ylabel('Y (lateral) [m]', fontsize=9)
     ax.grid(True, alpha=0.3)
     # 目標キューブ位置（参考）
-    ax.axvline(x=0.60, color='orange', lw=1, ls='--', alpha=0.6, label='cube x₀=0.60')
-    ax.axvline(x=1.50, color='red',    lw=1, ls=':', alpha=0.5, label='target x=1.50')
+    if not HIDE_CUBE:
+        ax.axvline(x=0.60, color='orange', lw=1, ls='--', alpha=0.6, label='cube x₀=0.60')
+    if REACH_TARGET is not None:
+        ax.axvline(x=REACH_TARGET[0], color='red', lw=1, ls=':', alpha=0.5,
+                   label=f'reach target x={REACH_TARGET[0]:.2f}')
+    else:
+        ax.axvline(x=1.50, color='red', lw=1, ls=':', alpha=0.5, label='target x=1.50')
     ax.legend(fontsize=7.5, loc='upper left')
     view_label = 'After (Learned Morphology)' if is_after else 'Before (Default Morphology)'
     ax.set_title(f'Top View (X-Y)  [{view_label}]  [epoch={epoch}]', fontsize=11, fontweight='bold')
@@ -543,8 +568,13 @@ def draw_morph_frame(fi):
     ax.set_xlabel('X (push direction) [m]', fontsize=9)
     ax.set_ylabel('Y (lateral) [m]', fontsize=9)
     ax.grid(True, alpha=0.3)
-    ax.axvline(x=0.60, color='orange', lw=1, ls='--', alpha=0.6, label='cube x₀=0.60')
-    ax.axvline(x=1.50, color='red',    lw=1, ls=':',  alpha=0.5, label='target x=1.50')
+    if not HIDE_CUBE:
+        ax.axvline(x=0.60, color='orange', lw=1, ls='--', alpha=0.6, label='cube x₀=0.60')
+    if REACH_TARGET is not None:
+        ax.axvline(x=REACH_TARGET[0], color='red', lw=1, ls=':', alpha=0.5,
+                   label=f'reach target x={REACH_TARGET[0]:.2f}')
+    else:
+        ax.axvline(x=1.50, color='red', lw=1, ls=':', alpha=0.5, label='target x=1.50')
     ax.legend(fontsize=7.5, loc='upper left')
     ax.set_title(f'Top View (X-Y)  [{label}]  frame {fi+1}/{total}',
                  fontsize=11, fontweight='bold', color=lcolor)
@@ -644,8 +674,8 @@ def draw_exec_frame(i):
         ax_e.scatter(*e, c='royalblue', s=100, zorder=5, depthshade=False)
         ax_e.scatter(*t, c='steelblue', s=80,  zorder=5, depthshade=False)
 
-    # キューブ
-    if cp is not None:
+    # キューブ（HIDE_CUBE=True のとき非表示。Reach では報酬に関与しないため）
+    if cp is not None and not HIDE_CUBE:
         in_bounds = X_MIN <= cp[0] <= X_MAX
         if in_bounds:
             ax_e.scatter(cp[0], cp[1], cp[2],
@@ -659,6 +689,13 @@ def draw_exec_frame(i):
                         color='darkorange', ha='right', va='top',
                         bbox=dict(boxstyle='round,pad=0.3', fc='lightyellow', alpha=0.8))
 
+    # Reach の目標点（cube の代わりに到達目標を描く）
+    if REACH_TARGET is not None:
+        tx, ty, tz = REACH_TARGET
+        ax_e.scatter(tx, ty, tz, c='red', s=200, marker='*', zorder=6, depthshade=False)
+        ax_e.text(tx, ty, tz + 0.1, f'target\n({tx:.2f}, {ty:.2f}, {tz:.2f})',
+                  fontsize=7, color='red', ha='center')
+
     # +x 矢印
     ax_e.quiver(0, 0, 0.05, 0.4, 0, 0,
                 color='green', lw=1.5, arrow_length_ratio=0.3, alpha=0.7)
@@ -668,7 +705,13 @@ def draw_exec_frame(i):
     ax_e.set_ylim(Y_MIN, Y_MAX)
     ax_e.set_zlim(Z_MIN, Z_MAX)
     ax_e.set_xlabel('X'); ax_e.set_ylabel('Y'); ax_e.set_zlabel('Z')
-    cube_info = f'  cube x={cp[0]:.2f}' if cp is not None else ''
+    if REACH_TARGET is not None and arm is not None:
+        _d = np.linalg.norm(np.asarray(arm['tip']) - np.asarray(REACH_TARGET))
+        cube_info = f'  dist_to_target={_d:.3f}'
+    elif cp is not None and not HIDE_CUBE:
+        cube_info = f'  cube x={cp[0]:.2f}'
+    else:
+        cube_info = ''
     qpos = frame.get('qpos', None)
     cube_vx = frame.get('cube_vx', None)
     step_label = '0 (before sim)' if frame.get('step0') else str(i)
