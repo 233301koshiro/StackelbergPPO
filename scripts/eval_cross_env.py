@@ -107,6 +107,9 @@ def run_worker(restore_dir: str, epoch, n_episodes: int,
     project_path = os.getcwd()
     cfg = Config(FLAGS, project_path, restore_dir)
     cfg.restore_dir = restore_dir
+    # 転用起動 run の再評価時に転用フィルタが残ると重みが読み込まれない（Bug 10）。
+    cfg.control_prior = False
+    cfg.morph_prior = False
 
     dtype = torch.float64
     torch.set_default_dtype(dtype)
