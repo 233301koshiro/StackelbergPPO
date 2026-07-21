@@ -53,16 +53,23 @@ class ChoreonoidWorkerPool:
             os.set_inheritable(req_worker_r.fileno(), True)
             os.set_inheritable(res_worker_w.fileno(), True)
 
+            # worker の一時ファイル（log_path・worker_sampler.py 内の Config job_dir）は
+            # 従来 CNOID_WORKER_ID（0..n-1）だけで作られており、複数 run を並列起動すると
+            # 全 run の worker 0〜3 が同じ /tmp/cnoid_worker_0〜3 を取り合っていた
+            # （2026-07-21 発覚: 3並列時に2本がハング、CPU使用率5%で anon_pipe_read 停止）。
+            # 親プロセス（＝この学習run）の PID を混ぜたタグで一意化する。
+            worker_tag = f'{os.getpid()}_{i}'
             env = dict(os.environ)
             env.update({
                 'CNOID_WORKER_ID':  str(i),
+                'CNOID_WORKER_TAG': worker_tag,
                 'CNOID_REQ_FD':     str(req_worker_r.fileno()),   # worker が読む
                 'CNOID_RES_FD':     str(res_worker_w.fileno()),   # worker が書く
                 'USE_CHOREONOID':   '1',
                 'OMP_NUM_THREADS':  '1',
             })
 
-            log_path = f'/tmp/cnoid_worker_{i}.log'
+            log_path = f'/tmp/cnoid_worker_{worker_tag}.log'
             log_file = open(log_path, 'w')
             proc = subprocess.Popen(
                 [CHOREONOID, '--no-window', '--python', WORKER_SCRIPT],
