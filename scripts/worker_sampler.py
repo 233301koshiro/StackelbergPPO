@@ -20,6 +20,9 @@ sys.path.insert(0, _PROJECT_ROOT)
 os.chdir(_PROJECT_ROOT)
 
 WORKER_ID = int(os.environ['CNOID_WORKER_ID'])
+# WORKER_TAG は親プロセスPID込みで一意（並列起動した複数 run の temp dir 衝突を防ぐ。
+# 2026-07-21 Bug 14: 従来は WORKER_ID(0..n-1) だけで /tmp/cnoid_worker_{ID} を共有していた）
+WORKER_TAG = os.environ.get('CNOID_WORKER_TAG', str(WORKER_ID))
 req_conn = mc.Connection(int(os.environ['CNOID_REQ_FD']), readable=True,  writable=False)  # main から受け取る
 res_conn = mc.Connection(int(os.environ['CNOID_RES_FD']), readable=False, writable=True)  # main へ送る
 
@@ -53,7 +56,7 @@ def tensorfy(np_list, device=torch.device('cpu')):
 FLAGS = OmegaConf.create(OmegaConf.to_object(OmegaConf.create(init_msg['cfg_yaml'])))
 project_path = init_msg['project_path']
 
-cfg = Config(FLAGS, project_path, f'/tmp/cnoid_worker_{WORKER_ID}')
+cfg = Config(FLAGS, project_path, f'/tmp/cnoid_worker_{WORKER_TAG}')
 
 dtype  = torch.float64
 torch.set_default_dtype(dtype)

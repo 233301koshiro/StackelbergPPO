@@ -371,7 +371,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             return float(override)
         if not hasattr(self, '_cached_cube_half_size'):
             import re
-            m = re.search(r'name="cube_geom"[^>]*\bsize="([^"\s]+)', self.init_xml_str)
+            # init_xml_str は bytes（cur_xml_str がデコード済み str）。
+            # 2026-07-21 発覚: str パターンで bytes を検索して TypeError → Choreonoid が
+            # 例外を握りつぶし Qt ループだけ残る「見せかけのハング」を引き起こしていた。
+            m = re.search(r'name="cube_geom"[^>]*\bsize="([^"\s]+)', self.cur_xml_str)
             self._cached_cube_half_size = float(m.group(1)) if m else 0.5
         return self._cached_cube_half_size
 
