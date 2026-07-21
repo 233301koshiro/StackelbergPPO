@@ -360,6 +360,33 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
     def transit_attribute_transform(self):
         self.stage = 'attribute_transform'
 
+    def _get_cube_half_size(self):
+        """cube_geom の半径(x)を init_xml_str から読む。env_specs.cube_half_size で
+        明示上書きも可能（未指定なら XML 実測、それも失敗したら 0.5 にフォールバック）。
+        2026-07-21 発覚: 従来は rrbot_arm.xml 専用の固定値 0.5 を全アーム共通で
+        使っており、tripo アーム（cube half=0.15）では閾値が2.5倍過大だった。
+        """
+        override = self.env_specs.get('cube_half_size', None)
+        if override is not None:
+            return float(override)
+        if not hasattr(self, '_cached_cube_half_size'):
+            import re
+            m = re.search(r'name="cube_geom"[^>]*\bsize="([^"\s]+)', self.init_xml_str)
+            self._cached_cube_half_size = float(m.group(1)) if m else 0.5
+        return self._cached_cube_half_size
+
+    def _get_max_arm_radius(self):
+        """全リンクの capsule 半径の最大値。従来は rrbot 専用の固定値 0.05 だった。"""
+        if not hasattr(self, '_cached_max_arm_radius'):
+            radii = []
+            for body in self.robot.bodies:
+                for geom in body.geoms:
+                    size = getattr(geom, 'size', None)
+                    if size is not None:
+                        radii.append(float(np.asarray(size).flat[0]))
+            self._cached_max_arm_radius = max(radii) if radii else 0.05
+        return self._cached_max_arm_radius
+
     def _check_initial_contact(self):
         """実行開始時のアーム先端位置が cube に接触しているか確認。
         接触している場合 True を返してエピソードを打ち切る
@@ -367,26 +394,33 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         check_init_contact=false で無効化可能。arm_safe_init の有無に依存しない。
 
         先端位置は「reset_state() 後の実際のシミュレーション状態における
-        shoulder_xy + (arm_safe_init 回転があれば適用した) bo1+bo11」で計算する。
+        shoulder_xy + 全リンクの bone_offset の合計（arm_safe_init 回転があれば適用）」
+        で計算する。
+
+        2026-07-21 訂正: 従来は bodies[1] + bodies[-1] の2リンクだけを足しており、
+        3関節以上のアーム（tripo_arm 系）では中間リンクが無視され先端位置を
+        37%（3関節）〜60%（4関節）過小評価していた（rrbot の2関節では偶然正しかった）。
+        cube_half_size も rrbot 専用の固定値 0.5 だった点も併せて修正。
         """
         if (not self.env_specs.get('check_init_contact', True)
                 or not self.is_fixed_base
                 or len(self.robot.bodies) < 3):
             return False
         bodies = self.robot.bodies
-        bo1  = np.asarray(bodies[1].bone_offset,  dtype=float)[:2]
-        bo11 = np.asarray(bodies[-1].bone_offset, dtype=float)[:2]
+        # 全非ルートリンク（bodies[1:]）の bone_offset を合計する（関節数に依存しない）
+        link_vec = np.zeros(2)
+        for body in bodies[1:]:
+            link_vec += np.asarray(body.bone_offset, dtype=float)[:2]
         shoulder_xy = self.data.body_xpos[self.model._body_name2id[bodies[1].name]][:2]
         # arm_safe_init が有効な場合は回転を適用、無効な場合は現在の joint 状態を反映
-        link_vec = bo1 + bo11
         if self.env_specs.get('arm_safe_init', False):
             theta = np.pi / 2
             cos_t, sin_t = np.cos(theta), np.sin(theta)
             link_vec = np.array([[cos_t, -sin_t], [sin_t, cos_t]]) @ link_vec
         tip_xy    = shoulder_xy + link_vec
         cube_xy   = self.get_body_com("cube")[:2]
-        cube_half = self.env_specs.get('cube_half_size', 0.5)  # rrbot_arm.xml: 大きいcubeは0.5
-        arm_rad   = 0.05   # 最大カプセル半径（body_1）
+        cube_half = self._get_cube_half_size()
+        arm_rad   = self._get_max_arm_radius()
         margin    = 0.03   # 安全マージン
         thresh    = cube_half + arm_rad + margin
         return (abs(tip_xy[0] - cube_xy[0]) < thresh and
