@@ -47,14 +47,24 @@ def extract_morphology(run_dir: str, label: str) -> dict:
 
     ckpt = pickle.load(open(f'{run_dir}/models/best.p', 'rb'))
 
+    no_root_offset = cfg.robot_cfg.get('no_root_offset', False)
     bodies = []
     for body in env.robot.bodies:
         bd = {'name': body.name, 'depth': body.depth}
-        if body.bone_offset is not None:
+        # no_root_offset=true のとき root(depth=0)の bone_offset は Leader の生出力に
+        # 過ぎず、rebuild() で bone_end が bone_start に強制されるため運動学に無効
+        # （2026-07-21 発覚: 台座固定の確認中に compare_morphology/eval_cnoid_visual の
+        # 両方がこの死んだパラメータを「成長した」ように表示していたことが判明）。
+        root_frozen = no_root_offset and body.parent is None
+        if body.bone_offset is not None and not root_frozen:
             bx = float(np.asarray(body.bone_offset[0]).flat[0])
             by = float(np.asarray(body.bone_offset[1]).flat[0])
             bd['bone_offset'] = (bx, by)
             bd['bone_len'] = float(np.linalg.norm(body.bone_offset))
+        elif root_frozen:
+            bd['bone_offset'] = (0.0, 0.0)
+            bd['bone_len'] = 0.0
+            bd['root_frozen'] = True
         bd['joints'] = []
         for joint in body.joints:
             j = {'name': joint.name, 'range': getattr(joint, 'range', None)}
@@ -95,7 +105,8 @@ def print_morphology(m: dict):
             bx, by = body['bone_offset']
             blen = body['bone_len']
             total_len += blen
-            print(f"    bone_offset: x={bx:+.3f}, y={by:+.3f}  len={blen:.3f} m")
+            tag = '  [台座・no_root_offset で固定]' if body.get('root_frozen') else ''
+            print(f"    bone_offset: x={bx:+.3f}, y={by:+.3f}  len={blen:.3f} m{tag}")
         for joint in body['joints']:
             r = joint.get('range')
             gear = joint.get('gear', 'N/A')

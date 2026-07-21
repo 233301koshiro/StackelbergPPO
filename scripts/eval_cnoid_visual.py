@@ -112,11 +112,19 @@ env = agent.env
 
 # ── ボディ物理パラメータ読み取り ─────────────────────────────────────────
 def get_body_physics(robot):
-    """Robot.bodies から bone_offset / ext_start を直接読む（非正規化済み）。"""
+    """Robot.bodies から bone_offset / ext_start を直接読む（非正規化済み）。
+    no_root_offset=true のとき root(depth=0)の bone_offset は Leader の生出力に
+    過ぎず rebuild() で無効化される（台座固定）ため、報告上もゼロとして扱う
+    （2026-07-21 発覚: この関数が死んだパラメータを「成長した」ように表示していた）。"""
+    no_root_offset = cfg.robot_cfg.get('no_root_offset', False)
     data = {}
     for body in robot.bodies:
         entry = {}
-        if hasattr(body, 'bone_offset') and body.bone_offset is not None:
+        root_frozen = no_root_offset and body.parent is None
+        if root_frozen:
+            entry['bone_offset'] = np.zeros(3)
+            entry['bone_length'] = 0.0
+        elif hasattr(body, 'bone_offset') and body.bone_offset is not None:
             bo = np.asarray(body.bone_offset, dtype=float).ravel()
             entry['bone_offset'] = bo.copy()
             entry['bone_length'] = float(np.linalg.norm(bo))
