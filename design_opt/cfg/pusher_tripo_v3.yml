@@ -1,5 +1,7 @@
 # pusher_tripo_v3: tripo_arm_v3（colorful2 忠実・縦型 4 関節）用。pusher.yml との差分は
-# offset type 'xz' と max_body_depth のみ（2026-07-17 作成、経緯は 実験系譜.md）
+# offset type 'xz'・max_body_depth・床貫通チェック（2026-07-17 作成、経緯は 実験系譜.md）
+env_specs:
+  check_floor_penetration: true   # 縦型: Leader の床めり込み形態にペナルティ（-init_contact_penalty）
 env_name: pusher
 agent_specs:
   batch_design: true

@@ -392,6 +392,29 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         return (abs(tip_xy[0] - cube_xy[0]) < thresh and
                 abs(tip_xy[1] - cube_xy[1]) < thresh)
 
+    def _check_floor_penetration(self):
+        """実行開始時にアームのいずれかの関節・先端が床（z=0）を割っているか確認。
+        縦型アーム（tripo_arm_v3）用: Leader は offset の z 成分を動かせるため、
+        設計フェーズで「床にめり込んだ初期姿勢」を作れてしまう。深い貫通は表面
+        ベースの衝突検出では解決されず、物理的にあり得ない形態が学習に混ざる。
+        cube の初期接触 exploit と同型の問題なので、同じペナルティ機構で Leader に
+        負の勾配を渡す（Bug 9 の教訓 = 棄却でなくペナルティ）。
+        env_specs.check_floor_penetration=true で有効化（デフォルト無効 = 既存 run 無影響）。
+        """
+        if (not self.env_specs.get('check_floor_penetration', False)
+                or not self.is_fixed_base):
+            return False
+        margin = self.env_specs.get('floor_penetration_margin', 0.0)
+        zs = []
+        for body in self.robot.bodies:
+            pos = self._body_xpos.get(body.name)
+            if pos is not None and np.all(np.isfinite(pos)):
+                zs.append(float(np.asarray(pos)[2]))
+        tip = self._arm_tip_pos
+        if np.all(np.isfinite(tip)):
+            zs.append(float(tip[2]))
+        return bool(zs) and min(zs) < margin
+
     def transit_execution(self):
         self.stage = 'execution'
         self.control_nsteps = 0
@@ -415,7 +438,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         #   収束した（2026-07-10 L2/TP1 再走 ep10 で実測）。50 ≈ ctrl コスト満額 + マージン。
         # init_contact_penalty <= 0: 旧挙動（棄却）。
         self._init_contact_penalty_pending = False
-        if self._check_initial_contact():
+        if self._check_initial_contact() or self._check_floor_penetration():
             if self.cfg.reward_specs.get('init_contact_penalty', 50.0) > 0:
                 self._init_contact_penalty_pending = True
             else:
