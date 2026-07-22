@@ -704,4 +704,4 @@ training done!（fwd_contact も正常値・nan なし）
 |---|---|
 | ~~**マーカー色の自動キャリブレーション**~~ | ✅ **実装・検証済み（2026-07-13）**: `glb_to_links.py --auto-color`。マゼンタ色相域（hue 285–345°・彩度≥0.3・明度≥80）の支配クラスタの中央値を目標色、99パーセンタイル偏差から tol を自動決定。正例（マゼンタ版 GLB）: 色 (214,75,169)・関節 3/3 検出・Z 誤差 <1mm。負例（金色版）: 明度フィルタ追加前は暗色頂点 (28,12,20) を偽検出 → val_min=80 で解消し正しく「クラスタなし」でフォールバック。`run_tripo_pipeline.sh` は JOINT_COLOR 未指定で自動モード |
 | **エンドエフェクタ向きの恒久対策** | プロンプト A への向き仕様追加（次回 Tripo3D 生成時）・OBB ベース自動整列（メッシュ衝突を使う段階で） |
-| **本格学習** | tripo_arm_v2 で scale=1・200ep 以上（GPU 空き待ち、L 系・target_pusher の後） |
+| ~~**本格学習**~~ | ✅ **実施済み・環境confound発見（2026-07-17〜22）**: tripo_arm_v2 で3タスク×1000ep完走。ただし後に cube damping（rrbot比1/5）・関節可動域（本節の `--ranges`指定値がrrbot/colorful2実測いずれとも不一致）の2件のconfoundを発見。damping修正版 tripo_arm_v2b、damping+可動域とも修正版 tripo_arm_v2c、縦型 tripo_arm_v3 で再実験中。詳細: [実験系譜.md](実験系譜.md)「tripo_arm v2 の cube damping confound」節、[引き継ぎ_再起動後.md](引き継ぎ_再起動後.md) |
