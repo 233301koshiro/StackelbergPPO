@@ -252,7 +252,7 @@ PREAMBLE = r"""
 \title{{\large 修士論文ドラフト}\\[8pt]
 {\LARGE 形態-制御 co-design を用いたロボットアームの\\タスク適性判定システムの構築}}
 \author{垣内研究室}
-\date{2026年7月16日（途中経過版）}
+\date{__BUILD_DATE__（途中経過版）}
 \begin{document}
 \maketitle
 \tableofcontents
@@ -266,8 +266,10 @@ POSTAMBLE = r"""
 # ── メイン ───────────────────────────────────────────────────────────────────
 
 def main():
+    import datetime
+    today = datetime.date.today().strftime('%Y%m%d')
     p = argparse.ArgumentParser()
-    p.add_argument('--out', default=str(ROOT / 'docs' / '修論ドラフト_20260716.pdf'))
+    p.add_argument('--out', default=str(ROOT / 'docs' / f'修論ドラフト_{today}.pdf'))
     args = p.parse_args()
 
     BUILD_DIR.mkdir(exist_ok=True)
@@ -289,7 +291,8 @@ def main():
     full_body = '\n\n'.join(body_parts)
     full_body = insert_figures(full_body)
 
-    tex_content = PREAMBLE + full_body + POSTAMBLE
+    build_date_ja = f'{today[:4]}年{int(today[4:6])}月{int(today[6:8])}日'
+    tex_content = (PREAMBLE + full_body + POSTAMBLE).replace('__BUILD_DATE__', build_date_ja)
     tex_file.write_text(tex_content)
     print(f'[write] {tex_file}')
 
