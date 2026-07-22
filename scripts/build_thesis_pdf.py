@@ -25,6 +25,7 @@ CHAPTER_ORDER = [
     ('第4章_実験および評価.md', False), # Chapter 4
     ('第5章_考察.md',        False),  # Chapter 5
     ('第6章_結論.md',        False),  # Chapter 6
+    ('付録A_プロンプト全文.md', True),  # Appendix A → \chapter*
 ]
 
 # ── Markdown → LaTeX 変換 ─────────────────────────────────────────────────────
