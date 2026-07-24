@@ -314,15 +314,24 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         (body_xpos(bodies[1])) is unaffected, but bo1+bo11 must be rotated by that
         same +90° before comparing against the cube direction, or the bonus
         rewards a "rest" direction that is never actually realized at runtime.
+
+        2026-07-24 (Bug 16 対応): L1/L2 の長さ計算は bone_offset の全3成分の
+        ノルムを使うよう修正済み（旧: [:2] 切り詰めで、縦型アームでは長さを
+        常にゼロと誤算していた）。ただし angle_term 側（shoulder_xy・cube_xy・
+        link_vec を使った水平面内の方向一致判定）は依然として「腕がX-Y平面内で
+        動く」ことを前提にした2Dロジックのままで、縦型アーム（tripo_arm_v3等）
+        での妥当性は未検証。本関数は reach_bonus_scale=0.0（既定値）のため
+        現状どの run でも休眠しており実害はないが、将来 reach_bonus を
+        縦型アームで有効化する際は angle_term 側の3D化を別途行うこと。
         """
         scale = self.cfg.reward_specs.get('reach_bonus_scale', 0.0)
         if scale == 0.0 or not self.is_fixed_base or len(self.robot.bodies) < 3:
             return 0.0
         bodies = self.robot.bodies
+        L1 = float(np.linalg.norm(np.asarray(bodies[1].bone_offset, dtype=float)))
+        L2 = float(np.linalg.norm(np.asarray(bodies[-1].bone_offset, dtype=float)))
         bo1 = np.asarray(bodies[1].bone_offset, dtype=float)[:2]
         bo11 = np.asarray(bodies[-1].bone_offset, dtype=float)[:2]
-        L1 = float(np.linalg.norm(bo1))
-        L2 = float(np.linalg.norm(bo11))
         shoulder_xy = self.data.body_xpos[self.model._body_name2id[bodies[1].name]][:2]
         cube_xy = self.get_body_com("cube")[:2]
 
@@ -396,31 +405,32 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         （Leader が initial contact exploit を学習するのを防ぐ）。
         check_init_contact=false で無効化可能。arm_safe_init の有無に依存しない。
 
-        先端位置は「reset_state() 後の実際のシミュレーション状態における
-        shoulder_xy + 全リンクの bone_offset の合計（arm_safe_init 回転があれば適用）」
-        で計算する。
+        先端位置は `_arm_tip_pos`（live simulation の body_xpos/body_xmat から
+        計算される、reset_state() 後の実際の3D先端位置。root からのチェーンを
+        辿り、bone_offset を各ボディの実姿勢で回転して足す）をそのまま使う。
+        arm_safe_init による qpos[0]=π/2 の回転は reset_state() が既に
+        シミュレーション状態へ反映済みのため、ここで改めて回転行列を
+        適用する必要はない。
 
-        2026-07-21 訂正: 従来は bodies[1] + bodies[-1] の2リンクだけを足しており、
-        3関節以上のアーム（tripo_arm 系）では中間リンクが無視され先端位置を
-        37%（3関節）〜60%（4関節）過小評価していた（rrbot の2関節では偶然正しかった）。
-        cube_half_size も rrbot 専用の固定値 0.5 だった点も併せて修正。
+        2026-07-21 訂正 (Bug 13): 従来は bodies[1] + bodies[-1] の2リンクだけを
+        足しており、3関節以上のアーム（tripo_arm 系）では中間リンクが無視され
+        先端位置を37%（3関節）〜60%（4関節）過小評価していた
+        （rrbot の2関節では偶然正しかった）。cube_half_size も rrbot 専用の
+        固定値 0.5 だった点も併せて修正。
+
+        2026-07-24 訂正 (Bug 16): Bug 13 の修正自体が bone_offset[:2]（X,Y成分
+        のみ）を手動で合計する方式で、全関節Z軸（ヨー）の平面アームでは正しい
+        ものの、ピッチ軸混在の縦型アーム（tripo_arm_v3）では静止姿勢の長さが
+        全部Z成分に乗るため link_vec が恒常的にゼロになり、先端位置を常に
+        肩関節の真上と誤認していた（Reach が ep2 で -50 に張り付き放置される
+        原因）。`_arm_tip_pos`（get_sim_obs 等で既に使われている、live
+        simulation ベースの N関節・軸構成非依存の先端位置）に置き換えて解決。
         """
         if (not self.env_specs.get('check_init_contact', True)
                 or not self.is_fixed_base
                 or len(self.robot.bodies) < 3):
             return False
-        bodies = self.robot.bodies
-        # 全非ルートリンク（bodies[1:]）の bone_offset を合計する（関節数に依存しない）
-        link_vec = np.zeros(2)
-        for body in bodies[1:]:
-            link_vec += np.asarray(body.bone_offset, dtype=float)[:2]
-        shoulder_xy = self.data.body_xpos[self.model._body_name2id[bodies[1].name]][:2]
-        # arm_safe_init が有効な場合は回転を適用、無効な場合は現在の joint 状態を反映
-        if self.env_specs.get('arm_safe_init', False):
-            theta = np.pi / 2
-            cos_t, sin_t = np.cos(theta), np.sin(theta)
-            link_vec = np.array([[cos_t, -sin_t], [sin_t, cos_t]]) @ link_vec
-        tip_xy    = shoulder_xy + link_vec
+        tip_xy    = self._arm_tip_pos[:2]
         cube_xy   = self.get_body_com("cube")[:2]
         cube_half = self._get_cube_half_size()
         arm_rad   = self._get_max_arm_radius()
