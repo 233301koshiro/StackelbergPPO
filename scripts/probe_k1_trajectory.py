@@ -41,12 +41,15 @@ cfg.morph_prior = False
 torch.set_default_dtype(torch.float64)
 set_global_seed(cfg.seed)
 
-ckpts = sorted(glob.glob(f'{restore_dir}/models/epoch_*.p'))
-eps = [int(re.search(r'epoch_(\d+)\.p', c).group(1)) for c in ckpts]
-step = int(os.environ.get('EVAL_EPOCH_STEP', '100'))
 decimals = int(os.environ.get('EVAL_DECIMALS', '3'))
-max_ep = int(os.environ.get('EVAL_MAX_EPOCH', '0')) or max(eps)
-sample_eps = [e for e in eps if ((e - min(eps)) % step == 0 or e == max(eps)) and e <= max_ep]
+if os.environ.get('EVAL_CHECKPOINT'):
+    sample_eps = [os.environ['EVAL_CHECKPOINT']]  # e.g. 'best' -> models/best.p
+else:
+    ckpts = sorted(glob.glob(f'{restore_dir}/models/epoch_*.p'))
+    eps = [int(re.search(r'epoch_(\d+)\.p', c).group(1)) for c in ckpts]
+    step = int(os.environ.get('EVAL_EPOCH_STEP', '100'))
+    max_ep = int(os.environ.get('EVAL_MAX_EPOCH', '0')) or max(eps)
+    sample_eps = [e for e in eps if ((e - min(eps)) % step == 0 or e == max(eps)) and e <= max_ep]
 
 print(f'[k1_traj] sample_eps={sample_eps}', flush=True)
 try:
@@ -80,7 +83,7 @@ try:
                     gear = float(joint.actuator.gear)
             gear_str = f'{gear:.{decimals}f}' if gear is not None else 'N/A'
             parts.append(f'{b.name}:off=[{off_str}],len={length:.{decimals}f},gear={gear_str}')
-        print(f'[k1_traj] ep={ep:4d}: {" ".join(parts)}', flush=True)
+        print(f'[k1_traj] ep={ep}: {" ".join(parts)}', flush=True)
 except Exception:
     import traceback
     traceback.print_exc()
