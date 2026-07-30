@@ -6,7 +6,7 @@
   python3 scripts/build_thesis_pdf.py
   python3 scripts/build_thesis_pdf.py --out docs/thesis_draft.pdf
 """
-import os, re, subprocess, argparse, shutil, textwrap
+import os, re, subprocess, argparse, shutil, textwrap, unicodedata
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -151,7 +151,17 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False) -> str:
                 i += 1
             if table_rows:
                 ncols = max(len(r) for r in table_rows)
-                col_spec = '|' + 'l|' * ncols
+                def _disp_width(s):
+                    # 全角(CJK等)文字は半角の約2倍の表示幅として概算する
+                    return sum(2 if unicodedata.east_asian_width(ch) in 'WF' else 1 for ch in s)
+                max_cell_w = max((_disp_width(c) for r in table_rows for c in r), default=0)
+                if max_cell_w > 22 or ncols >= 5:
+                    # 長文セル（比較表等）は折り返し可能な固定幅列にする。
+                    # l| のままだと1行に収まらず紙面外へはみ出す（Overfull \hbox）。
+                    col_w = f'{0.92 / ncols:.3f}\\textwidth'
+                    col_spec = '|' + (f'p{{{col_w}}}|') * ncols
+                else:
+                    col_spec = '|' + 'l|' * ncols
                 out.append(r'\begin{center}')
                 out.append(r'\begin{tabular}{' + col_spec + '}')
                 out.append(r'\hline')
