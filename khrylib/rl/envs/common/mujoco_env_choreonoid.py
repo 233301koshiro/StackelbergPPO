@@ -889,6 +889,10 @@ class ChoreonoidSimWorld:
                 floor_item = BodyItem()
                 floor_item.load(candidate)
                 self.world_item.addChildItem(floor_item)
+                # Item Tree Viewのチェックボックスが未チェックだとScene上に表示され
+                # ないため、追加直後に明示的にチェックする（手動でチェックしないと
+                # viewer/録画で何も映らない問題への対応、2026-07-31）。
+                floor_item.setChecked(True)
                 break
 
         self.sim_item = AISTSimulatorItem()
@@ -958,6 +962,8 @@ class ChoreonoidSimWorld:
 
             body_item.storeInitialState()
             self.world_item.addChildItem(body_item)
+            # floor_itemと同様、追加直後にチェックしないとScene上に表示されない。
+            body_item.setChecked(True)
             self.body_items[body_key] = body_item
 
         if self.is_running:
