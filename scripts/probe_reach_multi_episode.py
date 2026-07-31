@@ -4,7 +4,7 @@ probe_reach_multi_episode.py: 同一方策で複数エピソード走らせ、�
 同じ関節配置に収束する「固定アトラクタ」的な挙動になっていないかを確認する。
 
 使い方:
-  EVAL_RESTORE_DIR=single_run/tripo_v2c_reach EVAL_CHECKPOINT=best EVAL_N_EPISODES=6 \
+  EVAL_RESTORE_DIR=single_run/tripo_arm_v2c_reach EVAL_CHECKPOINT=best EVAL_N_EPISODES=6 \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
       --no-window --python scripts/probe_reach_multi_episode.py
 """

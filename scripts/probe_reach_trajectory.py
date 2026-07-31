@@ -6,7 +6,7 @@ probe_reach_trajectory.py: Reach 実行フェーズの先端位置・関節角�
 なっていないか」を検証する（advisor 指摘への回答）。
 
 使い方:
-  EVAL_RESTORE_DIR=single_run/tripo_v2c_reach EVAL_CHECKPOINT=best \
+  EVAL_RESTORE_DIR=single_run/tripo_arm_v2c_reach EVAL_CHECKPOINT=best \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
       --no-window --python scripts/probe_reach_trajectory.py
 """

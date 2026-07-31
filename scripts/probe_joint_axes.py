@@ -3,7 +3,7 @@
 全ボディ位置の Y 座標を出力し、アームが単一の縦平面内で動いているかを検証する。
 
 使い方:
-  EVAL_RESTORE_DIR=single_run/tripo_arm_v3_smoke USE_CHOREONOID=1 \
+  EVAL_RESTORE_DIR=single_run/tripo_arm_v3_pusher_smoke USE_CHOREONOID=1 \
   /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/probe_joint_axes.py
 """
 import os

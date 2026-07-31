@@ -56,7 +56,7 @@ if __name__ == '__main__':
     # co-design が実際に収束させた形態（今回の実測値、compare_morphology.py より）
     print_report('rrbot_L1 (2関節)', [0.654, 0.251], target_dist)
     print_report('TA (tripo 3関節, 狭可動域)', [0.500, 0.723, 0.513], target_dist)
-    print_report('tripo_v2c_reach (3関節, 広可動域)', [0.632, 0.561, 0.370], target_dist)
+    print_report('tripo_arm_v2c_reach (3関節, 広可動域)', [0.632, 0.561, 0.370], target_dist)
 
     # 幾何的に「必要十分」な最小構成の例（等分配・多少の余裕を見込む）
     print('=== 参考: 幾何的に必要十分な最小構成の例 ===')

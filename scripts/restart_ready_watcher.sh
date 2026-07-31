@@ -14,7 +14,7 @@ last_ep() {
     | tail -1 | grep -oE "\] [0-9]+" | tr -dc '0-9'
 }
 
-RUNS="rrbot_arm_pusher_L2 rrbot_arm_pusher_L2_s2 rrbot_arm_targetpusher_TP2 rrbot_arm_targetpusher_TP2_s2"
+RUNS="rrbot_arm_pusher_L2 rrbot_arm_pusher_L2_s2 rrbot_arm_tp_TP2 rrbot_arm_tp_TP2_s2"
 say "watcher start: waiting for all of [$RUNS] to reach ep999"
 
 while :; do
