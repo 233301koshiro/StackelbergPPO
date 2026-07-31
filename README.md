@@ -65,15 +65,24 @@ nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreono
 
 ### チェックポイントから再開
 
+> ⚠️ **`+restore_dir` を使うときは `epoch=` を必ず一緒に指定する**（Bug 12）。`epoch` を省くとデフォルトの `0` が使われ、
+> **チェックポイントが一切ロードされないまま無言でゼロスタート**する。過去にこれで転用実験の1世代が全て無効になった
+> （[デバッグ戦記.md](docs/デバッグ戦記.md) Bug 12）。現在は `design_opt/train.py` にガードがあり、
+> `restore_dir` 指定 + `epoch=0` の組み合わせは起動時にエラーで止まる。
+> 途中再開なら `epoch=<最新のepoch番号>`、best から始めるなら `epoch=best` を指定する。
+
 ```bash
 nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
   --no-window --python scripts/choreonoid_train.py \
   cfg=pusher num_threads=4 \
   hydra.run.dir=single_run/pusher_cnoid \
-  +restore_dir=single_run/pusher_cnoid \
+  +restore_dir=single_run/pusher_cnoid epoch=best \
   enable_wandb=false \
   > single_run/pusher_cnoid/stdout.log 2>&1 &
 ```
+
+> 中断した学習を**途中から続ける**場合は `epoch=best` ではなく直近の checkpoint 番号を指定し、
+> `reset_epoch` は付けない（エポックカウンタを継続させるため）。実例: `scripts/resume_after_reboot_20260731.sh`
 
 チェックポイントは `{hydra.run.dir}/models/` に保存される。
 - `epoch_XXXX.p`：10エポックごと
@@ -86,7 +95,7 @@ nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreono
   --no-window --python scripts/choreonoid_train.py \
   cfg=pusher num_threads=4 \
   hydra.run.dir=single_run/pusher_cnoid_transfer \
-  +restore_dir=single_run/pusher_mujoco \
+  +restore_dir=single_run/pusher_mujoco epoch=best \
   morph_prior=true reset_epoch=true \
   enable_wandb=false \
   > single_run/pusher_cnoid_transfer/stdout.log 2>&1 &
@@ -107,9 +116,11 @@ EVAL_RESTORE_DIR=single_run/pusher_cnoid EVAL_NUM_EPISODES=5 \
 EVAL_RESTORE_DIR=single_run/pusher_cnoid \
   USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_cnoid_visual.py
 
-# GUI リアルタイム再生（VirtualGL が必要）
-VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_FPS=25 VIEWER_EPISODES=3 \
-  vglrun choreonoid --python scripts/eval_cnoid_viewer.py
+# GUI リアルタイム再生
+#   事前に ubuntu ユーザー側で `xhost +SI:localuser:root` を実行して X11 認可を通す。
+#   vglrun は使わない（この環境では VGL_DISPLAY=:0 固定で失敗する。素の choreonoid が正しい）
+VIEWER_RESTORE_DIR=single_run/pusher_cnoid VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=3 \
+  DISPLAY=:1 USE_CHOREONOID=1 choreonoid --python scripts/eval_cnoid_viewer.py
 
 ---
 
