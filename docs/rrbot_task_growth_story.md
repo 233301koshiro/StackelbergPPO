@@ -7,19 +7,19 @@
 
 ## 作成物
 
-- 比較図: [docs/rrbot_task_growth_story.png](docs/rrbot_task_growth_story.png)
+- 比較図: [docs/rrbot_task_growth_story.png](rrbot_task_growth_story.png)
 - Pusher 動画:
-  - [形態動画](single_run/rrbot_arm_pusher_H1/videos/eval_morphology.mp4)
-  - [実行動画](single_run/rrbot_arm_pusher_H1/videos/eval_execution.mp4)
+  - [形態動画](../single_run/rrbot_arm_pusher_H1/videos/eval_morphology.mp4)
+  - [実行動画](../single_run/rrbot_arm_pusher_H1/videos/eval_execution.mp4)
 - Reach 動画:
-  - [形態動画](single_run/rrbot_arm_reach_L1/videos/eval_morphology.mp4)
-  - [実行動画](single_run/rrbot_arm_reach_L1/videos/eval_execution.mp4)
+  - [形態動画](../single_run/rrbot_arm_reach_L1/videos/eval_morphology.mp4)
+  - [実行動画](../single_run/rrbot_arm_reach_L1/videos/eval_execution.mp4)
 - Target-Pusher 動画:
-  - [形態動画](single_run/rrbot_arm_tp_TP1/videos/eval_morphology.mp4)
-  - [実行動画](single_run/rrbot_arm_tp_TP1/videos/eval_execution.mp4)
+  - [形態動画](../single_run/rrbot_arm_tp_TP1/videos/eval_morphology.mp4)
+  - [実行動画](../single_run/rrbot_arm_tp_TP1/videos/eval_execution.mp4)
   - 本番 run（TP2, 1000ep, best 0.450）版もあり:
-    [形態動画](single_run/rrbot_arm_tp_TP2/videos/eval_morphology.mp4) /
-    [実行動画](single_run/rrbot_arm_tp_TP2/videos/eval_execution.mp4)
+    [形態動画](../single_run/rrbot_arm_tp_TP2/videos/eval_morphology.mp4) /
+    [実行動画](../single_run/rrbot_arm_tp_TP2/videos/eval_execution.mp4)
 
 ## 見方
 
