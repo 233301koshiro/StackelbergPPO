@@ -348,6 +348,18 @@ def _fv(v, prec=8) -> str:
     return "[ " + ", ".join(f"{x:.{prec}g}" for x in v) + " ]"
 
 
+_LINK_COLOR_PALETTE = [
+    (0.90, 0.10, 0.10),  # red
+    (0.10, 0.55, 0.95),  # blue
+    (0.15, 0.75, 0.20),  # green
+    (0.95, 0.60, 0.05),  # orange
+    (0.65, 0.20, 0.85),  # purple
+    (0.95, 0.85, 0.10),  # yellow
+    (0.10, 0.80, 0.75),  # teal
+    (0.90, 0.30, 0.60),  # pink
+]
+
+
 def _serialize_links_to_yaml(links: list, root_name: str, body_name: str) -> str:
     out = [
         "format: ChoreonoidBody",
@@ -357,6 +369,7 @@ def _serialize_links_to_yaml(links: list, root_name: str, body_name: str) -> str
         f'root_link: "{root_name}"',
         "links:",
     ]
+    color_idx = 0
     for lk in links:
         out.append("  -")
         out.append(f'    name: "{lk["name"]}"')
@@ -401,6 +414,24 @@ def _serialize_links_to_yaml(links: list, root_name: str, body_name: str) -> str
             elif st == "box":
                 sx, sy, sz = shape["size"]
                 out.append(f"        geometry: {{ type: Box, size: [ {sx:.6g}, {sy:.6g}, {sz:.6g} ] }}")
+            cr, cg, cb = _LINK_COLOR_PALETTE[color_idx % len(_LINK_COLOR_PALETTE)]
+            color_idx += 1
+            out.append("        appearance:")
+            out.append("          material:")
+            out.append(f"            diffuseColor: [ {cr:.3g}, {cg:.3g}, {cb:.3g} ]")
+            # ルートリンク（土台の球）は隣接リンクに埋もれて見えにくいため、
+            # 衝突・質量に影響しない見た目専用（type: Visual）の一回り
+            # 大きい球を重ねて視認性を上げる。物理には一切影響しない。
+            if lk["name"] == root_name and lk["parent"] is None and st == "sphere":
+                marker_r = shape["radius"] * 1.4
+                out.append("      -")
+                out.append("        type: Visual")
+                out.append(f"        translation: [ {cx:.6g}, {cy:.6g}, {cz:.6g} ]")
+                out.append("        shape:")
+                out.append(f"          geometry: {{ type: Sphere, radius: {marker_r:.6g} }}")
+                out.append("          appearance:")
+                out.append("            material:")
+                out.append(f"              diffuseColor: [ {cr:.3g}, {cg:.3g}, {cb:.3g} ]")
     return "\n".join(out) + "\n"
 
 

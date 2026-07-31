@@ -520,6 +520,20 @@ def mujoco_xml_to_body(xml_str: str):
     def fv(v, prec=8):
         return '[ ' + ', '.join(f'{x:.{prec}g}' for x in v) + ' ]'
 
+    # 関節・リンクの見分けをつけやすくするための固定パレット（リンクごとに
+    # 巡回して割り当てる）。tripo系のように全関節が同軸で、実行中に隣接
+    # リンクが一直線に見えて関節数を誤認しやすい形態のデバッグ目的。
+    LINK_COLOR_PALETTE = [
+        (0.90, 0.10, 0.10),  # red
+        (0.10, 0.55, 0.95),  # blue
+        (0.15, 0.75, 0.20),  # green
+        (0.95, 0.60, 0.05),  # orange
+        (0.65, 0.20, 0.85),  # purple
+        (0.95, 0.85, 0.10),  # yellow
+        (0.10, 0.80, 0.75),  # teal
+        (0.90, 0.30, 0.60),  # pink
+    ]
+
     def serialize_links_to_yaml(links_list, root_name, body_name):
         out = [
             'format: ChoreonoidBody',
@@ -529,6 +543,7 @@ def mujoco_xml_to_body(xml_str: str):
             f'root_link: "{root_name}"',
             'links:',
         ]
+        color_idx = 0
         for lk in links_list:
             out.append('  -')
             out.append(f'    name: "{lk["name"]}"')
@@ -574,6 +589,24 @@ def mujoco_xml_to_body(xml_str: str):
                     out.append(f'        geometry: {{ type: Sphere, radius: {shape["radius"]:.6g} }}')
                 elif st == 'box':
                     out.append(f'        geometry: {{ type: Box, size: {fv(shape["size"], 6)} }}')
+                cr, cg, cb = LINK_COLOR_PALETTE[color_idx % len(LINK_COLOR_PALETTE)]
+                color_idx += 1
+                out.append('        appearance:')
+                out.append('          material:')
+                out.append(f'            diffuseColor: [ {cr:.3g}, {cg:.3g}, {cb:.3g} ]')
+                # ルートリンク（土台の球）は隣接リンクに埋もれて見えにくいため、
+                # 衝突・質量に影響しない見た目専用（type: Visual）の一回り
+                # 大きい球を重ねて視認性を上げる。物理には一切影響しない。
+                if lk['name'] == root_name and lk['parent'] is None and st == 'sphere':
+                    marker_r = shape['radius'] * 1.4
+                    out.append('      -')
+                    out.append('        type: Visual')
+                    out.append(f'        translation: [ {cx:.6g}, {cy:.6g}, {cz:.6g} ]')
+                    out.append('        shape:')
+                    out.append(f'          geometry: {{ type: Sphere, radius: {marker_r:.6g} }}')
+                    out.append('          appearance:')
+                    out.append('            material:')
+                    out.append(f'              diffuseColor: [ {cr:.3g}, {cg:.3g}, {cb:.3g} ]')
         return '\n'.join(out) + '\n'
 
     # Process each top-level worldbody child as its own independent .body file.
