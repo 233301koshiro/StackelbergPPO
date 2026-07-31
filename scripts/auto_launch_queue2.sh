@@ -30,10 +30,10 @@ launch_cmd() {
         +reward_specs.use_reach=true +reward_specs.target_x=0.8 +reward_specs.target_y=0.0 \
         +reward_specs.target_z=0.15 +reward_specs.ctrl_cost_coeff=0.2 \
         +env_specs.check_init_contact=false \
-        hydra.run.dir=single_run/tripo_v2b_reach \
+        hydra.run.dir=single_run/tripo_arm_v2b_reach \
         >> "$LOGF" 2>&1 &
       disown
-      echo "tripo_v2b_reach"
+      echo "tripo_arm_v2b_reach"
       ;;
     M1_1000_s0)
       nohup bash scripts/run_cnoid_train.sh \

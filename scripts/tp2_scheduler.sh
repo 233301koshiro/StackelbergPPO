@@ -68,12 +68,12 @@ launch_tp() {  # $1=run名 $2=追加フラグ（seed 等、空可）
   say "$1 launched (PID $!)"
 }
 
-launch_tp rrbot_arm_targetpusher_TP2 ""
+launch_tp rrbot_arm_tp_TP2 ""
 sleep 120   # 起動ピークをずらす
-launch_tp rrbot_arm_targetpusher_TP2_s2 "seed=1"
+launch_tp rrbot_arm_tp_TP2_s2 "seed=1"
 
 sleep 600
-for run in rrbot_arm_targetpusher_TP2 rrbot_arm_targetpusher_TP2_s2; do
+for run in rrbot_arm_tp_TP2 rrbot_arm_tp_TP2_s2; do
   if [ -s "single_run/$run/log/log_train.txt" ] || grep -q "epoch" "single_run/$run/stdout.log" 2>/dev/null; then
     say "$run startup confirmed"
   else

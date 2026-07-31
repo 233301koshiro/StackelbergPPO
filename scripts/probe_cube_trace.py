@@ -6,7 +6,7 @@ probe_cube_trace.py: 実行フェーズの cube_x(t)・先端-cube 距離・ctrl
 L2 vs L2_s2 の戦略差の定量化。
 
 使い方:
-  EVAL_RESTORE_DIR=single_run/rrbot_arm_targetpusher_TP1 EVAL_CHECKPOINT=best \
+  EVAL_RESTORE_DIR=single_run/rrbot_arm_tp_TP1 EVAL_CHECKPOINT=best \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
       --no-window --python scripts/probe_cube_trace.py
 """

@@ -21,7 +21,7 @@ check_mesh_interference.py: capsule近似で学習したcheckpointの形態(bone
     非凸な凹み同士がすり抜ける干渉は検出できない（保守的ではなく楽観的な近似）。
 
 使い方:
-  EVAL_RESTORE_DIR=single_run/tripo_v2c_pusher EVAL_CHECKPOINT=best \
+  EVAL_RESTORE_DIR=single_run/tripo_arm_v2c_pusher EVAL_CHECKPOINT=best \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
       --no-window --python scripts/check_mesh_interference.py
 """

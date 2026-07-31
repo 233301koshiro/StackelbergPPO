@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.."
 LOGF="single_run/transfer_autostart_watcher.log"
 
 # 監視対象（hydra.run.dir の basename）。実行中に動的に入れ替える。
-WATCH_RUNS=("rrbot_arm_pusher_K1_v2" "tripo_v2c_pusher" "tripo_v2c_tp")
+WATCH_RUNS=("rrbot_arm_pusher_K1_v2" "tripo_arm_v2c_pusher" "tripo_arm_v2c_tp")
 
 # 起動待ちキュー（run 名と、対応する hydra オーバーライド）
 QUEUE_NAMES=("K2_v2" "I1_v2")
