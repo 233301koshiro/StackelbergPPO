@@ -15,7 +15,7 @@ from gym.utils import seeding
 
 from cnoid.Base import RootItem
 from cnoid.Body import BodyLoader
-from cnoid.BodyPlugin import WorldItem, BodyItem, AISTSimulatorItem
+from cnoid.BodyPlugin import WorldItem, BodyItem, AISTSimulatorItem, SimulatorItem
 import cnoid.IRSLUtil as IU
 
 DEFAULT_SIZE = 500
@@ -898,6 +898,12 @@ class ChoreonoidSimWorld:
         self.sim_item = AISTSimulatorItem()
         self.sim_item.setTimeStep(0.01)
         self.sim_item.setRealtimeSyncMode(3)  # manual / non-realtime
+        # SimulatorItem::Impl::flushRecords()（SimulatorItem.cpp）は
+        # isRecordingEnabled==false の時だけ毎flushでフロントエンド（Scene表示）の
+        # ボディ状態を更新する（updateFrontendBodyStatelWithLastRecords）。デフォルトの
+        # recordingMode（録画有効）のままだと、tickRequest()で物理は進んでいても
+        # 画面表示が更新されず「見た目だけ動きが止まる」問題が起きる（2026-07-31発覚）。
+        self.sim_item.setRecordingMode(SimulatorItem.REC_NONE)
         self.world_item.addChildItem(self.sim_item)
 
     def _clear_bodies(self):
