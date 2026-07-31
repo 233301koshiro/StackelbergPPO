@@ -16,6 +16,11 @@ cd "$(dirname "$0")/.."
 
 OUT="${1:-/tmp/cnoid_record_$(date +%Y%m%d_%H%M%S).mp4}"
 DISP="${DISPLAY:-:1}"
+# 録画は無圧縮のraw pixelをXサーバから毎フレーム取得するため重い（4384x2318なら
+# 1フレーム約40MB）。学習プロセスと同時に動かすとCPUを奪い合うため、既定で
+# fps・解像度を落とし軽量なlibx264エンコードに変更（2026-07-31、ユーザー報告を受け対応）。
+RECORD_FPS="${RECORD_FPS:-12}"
+RECORD_SCALE_WIDTH="${RECORD_SCALE_WIDTH:-1600}"  # 出力の横幅[px]。元解像度のままにするには0を指定
 
 if [ -z "${VIEWER_RESTORE_DIR:-}" ]; then
   echo "[record] ERROR: VIEWER_RESTORE_DIR を設定してください" >&2
@@ -68,9 +73,20 @@ if [ $((Y + HEIGHT)) -gt "$SCREEN_H" ]; then HEIGHT=$((SCREEN_H - Y)); fi
 WIDTH=$((WIDTH / 2 * 2))
 HEIGHT=$((HEIGHT / 2 * 2))
 
-echo "[record] 録画領域: ${WIDTH}x${HEIGHT} at (${X},${Y})  [画面: ${SCREEN_W}x${SCREEN_H}] -> $OUT"
-ffmpeg -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate 25 \
-  -i "${DISP}+${X},${Y}" -pix_fmt yuv420p -y "$OUT" \
+echo "[record] 録画領域: ${WIDTH}x${HEIGHT} at (${X},${Y})  [画面: ${SCREEN_W}x${SCREEN_H}]"
+echo "[record] fps=${RECORD_FPS} scale_width=${RECORD_SCALE_WIDTH:-元解像度のまま} -> $OUT"
+
+SCALE_ARGS=()
+if [ "$RECORD_SCALE_WIDTH" != "0" ]; then
+  # -2で高さをアスペクト比維持のまま自動計算（偶数に丸められる）
+  SCALE_ARGS=(-vf "scale=${RECORD_SCALE_WIDTH}:-2")
+fi
+
+ffmpeg -f x11grab -video_size "${WIDTH}x${HEIGHT}" -framerate "${RECORD_FPS}" \
+  -i "${DISP}+${X},${Y}" \
+  "${SCALE_ARGS[@]}" \
+  -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p \
+  -y "$OUT" \
   > "${OUT}.ffmpeg.log" 2>&1 &
 FFMPEG_PID=$!
 echo "[record] ffmpeg録画開始 PID=$FFMPEG_PID"
