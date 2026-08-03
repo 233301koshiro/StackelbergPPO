@@ -7,12 +7,12 @@
 # 第6章6.5「今後の課題」項目2・想定問答.md Q3で明記した、研究の最終目標に
 # 対して最も本質的に残るギャップへの対応。
 #
-# 設計（2026-07-29、既存PJ実験と同じ「XMLで長さを凍結・gearのみ最適化」方式）:
+# 設計（2026-07-29、既存PJ実験と同じ「XMLでリンク長を凍結・gear/太さを最適化」方式）:
 #   tripo_arm_v2c_pj_short.xml: tripo_arm_v2cの0.5倍スケール（総リーチ 0.403m）
 #   tripo_arm_v2c_pj_long.xml:  tripo_arm_v2cの1.8倍スケール（総リーチ 1.451m）
 #   タスク: Reach（target_x=0.8、既存のtripo_arm_v2c_reach・rrbot L1/PJと同一設定）
 #   → short は物理的に届かない（0.403 << 0.8）、long は余裕で届く（1.451 >> 0.8）
-#   cfg=pusher_gearonly（body_params: {} で bone_offset を凍結、gearのみ最適化。
+#   cfg=pusher_gearonly（body_params: {} で bone_offset のみ凍結（gear・size・ext_start は可変）。
 #   xml_nameを変えるだけで再利用できる。PJ_short/PJ_longと同じ機構）
 #
 # 期待スコア（exec_R_eps、200ep）:
