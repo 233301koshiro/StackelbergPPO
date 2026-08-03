@@ -11,7 +11,7 @@ cd /userdir/StackelbergPPO
 LOG=single_run/launch_next3_20260803.log
 say() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 
-# PJ実験共通（4.4.3/4.4.4 と同一設定。長さ凍結・gearのみ最適化）
+# PJ実験共通（4.4.3/4.4.4 と同一設定。リンク長のみ凍結（gear・size・ext_start は可変））
 REACH="+reward_specs.use_reach=true +reward_specs.target_x=0.8 \
 +reward_specs.target_y=0.0 +reward_specs.target_z=0.15 \
 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false"
