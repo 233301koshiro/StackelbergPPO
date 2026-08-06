@@ -34,7 +34,21 @@ DOC_DIR = os.path.join(ROOT, 'docs')
 # ④状態 層だけが「進行中」を書いてよい。②台帳・③派生に状態語があれば古い可能性が高い
 STATUS_WORDS = ['進行中', '稼働中', '学習中', '完走待ち', '起動待ち', '実行中']
 # 検査から除く（履歴・アーカイブ・レビュー記録は当時の状態を残してよい）
-SKIP_PARTS = ['/archive/', 'セカンドオピニオン', '発表原稿']
+SKIP_PARTS = ['/archive/', 'セカンドオピニオン', '発表原稿',
+              '移行記録']   # MuJoCo→Choreonoid 移行時の記録。当時の run 名を残すのが正しい
+
+# 検査C で「存在しない run 名」として出るが、**意図的にそう書いている**もの。
+# コマンド例は `single_run/<run名>` というプレースホルダへ寄せた（2026-08-06）が、
+# 下記は文脈上そのままにするのが自然なため個別に除外する。
+INTENTIONAL_RUNS = {
+    'A', 'B',                    # COMPARE_RUNS の説明用プレースホルダ（評価スクリプト.md）
+    'pusher',                    # 移行記録の当時のディレクトリ名
+    'rrbot_arm2_cnoid_v1',       # 報酬設計の失敗史で言及する過去 run（タスク設計と報酬関数.md）
+    'rrbot_arm_velcap_D',        # 同上
+    'rrbot_arm_reach_F2',        # 進捗.md の知見セクションで言及する過去 run
+    'tripo_arm_smoke',           # パイプライン実証時のスモーク run（既に削除済み）
+    'tripo_arm_v2_smoke',        # 同上
+}
 
 
 def iter_docs():
@@ -105,7 +119,13 @@ def runs_in_line(line, runs):
     """
     found = []
     for n in sorted(runs, key=len, reverse=True):
-        if n in line and not any(n in f for f in found):
+        if n not in line:
+            continue
+        # 既に採用した長い名前の一部として現れているだけなら捨てる。
+        # ただし**出現回数が長い名前の合計を上回る**なら、独立にも出ている（例:
+        # 「ns2 … 比較対象の baseline `tripo_arm_v2c_pusher` は」の行）ので拾う。
+        covered = sum(line.count(f) for f in found if n in f)
+        if line.count(n) > covered:
             found.append(n)
     return found
 
@@ -168,6 +188,22 @@ def check_B(runs):
                 x = float(bm.group(1).replace('−', '-'))
                 if close_enough(x, info['values']):
                     continue
+                # 直後に単位が続くものはスコアではない（総リーチ m・速度 m/s・倍率・％）
+                tail = line[bm.end():bm.end() + 6]
+                if re.match(r'\s*(m/s|m|倍|%|％)', tail):
+                    continue
+                # 数値の**手前**に別の量を示す語がある場合も除外する。
+                # 実測では `best)** | 総リーチ 0.905` や `I1 の final 202.7〜best 238.7` の形が多く、
+                # 「best」との距離だけでは別の量を拾ってしまう
+                head = line[max(0, bm.start(1) - 14):bm.start(1)]
+                if re.search(r'総リーチ|リーチ|長さ|final|転用元|上限|下限|誤差|速度', head):
+                    continue
+                # 「202.7〜best 238.7」のような**範囲表記**の後半は、単一 run の best ではなく
+                # 別 run の値域を述べている（実測: デバッグ戦記の転用元 I1 の記述）
+                if re.search(r'\d\s*[〜～~-]\s*(best)?\s*$', head):
+                    continue
+                if '理論上限' in line or '上限 0' in line:
+                    continue
                 hits.append((rel(p), i, name, x, line.strip()[:90]))
     return hits
 
@@ -185,13 +221,23 @@ def check_C(runs):
             deleted.add(m.group(1))
     known |= deleted
     cand = re.compile(r'single_run/([A-Za-z0-9_]+)')
-    # 出現箇所ごとに並べると数十件になり読めないので、**run 名で束ねて**報告する
+    # 「もう存在しない」と本文が示している行は報告しない。過去の失敗 run の記録は
+    # 消さずに残す方針（実験系譜の裏取りに使う）なので、それを毎回警告しても意味がない
+    DEAD = re.compile(r'❌|停止|失敗|削除|無効|廃止|旧版|旧 run|未着手')
     seen = {}
     for p in iter_docs():
         for i, line in enumerate(open(p, encoding='utf-8', errors='ignore'), 1):
+            if DEAD.search(line):
+                continue
             for m in cand.finditer(line):
                 n = m.group(1)
-                if n in known or n.startswith(('comparison', 'queue', 'diag', 'boundary')):
+                if n in known or n in INTENTIONAL_RUNS or n.startswith(('comparison', 'queue', 'diag', 'boundary')):
+                    continue
+                # ログ・成果物ファイルへのパス（single_run/xxx.log 等）は run ではない
+                if re.match(r'\s*\.(log|txt|csv|json|p)\b', line[m.end():]):
+                    continue
+                # glob 表記（`single_run/tripo_arm_v2c_*`）の残骸。末尾 _ は run 名ではない
+                if n.endswith('_') or line[m.end():m.end() + 1] in '*{':
                     continue
                 seen.setdefault(n, []).append(f'{rel(p)}:{i}')
     return [(n, locs) for n, locs in sorted(seen.items())]
@@ -258,7 +304,8 @@ def main():
 
     if a.only in (None, 'D'):
         h = check_D(runs)
-        total += len(h)
+        # 未完走の run が台帳に無いのは正常なので、要対応（完走済み）だけを合計に数える
+        total += sum(1 for x in h if x[2])
         # 未完走の run が台帳に無いのは正常（完走してから記録する運用）。
         # 報告はするが「要対応」は完走済みのものだけに絞る
         need = [x for x in h if x[2]]
@@ -271,8 +318,15 @@ def main():
             print('    ✅ なし')
         print()
 
-    print(f'合計 {total} 件。**すべてが誤りとは限らない** — 意図的な履歴記述や、')
-    print('別 run を指す数値が混ざる。1件ずつ判断すること。')
+    need = total
+    print(f'合計 {total} 件')
+    print()
+    if total == 0:
+        print('✅ **クリーン。** この状態が正常なので、次に何か出たら本物だと思ってよい。')
+    else:
+        print('⚠️ 1件ずつ判断すること。**恒久的に正しい**（意図的な履歴記述・プレースホルダ等）と')
+        print('   判断したものは、その場しのぎで無視せず INTENTIONAL_RUNS / SKIP_PARTS へ足すか、')
+        print('   検出条件そのものを直すこと。毎回同じ件数が出る検査は読まれなくなる。')
     return 0
 
 
