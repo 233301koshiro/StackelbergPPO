@@ -39,6 +39,7 @@
 | `diagnose_morphology.py` | **形態診断 M7**（第3章 3.12）。第1層は学習不要・約1秒・Choreonoid 不要 |
 | `rank_settle.py` | **判定所要エポックの較正**（第4章 4.4.2）。学習不要、log_train.txt を読むだけ |
 | `audit_runs.sh` | 全 run の一次データ表。**md より先にこれを見る** |
+| `check_docs_consistency.py` | **docs とログの突き合わせ。** 古い状態語・数値の食い違い・記録漏れを検出。値を更新したら必ず走らせる |
 | `compare_morphology.py` | 複数 run の収束形態を並べて比較 |
 | `boundary_compare.py` | 境界張り付きの条件間比較（matched epoch） |
 | `eval_cnoid_numerical.py` | 数値で成功率・報酬を確認 |
