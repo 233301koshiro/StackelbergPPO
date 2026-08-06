@@ -23,18 +23,31 @@ RUN_DIR = 'single_run'
 
 
 def running_best(run):
-    """run の各 epoch における「そこまでの best exec_R_eps」を返す。"""
-    path = os.path.join(RUN_DIR, run, 'stdout.log')
+    """run の各 epoch における「そこまでの best exec_R_eps」を返す。
+
+    ⚠️ データ源は `log/log_train.txt` を優先する。`stdout.log` は再開（resume）で
+    上書きされ ep0 付近が欠落することがあり、欠落したまま順位を測ると
+    「共通 epoch の先頭」を確定点と誤読する（2026-08-06 に実際に誤った）。
+    log_train.txt は追記されるので再開をまたいで ep0 から残る。
+    同じ epoch が複数回現れる場合（再開で midway から再実行された区間）は、
+    最後まで走り切った系列である**後の方**を採用する。
+    """
+    d = os.path.join(RUN_DIR, run)
+    path = os.path.join(d, 'log', 'log_train.txt')
+    if not os.path.exists(path):
+        path = os.path.join(d, 'stdout.log')
     if not os.path.exists(path):
         raise FileNotFoundError(path)
+
     per_epoch = {}
     for line in open(path, errors='ignore'):
-        m = re.match(r'^(\d+)\s+T_sample', line)
+        # log_train.txt は先頭に "[YYYY-MM-DD HH:MM:SS,mmm] " が付く
+        m = re.search(r'(?:^|\]\s*)(\d+)\s+T_sample', line)
         if not m:
             continue
         v = re.search(r'exec_R_eps\s+([-\d.]+)', line)
         if v:
-            per_epoch[int(m.group(1))] = float(v.group(1))
+            per_epoch[int(m.group(1))] = float(v.group(1))   # 後勝ち
     if not per_epoch:
         raise ValueError(f'{run}: exec_R_eps を含む行が無い')
     out, best = {}, float('-inf')
@@ -62,7 +75,10 @@ def settle_epoch(runs, labels):
         else:
             settled = None          # 逆転したのでカウントし直す
     order = ' > '.join(labels[i] for i in final_rank)
-    return settled, order, [round(v, 2) for v in final_vals], epochs[-1]
+    # 共通 epoch が 0 から始まらない場合、確定点が観測範囲の外にありうる。
+    # settled == epochs[0] なら「その epoch 以前は見えていない」＝上界としてしか読めない。
+    truncated = epochs[0] > 0 and settled == epochs[0]
+    return settled, order, [round(v, 2) for v in final_vals], epochs[-1], epochs[0], truncated
 
 
 # (runs, labels, コホート名) — 較正の根拠として第4章 4.4.2 が参照する
@@ -102,15 +118,26 @@ def main():
     else:
         cohorts = COHORTS
 
-    print(f'{"コホート":36s} {"確定ep":>7s}  {"最終順位":24s} 最終値')
-    print('-' * 96)
+    print(f'{"コホート":36s} {"確定ep":>8s}  {"最終順位":24s} 最終値')
+    print('-' * 100)
+    warned = False
     for runs, labels, name in cohorts:
         try:
-            ep, order, vals, last = settle_epoch(runs, labels)
-            ep_s = str(ep) if ep is not None else '未確定'
-            print(f'{name:36s} {ep_s:>7s}  {order:24s} {vals}  (ep{last}まで)')
+            ep, order, vals, last, first, truncated = settle_epoch(runs, labels)
+            if ep is None:
+                ep_s = '未確定'
+            elif truncated:
+                ep_s = f'≤{ep}'       # 観測開始点で既に確定済み＝上界しか言えない
+                warned = True
+            else:
+                ep_s = str(ep)
+            rng = f'(ep{first}〜{last})' if first > 0 else f'(ep{last}まで)'
+            print(f'{name:36s} {ep_s:>8s}  {order:24s} {vals}  {rng}')
         except (FileNotFoundError, ValueError) as e:
-            print(f'{name:36s} {"SKIP":>7s}  {type(e).__name__}: {e}')
+            print(f'{name:36s} {"SKIP":>8s}  {type(e).__name__}: {e}')
+    if warned:
+        print('\n⚠️ 「≤N」は観測開始 epoch で既に最終順位だったことを示す（それ以前は'
+              'ログが無く確認できない）。確定点の上界としてのみ読むこと。')
 
 
 if __name__ == '__main__':
