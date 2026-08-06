@@ -259,9 +259,14 @@ def main():
     if a.only in (None, 'D'):
         h = check_D(runs)
         total += len(h)
-        print(f'【D】checkpoint があるのに台帳に無い run: {len(h)} 件')
+        # 未完走の run が台帳に無いのは正常（完走してから記録する運用）。
+        # 報告はするが「要対応」は完走済みのものだけに絞る
+        need = [x for x in h if x[2]]
+        print(f'【D】checkpoint があるのに台帳に無い run: {len(h)} 件'
+              f'（うち**完走済み＝要対応** {len(need)} 件）')
         for n, ep, done in h:
-            print(f'    {n}  (ep{ep}, {"完走" if done else "未完走"})')
+            mark = '❗要対応' if done else '  稼働中/未完走（完走後に記録すればよい）'
+            print(f'    {n}  (ep{ep}) {mark}')
         if not h and not a.quiet:
             print('    ✅ なし')
         print()
