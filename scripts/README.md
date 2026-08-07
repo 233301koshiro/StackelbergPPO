@@ -101,6 +101,7 @@
 | `monitor_training.py` | 学習監視（現在は使っていない） |
 | `plot_pj_comparison.py` | PJ実験の比較図 |
 | `build_thesis_pdf.py` | **修論 PDF ビルド**（`docs/研究応用/修論ドラフト/` の全 md → xelatex で1冊に）。下記の注意を読んでから使う |
+| `make_thesis_figures.py` | **修論の図を一次データから生成**（`figures/*.png`）。学習曲線は `log/log_train.txt` から読む。図の数値は手で直さず、原本を確認してこれを再実行する |
 | `eval_morphology.py` | 形態評価（docs・コードのどちらからも参照なし。`compare_morphology.py` に役割が吸収されたとみられる） |
 
 ---
