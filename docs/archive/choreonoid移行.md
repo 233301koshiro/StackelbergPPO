@@ -395,7 +395,7 @@ Simulation by AISTSimulator has started.
 
 ### ボディ名の命名規則
 
-ログに出る `bodies=['0', '1', '11', '12', '111', ...]` はロボットのツリー構造をエンコードしたもの（[xml_robot.py の `reindex()` メソッド](../khrylib/robot/xml_robot.py)）。
+ログに出る `bodies=['0', '1', '11', '12', '111', ...]` はロボットのツリー構造をエンコードしたもの（[xml_robot.py の `reindex()` メソッド](../../khrylib/robot/xml_robot.py)）。
 
 ```
 ルール: 子の名前 = str(自分が親の何番目の子か) + 親の名前（ルートは '0' で除く）

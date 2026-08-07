@@ -25,6 +25,8 @@
 | `mesh_to_params.py` | M4: OBB からリンク長・カプセル半径を抽出 → topology.json |
 | `topology_to_xml.py` | M5: topology.json → MuJoCo 互換 XML |
 | `run_2axis_mvp.sh` | rrbot 用の一気通貫（topology.json → XML/body → 学習） |
+| `eval_pipeline_robustness.py` | **M3 の頑健性評価**（第4章 4.2.2 = 軸1）。色ドリフトに対する許容幅を tolerance 掃引で測る。表 4.4・4.5 と 図 4.1 の出典 |
+| `make_scaled_arm.py` | 既存アーム XML の**リンク長だけ**を倍率スケールした XML を作る。診断の助言（「N 倍に伸ばせ」）を機械的に適用するのに使う（第4章 4.4.1） |
 | `check_mesh_interference.py` | 静止姿勢の凸包による自己干渉チェック（v2系のみ） |
 | `save_morphology_urdf.py` | 収束形態を URDF として書き出す |
 
@@ -73,7 +75,7 @@
 
 `launch_pj_experiment.sh` `launch_pj_tripo_experiment.sh` `launch_M_ablation.sh`
 `launch_curriculum_transfer.sh` `launch_next3_20260803.sh` `launch_nsteps_ns1.sh`
-`launch_pjp_1000.sh` `launch_pj_1000.sh`
+`launch_pjp_1000.sh` `launch_pj_1000.sh` `launch_pj_dist.sh` `launch_recourse.sh`
 `auto_launch_next_transfer.sh` `auto_launch_queue2.sh` `auto_launch_v2b_reach.sh`
 `auto_launch_pj_pusher_matrix.sh` `auto_launch_queue_20260804.sh`
 `resume_after_reboot_20260731.sh`（**再開手順の参考としては今も有用**）
@@ -83,6 +85,7 @@
 | スクリプト | 状態 |
 |---|---|
 | `experiment_queue.sh` | ✅ **現行。** 完走マーカーで判定する版（Bug 19 対応済み） |
+| `weekend_queue.sh` | ✅ **現行（2026-08-07 追加）。** 空きメモリを見て軸3 の補強実験を順に投入する無人運転用。メモリ・ディスクの下限と投入期限を持つ |
 | `ns1_scheduler.sh` | ❌ 廃止。`experiment_queue.sh` に統合済み |
 | `tp2_scheduler.sh` / `weekend_scheduler.sh` / `restart_ready_watcher.sh` / `m_s2_watcher.sh` | ❌ 役目を終えた |
 
