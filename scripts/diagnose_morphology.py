@@ -22,6 +22,7 @@ diagnose_morphology.py: スケッチ由来の形態が、指定タスクに対�
     /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/diagnose_morphology.py
 """
 import argparse
+import math
 import os
 import re
 import sys
@@ -115,6 +116,23 @@ def max_reach_after_design(lengths):
     return sum(float(np.hypot(l + OFFSET_HALF, OFFSET_HALF)) for l in lengths)
 
 
+def scale_advice(need):
+    """必要倍率から「下限」と「推奨」を返す。
+
+    Bug 22: 以前は `f'{need:.2f}'` で表示していたため**四捨五入で切り捨てられ**、
+    助言どおりに直しても届かない形態が出た（必要 1.9846 倍 → 表示「1.98 倍以上」
+    → 実際は 2 mm 足りず、同じ診断が再び却下した）。倍率は必ず**切り上げる**。
+
+    加えて下限ちょうどでは、腕を伸ばしきった特異姿勢でしか目標に触れられない。
+    Reach のように目標で止まることを要求するタスクでは実質的に達成できないので、
+    10% の余裕を持たせた値を推奨値として併記する（既存の適合形態 pj_mid が
+    余裕 10% であることに合わせた）。
+    """
+    lo = math.ceil(need * 100) / 100
+    rec = math.ceil(need * 1.10 * 100) / 100
+    return lo, rec
+
+
 def layer1(geo, task, target, length_frozen=True):
     """第1層: 幾何だけで即答できる不適合。(所見リスト, 致命的か) を返す。"""
     findings = []
@@ -150,7 +168,9 @@ def layer1(geo, task, target, length_frozen=True):
             need = d / r_max
             findings.append(('fatal',
                 f'**腕が短すぎて目標に届きません**（届く範囲は {r_max:.3f} m まで、目標は {d:.3f} m 先）。\n'
-                f'      → 腕全体を **{need:.2f} 倍以上**に伸ばしてください。'))
+                f'      → 腕全体を **{scale_advice(need)[1]:.2f} 倍**に伸ばしてください。\n'
+                f'      　（{scale_advice(need)[0]:.2f} 倍で計算上は届きますが、'
+                f'腕を伸ばしきった姿勢でしか触れられないため余裕を含めた値を示しています）'))
         elif d < r_min:
             fatal = True
             findings.append(('fatal',
@@ -186,7 +206,9 @@ def layer1(geo, task, target, length_frozen=True):
                 fatal = True
                 findings.append(('fatal',
                     f'**腕が短すぎて対象に触れません**（届く範囲 {r_max:.3f} m、対象は {near:.3f} m 先）。\n'
-                    f'      → 腕全体を **{near/r_max:.2f} 倍以上**に伸ばしてください。'))
+                    f'      → 腕全体を **{scale_advice(near / r_max)[1]:.2f} 倍**に伸ばしてください。\n'
+                    f'      　（{scale_advice(near / r_max)[0]:.2f} 倍で計算上は届きますが、'
+                    f'腕を伸ばしきった姿勢でしか触れられないため余裕を含めた値を示しています）'))
             elif r_max > near + 2 * half:
                 findings.append(('warn',
                     f'静止状態で腕の先端が対象にめり込む可能性があります'
