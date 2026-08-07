@@ -45,11 +45,26 @@ def extract(run_dir, label):
     agent.sample(500, mean_action=True)
     meta = pickle.load(open(f'{run_dir}/models/{ck}.p', 'rb'))
     env = agent.env
+    # ⚠️ design_cur_params の要素はスカラとは限らない（bone_offset のように多成分の
+    # パラメータが 1 要素として入る）。素朴に float() すると
+    # 「TypeError: only 0-dimensional arrays can be converted to Python scalars」で落ちる
+    # （2026-08-07 に実際に失敗し、境界比較が実行できていなかった）。
+    # 成分ごとに展開し、名前にも添字を付けて対応を保つ。
+    names, vals = [], []
+    for nm, v in zip(env.design_param_names, env.design_cur_params):
+        a = np.asarray(v, dtype=float).ravel()
+        if a.size == 1:
+            names.append(str(nm)); vals.append(float(a[0]))
+        else:
+            for k, x in enumerate(a):
+                names.append(f'{nm}[{k}]'); vals.append(float(x))
+
+    br = np.asarray(meta['best_rewards'], dtype=float).ravel()
     return {
         'label': label, 'ckpt_used': ck, 'epoch': meta['epoch'],
-        'best': float(meta['best_rewards']),
-        'names': list(env.design_param_names),
-        'vals': [float(v) for v in env.design_cur_params],
+        'best': float(br[0]) if br.size else float('nan'),
+        'names': names,
+        'vals': vals,
     }
 
 
