@@ -269,10 +269,52 @@ def fig_task_separation():
     return 'task_separation.png'
 
 
+
+# ── 図5: 関節検出の色ドリフト許容幅（4.2.2 = 軸1） ──────────────────────────
+def fig_marker_tolerance():
+    """`eval_pipeline_robustness.py` の実測値をそのまま図にする。
+    値を変えるときはスクリプトを走らせ直して両方を直すこと（表 4.4・4.5 と対）。"""
+    tols = [40, 60, 70, 80, 90, 100, 120]
+    # None = 検出失敗
+    arm3 = [None, None, None, 12.8, 0.4, 0.3, 0.3]
+    grip = [None, None, 9.8, 4.5, 1.5, 0.6, 0.2]
+
+    fig, ax = plt.subplots(figsize=(7.8, 4.2))
+    # 検出できない領域
+    ax.axvspan(35, 65, color='#f8d7da', alpha=0.55, zorder=1)
+    ax.text(50, 7.5, '両メッシュとも\n検出失敗', ha='center', va='center',
+            fontsize=11, color='#8b2a33')
+    ax.axhline(2.0, color='#888', ls='--', lw=1.2, zorder=2)
+    ax.text(121, 2.25, '誤差 2 mm', fontsize=10, color='#555', ha='right')
+
+    for vals, lab, c, m in [(arm3, '3 関節アーム', C_MID, 'o'),
+                            (grip, 'グリッパ付きアーム', C_LONG, 's')]:
+        xs = [t for t, v in zip(tols, vals) if v is not None]
+        ys = [v for v in vals if v is not None]
+        ax.plot(xs, ys, '-', color=c, lw=2.2, marker=m, ms=8, label=lab, zorder=4)
+        # 検出失敗した点を × で軸下に置く
+        fx = [t for t, v in zip(tols, vals) if v is None]
+        ax.plot(fx, [-0.9] * len(fx), 'x', color=c, ms=10, mew=2.4, zorder=4)
+
+    ax.plot([], [], 'x', color='#555', ms=10, mew=2.4, label='検出失敗')
+    ax.axvline(40, color='#c0392b', lw=1.6, ls=':', zorder=3)
+    ax.text(40, 13.9, '既定値 40', fontsize=10.5, color='#c0392b', ha='center', va='top')
+    ax.set_xlabel('色検出の許容閾値 tolerance（公称マーカー色からの距離）')
+    ax.set_ylabel('関節位置の誤差 [mm]')
+    ax.set_xlim(35, 125)
+    ax.set_ylim(-2.0, 14.5)
+    ax.legend(loc='upper right', fontsize=10.5, framealpha=0.95)
+    ax.set_title('固定した基準色では、検出の成立と位置精度を両立できない', fontsize=12.5, pad=9)
+    fig.savefig(os.path.join(OUT, 'marker_tolerance.png'))
+    plt.close(fig)
+    return 'marker_tolerance.png'
+
+
 FIGS = {'matrix': fig_matrix_reversal,
         'transfer': fig_transfer_decomposition,
         'diagnosis': fig_diagnosis_validation,
-        'separation': fig_task_separation}
+        'separation': fig_task_separation,
+        'tolerance': fig_marker_tolerance}
 
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
