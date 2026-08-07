@@ -16,16 +16,25 @@ BUILD_DIR = ROOT / 'build_pdf'
 
 # 章の読み込み順: (ファイル名, unnumbered)
 # unnumbered=True → \chapter* (LaTeX の章カウンタを進めない)
+# (ファイル名, unnumbered, opts)
+#   opts['title'] : 章タイトルを差し替える（md の H1 を使わない）
+#   opts['merge'] : True なら**章を起こさず前の章の続き**として出力する（H1 を落とす）
+#
+# ⚠️ 第3章の構成（2026-08-06 決定、案A）: 前提と提案手法は**1つの第3章**で、
+#    前提が 3.1〜3.4、提案手法が 3.5〜3.13 を占める。
+#    本スクリプトは md の節番号を捨てて LaTeX に振り直させる（strip_heading_number）ため、
+#    2ファイルを別章にすると提案手法の節が 3.1 から振り直され、
+#    本文中の「3.12 節」等の参照が全部ずれる。そこで merge で連結する。
 CHAPTER_ORDER = [
-    ('要旨.md',              True),   # \chapter* → カウンタ進めない
-    ('第1章_序論.md',        False),  # Chapter 1
-    ('第2章_関連研究.md',    False),  # Chapter 2
-    ('第3章前段_前提.md',    True),   # \chapter* (前提章) → カウンタ進めない
-    ('第3章_提案手法.md',    False),  # Chapter 3
-    ('第4章_実験および評価.md', False), # Chapter 4
-    ('第5章_考察.md',        False),  # Chapter 5
-    ('第6章_結論.md',        False),  # Chapter 6
-    ('付録A_プロンプト全文.md', True),  # Appendix A → \chapter*
+    ('要旨.md',                 True,  {}),
+    ('第1章_序論.md',           False, {}),
+    ('第2章_関連研究.md',       False, {}),
+    ('第3章前段_前提.md',       False, {'title': '提案手法: スケッチ起点の形態検証パイプライン'}),
+    ('第3章_提案手法.md',       False, {'merge': True}),
+    ('第4章_実験および評価.md', False, {}),
+    ('第5章_考察.md',           False, {}),
+    ('第6章_結論.md',           False, {}),
+    ('付録A_プロンプト全文.md', True,  {}),
 ]
 
 # ── Markdown → LaTeX 変換 ─────────────────────────────────────────────────────
@@ -82,7 +91,8 @@ def strip_heading_number(title: str) -> str:
     title = re.sub(r'^第\d+章(?:前段)?\s+', '', title)
     return title
 
-def md_to_latex_body(md_text: str, unnumbered: bool = False) -> str:
+def md_to_latex_body(md_text: str, unnumbered: bool = False,
+                     merge: bool = False, title_override: str = None) -> str:
     r"""
     unnumbered=True のとき、すべての見出しを starred コマンド（\chapter*）にし、
     LaTeX の章カウンタに影響を与えない。章タイトル（レベル1）のみ TOC に追加する。
@@ -124,6 +134,11 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False) -> str:
             level = len(h_match.group(1))
             raw_title = md_inline(h_match.group(2))
             title = strip_heading_number(raw_title)
+            if level == 1 and merge:
+                i += 1          # 前の章の続きなので章見出しを起こさない
+                continue
+            if level == 1 and title_override:
+                title = title_override
             if unnumbered:
                 cmds = {1: 'chapter*', 2: 'section*', 3: 'subsection*', 4: 'subsubsection*'}
                 out.append(f'\\{cmds.get(level, "paragraph*")}{{{title}}}')
@@ -287,7 +302,7 @@ def main():
     tex_file = BUILD_DIR / 'thesis.tex'
 
     body_parts = []
-    for fname, unnumbered in CHAPTER_ORDER:
+    for fname, unnumbered, opts in CHAPTER_ORDER:
         md_path = DRAFT_DIR / fname
         if not md_path.exists():
             print(f'[skip] {fname} not found')
@@ -296,7 +311,9 @@ def main():
         md_text = md_path.read_text()
         # 執筆メモセクションは除外
         md_text = re.sub(r'## 執筆メモ（本文には含めない）.*', '', md_text, flags=re.DOTALL)
-        latex_body = md_to_latex_body(md_text, unnumbered=unnumbered)
+        latex_body = md_to_latex_body(md_text, unnumbered=unnumbered,
+                                      merge=opts.get('merge', False),
+                                      title_override=opts.get('title'))
         body_parts.append(latex_body)
 
     full_body = '\n\n'.join(body_parts)
