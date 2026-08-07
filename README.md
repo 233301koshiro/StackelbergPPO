@@ -4,7 +4,7 @@
 
 **元論文**: "Efficient Morphology-Control Co-Design via Stackelberg Proximal Policy Optimization"  
 Yanning Dai*, Yuhui Wang*, Dylan R. Ashley, Jürgen Schmidhuber — ICLR 2026  
-[論文](https://openreview.net/pdf?id=sJ0vOOkclw) | [元リポジトリ](https://github.com/YanningDai/StackelbergPPO.git) | [プロジェクトページ](https://yanningdai.github.io/stackelberg-ppo-co-design/)
+[論文(OpenReview)](https://openreview.net/pdf?id=sJ0vOOkclw) | [論文(arXiv, 全文取得可)](https://arxiv.org/abs/2603.15388) | [元リポジトリ](https://github.com/YanningDai/StackelbergPPO.git) | [プロジェクトページ](https://yanningdai.github.io/stackelberg-ppo-co-design/)
 
 <img src="static/m.png" alt="description">
 
