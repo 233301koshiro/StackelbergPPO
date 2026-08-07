@@ -184,7 +184,10 @@ def check_B(runs):
             info = runs[name]
             # **「best」の直後にある数値だけ**を対象にする。同じ行にはピーク速度・倍率・
             # リンク長・理論上限が混在しており、行単位で拾うと誤検出が支配的になる（実測13件中0件が真）
-            for bm in re.finditer(r'best[^0-9\-−]{0,12}((-|−)?\d{1,4}\.\d{1,2})', line):
+            # 末尾の (?![\d.]) は**節番号を弾く**ためにある。2026-08-07 の第4章再編で
+            # 4.3.3.3 のような4階層の節番号が全MDに現れるようになり、
+            # 「best を比較 → 4.3.3.3」を best 値 4.3 と誤検出した。
+            for bm in re.finditer(r'best[^0-9\-−]{0,12}((-|−)?\d{1,4}\.\d{1,2})(?![\d.])', line):
                 x = float(bm.group(1).replace('−', '-'))
                 if close_enough(x, info['values']):
                     continue
@@ -196,7 +199,7 @@ def check_B(runs):
                 # 実測では `best)** | 総リーチ 0.905` や `I1 の final 202.7〜best 238.7` の形が多く、
                 # 「best」との距離だけでは別の量を拾ってしまう
                 head = line[max(0, bm.start(1) - 14):bm.start(1)]
-                if re.search(r'総リーチ|リーチ|長さ|final|転用元|上限|下限|誤差|速度', head):
+                if re.search(r'総リーチ|リーチ|長さ|final|転用元|上限|下限|誤差|速度|節|章', head):
                     continue
                 # 「202.7〜best 238.7」のような**範囲表記**の後半は、単一 run の best ではなく
                 # 別 run の値域を述べている（実測: デバッグ戦記の転用元 I1 の記述）
