@@ -100,8 +100,42 @@
 | `cnoid_transfer.py` | 転用まわりの補助 |
 | `monitor_training.py` | 学習監視（現在は使っていない） |
 | `plot_pj_comparison.py` | PJ実験の比較図 |
-| `build_thesis_pdf.py` | 修論 PDF ビルド（未整備） |
+| `build_thesis_pdf.py` | **修論 PDF ビルド**（`docs/研究応用/修論ドラフト/` の全 md → xelatex で1冊に）。下記の注意を読んでから使う |
 | `eval_morphology.py` | 形態評価（docs・コードのどちらからも参照なし。`compare_morphology.py` に役割が吸収されたとみられる） |
+
+---
+
+## build_thesis_pdf.py の注意（節番号の罠）
+
+```bash
+python3 scripts/build_thesis_pdf.py --out docs/修論ドラフト_YYYYMMDD.pdf
+```
+
+⚠️ **本スクリプトは md の節番号を捨て、LaTeX に振り直させる**（`strip_heading_number`）。
+つまり **PDF の節番号は「章の中で何番目の `##` か」で決まり、md に書いた番号とは無関係**。
+
+そのため **md 側で節を増減・移動したら、`CHAPTER_ORDER` の構成が正しいか必ず確認する**。
+ずれると本文中の「3.12 節」のような参照が全部無効になる（2026-08-07 に実際に踏みかけた）。
+
+`CHAPTER_ORDER` は `(ファイル名, unnumbered, opts)` の3要素:
+
+| opts | 意味 |
+|---|---|
+| `{'merge': True}` | **章を起こさず前の章の続き**として出力（H1 を落とす） |
+| `{'title': '...'}` | 章タイトルを md の H1 ではなくこれにする |
+
+**第3章はこの merge を使っている。** 前提（`第3章前段_前提.md`）と提案手法（`第3章_提案手法.md`）は
+案A（2026-08-06 決定）により**1つの第3章**で、前提が 3.1〜3.4、提案手法が 3.5〜3.13 を占める。
+2ファイルを別章にすると提案手法の節が 3.1 から振り直されて壊れる。
+
+**ビルド後の検証手順**:
+
+```bash
+pdftotext -f 1 -l 5 docs/修論ドラフト_YYYYMMDD.pdf - | grep -E "^\s*3\.[0-9]+"
+```
+
+で目次を出し、**md の節番号と一致するか**を見る。とくに他章から参照されている節
+（`grep -rn "3\.12" docs/`）が合っているかを確認する。
 
 ---
 
