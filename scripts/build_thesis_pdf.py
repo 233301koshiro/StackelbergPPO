@@ -122,11 +122,19 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
 
         # 図: `![キャプション](figures/xxx.png)` を figure 環境にする。
         # 幅は `{width=0.7}` を alt 末尾に付けて指定できる（既定 0.92）。
-        img = re.match(r'^!\[(.*?)\]\((figures/[^)]+)\)\s*$', line.strip())
+        img = re.match(r'^!\[(.*?)\]\((figures/[^)]+)\)\s*(\{width=[\d.]+\})?\s*$',
+                       line.strip())
+        if not img and line.strip().startswith('!['):
+            # 図の行に見えるのにパースできないものを**黙って捨てない**。
+            # 実際に `{width=1.0}` を閉じ括弧の外に書いた図が1点、
+            # 警告も出ずに PDF から欠落した（2026-08-07）。
+            print(f'[warn] 図の行を解釈できない（PDF に出ません）: {line.strip()[:70]}')
         if img:
             cap, rel = img.group(1), img.group(2)
+            # `{width=}` は alt 内・閉じ括弧の外のどちらに書いてもよい
             wm = re.search(r'\{width=([\d.]+)\}\s*$', cap)
-            width = float(wm.group(1)) if wm else 0.92
+            width = float(wm.group(1)) if wm else (
+                float(img.group(3)[7:-1]) if img.group(3) else 0.92)
             if wm:
                 cap = cap[:wm.start()].strip()
             path = (ROOT / rel).resolve()
