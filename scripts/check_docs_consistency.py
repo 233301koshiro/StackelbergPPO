@@ -187,13 +187,14 @@ def check_B(runs):
             # 末尾の (?![\d.]) は**節番号を弾く**ためにある。2026-08-07 の第4章再編で
             # 4.3.3.3 のような4階層の節番号が全MDに現れるようになり、
             # 「best を比較 → 4.3.3.3」を best 値 4.3 と誤検出した。
-            for bm in re.finditer(r'best[^0-9\-−]{0,12}((-|−)?\d{1,4}\.\d{1,2})(?![\d.])', line):
+            for bm in re.finditer(r'best[^0-9\-−]{0,24}((-|−)?\d{1,4}\.\d{1,2})(?![\d.])', line):
                 x = float(bm.group(1).replace('−', '-'))
                 if close_enough(x, info['values']):
                     continue
                 # 直後に単位が続くものはスコアではない（総リーチ m・速度 m/s・倍率・％）
                 tail = line[bm.end():bm.end() + 6]
-                if re.match(r'\s*(m/s|m|倍|%|％)', tail):
+                # 「4.3 節」「5.6 章」のような参照は値ではない（節番号は手前だけでなく後ろにも来る）
+                if re.match(r'\s*(m/s|m|倍|%|％|節|章|項)', tail):
                     continue
                 # 数値の**手前**に別の量を示す語がある場合も除外する。
                 # 実測では `best)** | 総リーチ 0.905` や `I1 の final 202.7〜best 238.7` の形が多く、
