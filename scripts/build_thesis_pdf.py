@@ -251,7 +251,7 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
 # ── 図の挿入処理 ─────────────────────────────────────────────────────────────
 
 # 図の挿入は md 側の `![キャプション](figures/xxx.png)` で行う（2026-08-07）。
-# 以前は 4.4.3 の PJ 学習曲線だけを LaTeX 本文へ後付けする関数があったが、
+# 以前は 4.3.3.1 の PJ 学習曲線だけを LaTeX 本文へ後付けする関数があったが、
 # 図を増やすたびに関数を書き足す方式では追随できないため廃止した。
 
 
@@ -266,6 +266,10 @@ PREAMBLE = r"""
 \setCJKmonofont{Noto Sans Mono CJK JP}
 \setmainfont{TeX Gyre Termes}
 \usepackage[margin=25mm]{geometry}
+% 第4章は 4.3.2.1 のような4階層目まで使う（軸2 の要求仕様ごとの入れ子）。
+% report 既定は secnumdepth=2 で subsubsection が無番号・目次にも出ないため引き上げる。
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{longtable}

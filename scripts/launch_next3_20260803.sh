@@ -3,7 +3,7 @@
 # 3並列を超えないこと（実験系譜.md の運用ルール）。
 #
 #  ① tripo_arm_v3_pusher : 縦型4関節（非平面）の Pusher 本走。第6章6.5-1「一般性の拡張」
-#  ② tripo_pj_long_s2    : PJ実験(4.4.4)の seed=1。1シードのみという限界を埋める
+#  ② tripo_pj_long_s2    : PJ実験(4.3.3.2)の seed=1。1シードのみという限界を埋める
 #  ③ tripo_pj_mid        : 1.1倍スケール(0.887m)。到達可能な形態同士の判別解像度を測る
 #                          （第6章6.5-2「優劣が微妙な形態同士は未検証」への回答）
 set -u
@@ -11,7 +11,7 @@ cd /userdir/StackelbergPPO
 LOG=single_run/launch_next3_20260803.log
 say() { echo "[$(date '+%F %T')] $*" | tee -a "$LOG"; }
 
-# PJ実験共通（4.4.3/4.4.4 と同一設定。リンク長のみ凍結（gear・size・ext_start は可変））
+# PJ実験共通（4.3.3.1/4.3.3.2 と同一設定。リンク長のみ凍結（gear・size・ext_start は可変））
 REACH="+reward_specs.use_reach=true +reward_specs.target_x=0.8 \
 +reward_specs.target_y=0.0 +reward_specs.target_z=0.15 \
 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false"
