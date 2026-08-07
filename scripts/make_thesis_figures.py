@@ -69,7 +69,7 @@ def running_best(y):
     return np.maximum.accumulate(y)
 
 
-# ── 図1: マトリクス判定の順位反転（4.4.5） ──────────────────────────────────
+# ── 図1: マトリクス判定の順位反転（4.3.3.3） ──────────────────────────────────
 def fig_matrix_reversal():
     labels = ['短腕 0.403 m', '中間 0.887 m', '長腕 1.451 m']
     cols = [C_SHORT, C_MID, C_LONG]
@@ -129,7 +129,7 @@ def fig_matrix_reversal():
     return 'matrix_reversal.png'
 
 
-# ── 図2: 転用成分の分解（4.4.1） ────────────────────────────────────────────
+# ── 図2: 転用成分の分解（4.3.4.1） ────────────────────────────────────────────
 def fig_transfer_decomposition():
     spec = [('rrbot_arm_pusher_H1',    '転用元 H1',            '#7f8c8d', '--'),
             ('rrbot_arm_pusher_K1_v2', 'K1: 制御方策のみ転用', '#c0392b', '-'),
@@ -218,7 +218,7 @@ def fig_diagnosis_validation():
     return 'diagnosis_validation.png'
 
 
-# ── 図4: タスク別の収束形態の分離（4.3） ───────────────────────────────────
+# ── 図4: タスク別の収束形態の分離（4.3.2） ───────────────────────────────────
 def fig_task_separation():
     # ②台帳（第4章 表4.5）の確定値。morph dump 由来で①原本には無いため転記。
     # 値を直すときは第4章 表4.5 と 形態比較.md を同時に直すこと。

@@ -37,7 +37,7 @@
 | スクリプト | 役割 |
 |---|---|
 | `diagnose_morphology.py` | **形態診断 M7**（第3章 3.12）。第1層は学習不要・約1秒・Choreonoid 不要 |
-| `rank_settle.py` | **判定所要エポックの較正**（第4章 4.4.2）。学習不要、log_train.txt を読むだけ |
+| `rank_settle.py` | **判定所要エポックの較正**（第4章 4.3.4.2）。学習不要、log_train.txt を読むだけ |
 | `audit_runs.sh` | 全 run の一次データ表。**md より先にこれを見る** |
 | `check_docs_consistency.py` | **docs とログの突き合わせ。** 古い状態語・数値の食い違い・記録漏れを検出。値を更新したら必ず走らせる |
 | `compare_morphology.py` | 複数 run の収束形態を並べて比較 |
@@ -60,7 +60,7 @@
 | `probe_k1_trajectory.py` | K1 の形態推移（転用が効かない理由） | 第5章 5.3 |
 | `probe_reach_convergence.py` | Reach の収束速度仮説 | 実験系譜 9-3（**反証された**） |
 | `probe_reach_trajectory.py` / `probe_reach_multi_episode.py` | Reach の到達・保持挙動 | 第5章 5.1.2 |
-| `probe_L0_intervention.py` | 運動学的に不活性な L0 の介入実験 | 第4章 4.4.6 |
+| `probe_L0_intervention.py` | 運動学的に不活性な L0 の介入実験 | 第4章 4.3.6 |
 | `probe_v3_contact_check.py` | v3 の初期接触判定（Bug 16 関連） | デバッグ戦記 Bug 16 |
 | `probe_joint_axes.py` | 関節軸の平面性 | — |
 | `collect_m_ablation_results.py` | M系 ablation の集計 | 第5章 5.4 |

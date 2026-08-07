@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""判定所要学習量の較正（第4章 4.4.2）— 順位が最終順位に固定される最小 epoch を測る。
+"""判定所要学習量の較正（第4章 4.3.4.2）— 順位が最終順位に固定される最小 epoch を測る。
 
 判定に使う代表値は「そのエポックまでの best exec_R_eps」（= running best）である。
 第4章 4.1.3 が各 run の代表値を best checkpoint と定めているため、判定を epoch E で
@@ -81,7 +81,7 @@ def settle_epoch(runs, labels):
     return settled, order, [round(v, 2) for v in final_vals], epochs[-1], epochs[0], truncated
 
 
-# (runs, labels, コホート名) — 較正の根拠として第4章 4.4.2 が参照する
+# (runs, labels, コホート名) — 較正の根拠として第4章 4.3.4.2 が参照する
 COHORTS = [
     # A: 同一条件・別シード対（差は乱数のみ＝最も判別が難しい＝上界）
     (['rrbot_arm_pusher_L2', 'rrbot_arm_pusher_L2_s2'], ['L2', 'L2_s2'],
