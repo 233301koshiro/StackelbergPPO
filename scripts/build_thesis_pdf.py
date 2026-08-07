@@ -120,6 +120,34 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             i += 1
             continue
 
+        # 図: `![キャプション](figures/xxx.png)` を figure 環境にする。
+        # 幅は `{width=0.7}` を alt 末尾に付けて指定できる（既定 0.92）。
+        img = re.match(r'^!\[(.*?)\]\((figures/[^)]+)\)\s*$', line.strip())
+        if img:
+            cap, rel = img.group(1), img.group(2)
+            wm = re.search(r'\{width=([\d.]+)\}\s*$', cap)
+            width = float(wm.group(1)) if wm else 0.92
+            if wm:
+                cap = cap[:wm.start()].strip()
+            path = (ROOT / rel).resolve()
+            if not path.exists():
+                print(f'[warn] 図が見つからない: {rel}')
+                i += 1
+                continue
+            # 本ドラフトは図表番号を**本文側で手動管理**している（表と同じ流儀）。
+            # \caption を使うと LaTeX が別途採番して本文の「図 4.2」とずれるので、
+            # 番号込みのキャプションを小さめの地の文として自分で置く。
+            out.append(r'\begin{figure}[htbp]')
+            out.append(r'\centering')
+            out.append(rf'\includegraphics[width={width}\textwidth]{{{path}}}')
+            if cap:
+                out.append(r'\\[2mm]')
+                out.append(r'\begin{minipage}{0.92\textwidth}{\small '
+                           + md_inline(cap) + r'}\end{minipage}')
+            out.append(r'\end{figure}')
+            i += 1
+            continue
+
         # ドラフト管理メモ / blockquote → 薄いグレー
         if line.startswith('>'):
             content = line.lstrip('> ').strip()
@@ -222,35 +250,10 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
 
 # ── 図の挿入処理 ─────────────────────────────────────────────────────────────
 
-def insert_figures(latex_body: str) -> str:
-    """PJ 学習曲線図を 4.4.3 節の後に挿入"""
-    fig_path = FIGURES_DIR / 'pj_learning_curve.png'
-    if not fig_path.exists():
-        return latex_body
+# 図の挿入は md 側の `![キャプション](figures/xxx.png)` で行う（2026-08-07）。
+# 以前は 4.4.3 の PJ 学習曲線だけを LaTeX 本文へ後付けする関数があったが、
+# 図を増やすたびに関数を書き足す方式では追随できないため廃止した。
 
-    fig_block = textwrap.dedent(r"""
-    \begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.92\textwidth]{""" + str(fig_path.resolve()) + r"""}
-    \caption{前向き判定テスト（PJ 実験）の学習曲線（200 エポック完走）。
-    横軸: エポック数、縦軸: エピソード報酬 exec\_R\_eps。
-    短腕（赤）は ep10 以降 $-250$ 付近に頭打ちし、幾何学的到達不可能性（目標 x=0.8\,m に対しリーチ 0.55\,m）
-    を反映する。長腕（青）は ep10 で $-48$ まで急上昇し、最終 ep199 で $-8.5$ に収束する。
-    順位は ep0 から一貫して長腕 $>$ 短腕であり、217 ポイント差（ep10 時点）以降逆転しない。
-    参照ライン（緑破線）は Reach co-design の完走結果（L1）。}
-    \label{fig:pj_learning_curve}
-    \end{figure}
-    """)
-
-    marker = r'\subsection{前向き判定テスト（PJ 実験）}'
-    if marker in latex_body:
-        idx = latex_body.find(marker)
-        ec_idx = latex_body.find(r'\end{center}', idx)
-        if ec_idx != -1:
-            latex_body = (latex_body[:ec_idx + len(r'\end{center}')]
-                          + '\n' + fig_block
-                          + latex_body[ec_idx + len(r'\end{center}'):])
-    return latex_body
 
 # ── LaTeX テンプレート ────────────────────────────────────────────────────────
 
@@ -323,7 +326,6 @@ def main():
         body_parts.append(latex_body)
 
     full_body = '\n\n'.join(body_parts)
-    full_body = insert_figures(full_body)
 
     build_date_ja = f'{today[:4]}年{int(today[4:6])}月{int(today[6:8])}日'
     tex_content = (PREAMBLE + full_body + POSTAMBLE).replace('__BUILD_DATE__', build_date_ja)
