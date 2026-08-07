@@ -4,7 +4,11 @@
       "Bash(awk *)",
       "Bash(bash scripts/audit_runs.sh *)",
       "Bash(bash /userdir/StackelbergPPO/scripts/audit_runs.sh *)",
-      "Bash(nvidia-smi *)"
+      "Bash(nvidia-smi *)",
+      "Bash(git add *)",
+      "Bash(break)",
+      "Bash(sed -n '/診断レポート:/,$p' single_run/diag_validation/tripo_pjp_long.txt)",
+      "Bash(grep -vE \"^\\\\s*$\")"
     ]
   }
 }
