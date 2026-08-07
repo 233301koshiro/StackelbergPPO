@@ -311,6 +311,12 @@ def main():
         md_text = md_path.read_text()
         # 執筆メモセクションは除外
         md_text = re.sub(r'## 執筆メモ（本文には含めない）.*', '', md_text, flags=re.DOTALL)
+        # ドラフト管理の blockquote も除外（2026-08-07）。
+        # 版歴・節番号の繰り下げ履歴・ビルドスクリプトのパス・「案A」といった
+        # **執筆者向けの内部メモが全章の冒頭に印字されていた**（実測11箇所）。
+        # md には残す（作業に要る）が、配布物である PDF からは落とす。
+        md_text = re.sub(r'^> \*\*ドラフト管理\*\*.*?(?=\n(?!>)|\Z)', '',
+                         md_text, flags=re.DOTALL | re.M)
         latex_body = md_to_latex_body(md_text, unnumbered=unnumbered,
                                       merge=opts.get('merge', False),
                                       title_override=opts.get('title'))
