@@ -63,17 +63,22 @@ def parse_arm_xml(xml_path):
 
     base_pos = np.array([float(x) for x in arm_root.get('pos', '0 0 0').split()])
 
-    lengths, radii, axes = [], [], []
+    lengths, radii, axes, offsets, dirs = [], [], [], [], []
     node = arm_root
     while True:
         child = node.find('body')
         if child is None:
             break
+        # ⚠️ Bug 23: リンクの見た目の長さ（geom fromto）と、関節の取り付け位置（body pos）は
+        # 別物である。運動学が決まるのは後者なので、両方を読んで突き合わせる。
+        offsets.append(float(np.linalg.norm(
+            np.array([float(x) for x in child.get('pos', '0 0 0').split()]))))
         g = child.find('geom')
         if g is not None and g.get('type') == 'capsule':
             ft = [float(x) for x in g.get('fromto').split()]
             vec = np.array(ft[3:6]) - np.array(ft[0:3])
             lengths.append(float(np.linalg.norm(vec)))
+            dirs.append(vec / (np.linalg.norm(vec) + 1e-12))
             radii.append(float(g.get('size')))
         j = child.find('joint')
         if j is not None:
@@ -87,7 +92,23 @@ def parse_arm_xml(xml_path):
         half = float(cg.get('size').split()[0]) if cg is not None else 0.15
         cube_info = dict(pos=cpos, half=half)
 
-    return dict(base_pos=base_pos, lengths=lengths, radii=radii, axes=axes, cube=cube_info)
+    return dict(base_pos=base_pos, lengths=lengths, radii=radii, axes=axes,
+                offsets=offsets, dirs=dirs, cube=cube_info)
+
+
+def kinematic_reach(lengths, offsets):
+    """関節の取り付け位置の連鎖から出る**実効リーチ**。
+
+    第1層は長らくリンク長（geom）の総和だけでリーチを判定していたが、それは
+    「各関節が前のリンクの先端にある」という**暗黙の仮定**に依存している。
+    Bug 23 では生成器がこの仮定を破った XML を作り、診断は実効 0.504 m の腕に
+    「総リーチ 0.802 m・余裕 0%」と答えた。仮定は明示して検算する。
+    """
+    if not lengths or not offsets:
+        return sum(lengths)
+    # offsets[i] = 「i 番目の子 body が親のどこに付いているか」。
+    # 正常なら offsets[i+1] == lengths[i] になる。先端は offsets の連鎖 + 末端リンク。
+    return sum(offsets[:len(lengths)]) + lengths[-1]
 
 
 def reach_annulus(lengths):
@@ -145,6 +166,19 @@ def layer1(geo, task, target, length_frozen=True):
 
     findings.append(('info', f'腕の構成: {len(lengths)}関節・設計図の総リーチ {r_now:.3f} m'
                              f'（各リンク {", ".join(f"{l:.3f}" for l in lengths)} m）'))
+
+    # Bug 23: リンク長の総和は「各関節が前のリンクの先端にある」ときしか実効リーチと一致しない。
+    # 一致しない XML は、リンクが重なるか離れるかしており、判定の前提が崩れている。
+    r_kin = kinematic_reach(lengths, geo.get('offsets', []))
+    if abs(r_kin - r_now) > 1e-4:
+        fatal = True
+        findings.append(('fatal',
+            f'**この XML は壊れています**（リンク長と関節の取り付け位置が矛盾）。\n'
+            f'      リンク長の総和は {r_now:.4f} m ですが、関節位置の連鎖から出る'
+            f'**実効リーチは {r_kin:.4f} m** しかありません。\n'
+            f'      → リンクが互いに重なっています。XML の `body pos` を各リンクの長さに合わせてください。\n'
+            f'      　（この不一致を見逃すと、届かない腕を「届く」と判定します。Bug 23 の再発）'))
+        r_now = r_kin      # 以降の判定は実効値で行う
     if length_frozen:
         r_max = r_now
         findings.append(('info', 'リンク長は固定されているため、この長さのまま判定します'))
@@ -157,6 +191,33 @@ def layer1(geo, task, target, length_frozen=True):
     if r_min > 1e-6:
         findings.append(('info', f'到達可能な範囲は半径 {r_min:.3f}〜{r_max:.3f} m のドーナツ状'
                                  f'（1本のリンクが長すぎて中心付近には届きません）'))
+
+    # 非平面アームでは「リンク長の総和＝水平リーチ」が成り立たない。根元の関節軸に平行なリンクは、
+    # その軸まわりの回転では水平に伸びず**肩の高さを上げるだけ**である
+    # （tripo_arm_v3 の根元 0.202 m の鉛直支柱がこれ。総和 1.002 m に対し水平限界は 0.797 m）。
+    # 判定は変えず警告に留める: 正確な水平リーチは関節可動域込みの順運動学が要り、本層の範囲外。
+    # ⚠️ geom の fromto は**そのボディのローカル系**なので、世界座標の軸と比べても意味がない。
+    # 各リンクを「自分自身の関節軸」と比べる: 軸に平行なリンクはその関節では振れない。
+    if not planar and geo.get('dirs') and len(axes) == len(lengths):
+        par, perp = [], []
+        for l, dv, ax in zip(lengths, geo['dirs'], axes):
+            a = np.array(ax, dtype=float)
+            a = a / (np.linalg.norm(a) + 1e-12)
+            (par if abs(float(np.dot(dv, a))) > 0.99 else perp).append(l)
+        if par and perp:
+            l_h = sum(perp)
+            shoulder_z = float(base[2]) + sum(par)
+            msg = (f'この腕は非平面です（関節軸が複数種類）。**上の総リーチ {r_max:.3f} m は水平リーチではありません**。\n'
+                   f'      根元の関節軸に平行なリンク {sum(par):.3f} m は肩の高さを上げるだけで、'
+                   f'水平に伸びるのは残り {l_h:.3f} m です（肩の高さ {shoulder_z:.3f} m）。')
+            if target is not None and len(target) >= 3:
+                dz_s = abs(float(target[2]) - shoulder_z)
+                lim = float(np.sqrt(max(0.0, l_h ** 2 - dz_s ** 2)))
+                msg += (f'\n      → 目標の高さ {float(target[2]):.3f} m での**水平到達限界は約 {lim:.3f} m**。'
+                        f'以降の判定はこの値で行います。')
+                # 総和で判定すると「届く」と誤答する（v3・目標 0.8 m がまさにこれ）。
+                r_max = min(r_max, lim)
+            findings.append(('warn', msg))
 
     if task == 'reach':
         d = float(np.linalg.norm(target[:2] - base[:2]))
