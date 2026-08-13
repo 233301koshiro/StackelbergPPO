@@ -54,6 +54,23 @@ def main():
         return m.group(1) + body + m.group(8)
 
     text = FROMTO.sub(sub, text)
+
+    # ⚠️ Bug 23（2026-08-10）: geom の fromto だけを伸ばすと、関節の取り付け位置
+    # （子 body の pos）が元のまま残り、リンクが重なった形態になる。MuJoCo の運動学は
+    # body pos の連鎖で決まるため、見た目だけ伸びて**実効リーチは伸びない**。
+    # 腕の body（name が数字）の pos も同じ倍率でスケールする。
+    # 根元 body "0"（ベース設置高さ）と cube は対象外。
+    BODYPOS = re.compile(r'(<body name=")(\d+)("\s+pos=")([-\d.eE ]+)(")')
+
+    def sub_pos(m):
+        if m.group(2) == '0':
+            return m.group(0)
+        vals = [float(v) * args.scale for v in m.group(4).split()]
+        return m.group(1) + m.group(2) + m.group(3) + \
+            ' '.join(f'{v:.6f}' for v in vals) + m.group(5)
+
+    text = BODYPOS.sub(sub_pos, text)
+
     text = re.sub(r'(<mujoco model=")[^"]*(")',
                   rf'\g<1>3-joint_serial_arm_({args.name}, {args.scale}x_of_{args.base})\g<2>',
                   text, count=1)
@@ -66,6 +83,24 @@ def main():
     print(f'       →   {", ".join(f"{a:.4f}" for a in after)}  '
           f'(合計 {sum(after):.4f} m)')
     print('  ※ capsule 半径・ギア比・目標位置は変更していない')
+
+    # Bug 23 再発防止: 公称（geom 長の合計）ではなく、body pos 連鎖から出る
+    # **実効リーチ**を出力ファイルから読み直して検算する。両者がずれていたら失敗させる。
+    out = open(dst, encoding='utf-8').read()
+    offs = [sum(float(v) ** 2 for v in m.group(4).split()) ** 0.5
+            for m in BODYPOS.finditer(out)]
+    lens = []
+    for m in FROMTO.finditer(out):
+        v = [float(x) for x in m.group(0).split('"')[1].split()]
+        lens.append(sum((v[i + 3] - v[i]) ** 2 for i in range(3)) ** 0.5)
+    effective = sum(offs[2:]) + lens[-1]
+    nominal = sum(lens)
+    print(f'  実効リーチ（body pos 連鎖 + 末端 geom）: {effective:.4f} m')
+    if abs(effective - nominal) > 1e-4:
+        raise SystemExit(
+            f'❌ 公称 {nominal:.4f} m と実効 {effective:.4f} m が食い違う。'
+            'Bug 23 と同じ欠陥。生成物を使ってはいけない')
+    print('  ✅ 公称と実効が一致（Bug 23 の検算を通過）')
 
 
 if __name__ == '__main__':
