@@ -72,6 +72,16 @@ case "${1:-all}" in
       +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false \
       +reward_specs.init_contact_penalty=1600
     ;;
+  v3full)
+    # 2026-08-21: smoke2 が ep2 でペナルティを脱し ep28 で残距離 5.9 cm まで来たため本走。
+    # v3_pusher（1000ep・best 124.36）と**同一予算**で回し、非平面でのタスク識別を見る
+    # （第6章 6.4.2(1)・6.5-1）。設定は smoke2 と max_epoch_num 以外すべて同一。
+    launch tripo_v3_reach2 1000 pusher_tripo_v3 tripo_arm_v3 0 \
+      +reward_specs.use_reach=true +reward_specs.target_x=0.72 \
+      +reward_specs.target_y=0.0 +reward_specs.target_z=0.25 \
+      +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false \
+      +reward_specs.init_contact_penalty=1600
+    ;;
   c0s2)
     # 9-15 の限界を閉じる: ctrl=0 側の seed=1。これで両 ctrl 条件が 2 seed になり、
     # 「制御コストが部分的に寄与するか」を seed 幅と比較して判定できるようになる。
