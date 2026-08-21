@@ -27,8 +27,8 @@ cd /userdir/StackelbergPPO
 running() { pgrep -f "hydra\.run\.dir=single_run/$1\$" >/dev/null 2>&1; }
 finished() { grep -q "training done!" "single_run/$1/log/log_train.txt" 2>/dev/null; }
 
-launch() {  # launch <run名> <ep数> <cfg> <xml> <フラグ...>
-  local run=$1 ep=$2 cfg=$3 xml=$4; shift 4
+launch() {  # launch <run名> <ep数> <cfg> <xml> <seed> <フラグ...>
+  local run=$1 ep=$2 cfg=$3 xml=$4 sd=$5; shift 5
   if running "$run"; then echo "[$(date '+%F %T')] $run は稼働中。スキップ"; return; fi
   if finished "$run"; then echo "[$(date '+%F %T')] $run は完走済み。スキップ"; return; fi
   mkdir -p "single_run/$run"
@@ -36,10 +36,10 @@ launch() {  # launch <run名> <ep数> <cfg> <xml> <フラグ...>
     /choreonoid_ws/install/bin/choreonoid --no-window \
     --python scripts/choreonoid_train.py \
     cfg="$cfg" xml_name="$xml" num_threads=4 max_epoch_num="$ep" \
-    enable_wandb=false fix_skeleton=true seed=0 +robot_param_scale=1 \
+    enable_wandb=false fix_skeleton=true seed="$sd" +robot_param_scale=1 \
     "$@" hydra.run.dir="single_run/$run" \
     > "single_run/$run/stdout.log" 2>&1 &
-  echo "[$(date '+%F %T')] $run launched (PID $!, ${ep}ep, xml=$xml)"
+  echo "[$(date '+%F %T')] $run launched (PID $!, ${ep}ep, xml=$xml, seed=$sd)"
 }
 
 # 到達タスクの共通フラグ。既存の pj 系と target 以外は完全一致
@@ -50,16 +50,41 @@ REACH_BASE="+reward_specs.use_reach=true +reward_specs.target_x=0.8 \
 case "${1:-all}" in
   smoke|all)
     # v3 Reach スモーク: 目標を肩より上へ。−50 を脱するかだけを見る
-    launch tripo_v3_reach_smoke 30 pusher_tripo_v3 tripo_arm_v3 \
+    launch tripo_v3_reach_smoke 30 pusher_tripo_v3 tripo_arm_v3 0 \
       +reward_specs.use_reach=true +reward_specs.target_x=0.72 \
       +reward_specs.target_y=0.0 +reward_specs.target_z=0.25 \
       +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false
     ;;&
+  smoke2)
+    # ── 2026-08-21: 目標高さ仮説は反証された（9-14）。真因はペナルティの逆転で、
+    #    Reach は届かないと正直な試行が -720〜-1521 になるのに対し床貫通は -50 しかなく、
+    #    **貫通する方が得**だった。第5章 5.2.4 の原則（ペナルティは正直に動いた
+    #    最悪リターンより確実に悪くせよ）に従い、ペナルティを最悪値から逆算して設定する。
+    #
+    #    肩 S=(0,0,0.2217)、水平伸展 0.800 m、目標 T=(0.72,0,0.25)
+    #    先端が到達しうる最遠距離 = |S-T| + 0.800 = 0.7206 + 0.800 = 1.5206 m
+    #    → 正直な最悪エピソード = -1521（1000 step × 最遠距離）
+    #    → ペナルティ 1600 を採用（1521 を確実に上回り、かつ過大ではない）
+    #    ⚠️ 当初案の 1000 では **不足**（-1000 > -1521 なので貫通がまだ得）。勘で決めないこと。
+    launch tripo_v3_reach_smoke2 30 pusher_tripo_v3 tripo_arm_v3 0 \
+      +reward_specs.use_reach=true +reward_specs.target_x=0.72 \
+      +reward_specs.target_y=0.0 +reward_specs.target_z=0.25 \
+      +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false \
+      +reward_specs.init_contact_penalty=1600
+    ;;
+  c0s2)
+    # 9-15 の限界を閉じる: ctrl=0 側の seed=1。これで両 ctrl 条件が 2 seed になり、
+    # 「制御コストが部分的に寄与するか」を seed 幅と比較して判定できるようになる。
+    launch tripo_pjr199_c0_s2 200 pusher_gearonly tripo_arm_v2c_pj_rec199 1 \
+      $REACH_BASE +reward_specs.ctrl_cost_coeff=0.0
+    launch tripo_pj_mid_c0_s2 200 pusher_gearonly tripo_arm_v2c_pj_mid 1 \
+      $REACH_BASE +reward_specs.ctrl_cost_coeff=0.0
+    ;;
   c0|all)
     # 制御コストのみ 0.2 → 0.0。他は tripo_pjr199 / tripo_pj_mid と完全一致
-    launch tripo_pjr199_c0 200 pusher_gearonly tripo_arm_v2c_pj_rec199 \
+    launch tripo_pjr199_c0 200 pusher_gearonly tripo_arm_v2c_pj_rec199 0 \
       $REACH_BASE +reward_specs.ctrl_cost_coeff=0.0
-    launch tripo_pj_mid_c0 200 pusher_gearonly tripo_arm_v2c_pj_mid \
+    launch tripo_pj_mid_c0 200 pusher_gearonly tripo_arm_v2c_pj_mid 0 \
       $REACH_BASE +reward_specs.ctrl_cost_coeff=0.0
     ;;
 esac
