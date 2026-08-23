@@ -82,6 +82,21 @@ case "${1:-all}" in
       +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false \
       +reward_specs.init_contact_penalty=1600
     ;;
+  v3seed)
+    # 2026-08-23: 9-16 の結論（非平面でもタスク識別が成立）は各 1 seed だった。
+    # 修論の立場（「シード間で初期的な一貫性が確認された」水準）に揃えるため seed=1 を足す。
+    # ⚠️ それぞれ既存 run と **seed 以外は完全に同一**にすること:
+    #    Reach  は tripo_v3_reach2      と同一（ペナルティ 1600・目標 0.72/0/0.25）
+    #    Pusher は tripo_arm_v3_pusher  と同一（reward_specs の上書きなし＝ペナルティ既定値 50）
+    #    Pusher にペナルティ 1600 を付けてはいけない。正直な試行が 0〜+124 の Pusher では
+    #    既定値 50 で機能しており、変えると seed 比較にならない（9-14 の教訓の逆適用）。
+    launch tripo_v3_reach2_s2 1000 pusher_tripo_v3 tripo_arm_v3 1 \
+      +reward_specs.use_reach=true +reward_specs.target_x=0.72 \
+      +reward_specs.target_y=0.0 +reward_specs.target_z=0.25 \
+      +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false \
+      +reward_specs.init_contact_penalty=1600
+    launch tripo_arm_v3_pusher_s2 1000 pusher_tripo_v3 tripo_arm_v3 1
+    ;;
   c0s2)
     # 9-15 の限界を閉じる: ctrl=0 側の seed=1。これで両 ctrl 条件が 2 seed になり、
     # 「制御コストが部分的に寄与するか」を seed 幅と比較して判定できるようになる。
