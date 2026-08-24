@@ -86,6 +86,7 @@
 | スクリプト | 状態 |
 |---|---|
 | `experiment_queue.sh` | ✅ **現行。** 完走マーカーで判定する版（Bug 19 対応済み） |
+| `queue_pjd_pusher.sh` | ✅ **現行（2026-08-24）。** 配分判別の Pusher 版4本を空きを見て順に投入（9-17）。投入前に `audit_xml_reach.py` で XML を検算する |
 | `weekend_queue.sh` | ✅ **現行（2026-08-07 追加）。** 空きメモリを見て軸3 の補強実験を順に投入する無人運転用。メモリ・ディスクの下限と投入期限を持つ |
 | `ns1_scheduler.sh` | ❌ 廃止。`experiment_queue.sh` に統合済み |
 | `tp2_scheduler.sh` / `weekend_scheduler.sh` / `restart_ready_watcher.sh` / `m_s2_watcher.sh` | ❌ 役目を終えた |
