@@ -1,4 +1,17 @@
 <mujoco model="3-joint_serial_arm_(tripo_arm_v2c_pj_recmin_p, 2.11x_of_tripo_arm_v2c_pj_short)">
+<!-- ============================================================
+     ⛔ この XML は使わないこと（Bug 23 の実体、2026-08-10 判明）
+
+     geom の fromto だけを伸ばし body の pos を伸ばしていないため、
+     見た目は 0.8505 m だが **実効リーチは 0.516 m**（61%）しかない。
+     MuJoCo の運動学は body pos の連鎖で決まるので、
+     この形態で学習しても「伸ばしたつもりの腕」にはならない。
+
+     これを使った run（tripo_pjr_min / _s2 / _minp）は無効。
+     修正版は tripo_arm_v2c_pj_rec199 / rec209 / rec211 を使う。
+     経緯: docs/デバッグ戦記.md Bug 23、docs/研究応用/実験系譜.md 9-11
+     検算: python3 scripts/audit_xml_reach.py
+     ============================================================ -->
   <asset>
     <texture name="skybox" type="skybox" builtin="gradient" rgb1=".2 .3 .4" rgb2="0 0 0" width="800" height="800" mark="random" markrgb="1 1 1"/>
     <texture name="grid" type="2d" builtin="checker" rgb1=".2 .1 .2" rgb2=".3 .2 .3" width="300" height="300" mark="edge" markrgb=".3 .2 .3"/>

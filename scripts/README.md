@@ -27,6 +27,7 @@
 | `run_2axis_mvp.sh` | rrbot 用の一気通貫（topology.json → XML/body → 学習） |
 | `eval_pipeline_robustness.py` | **M3 の頑健性評価**（第4章 4.2.2 = 軸1）。色ドリフトに対する許容幅を tolerance 掃引で測る。表 4.4・4.5 と 図 4.1 の出典 |
 | `make_scaled_arm.py` | 既存アーム XML の**リンク長だけ**を倍率スケールした XML を作る。診断の助言（「N 倍に伸ばせ」）を機械的に適用するのに使う（第4章 4.4.1） |
+| `audit_xml_reach.py` | **アーム XML の公称リーチと実効リーチを検算**（Bug 23 の再発防止）。`fromto` だけ伸ばして `body pos` を伸ばし忘れた XML を検出する。不一致があれば終了コード 1。原論文由来の環境と分岐トポロジーは対象外 |
 | `check_mesh_interference.py` | 静止姿勢の凸包による自己干渉チェック（v2系のみ） |
 | `save_morphology_urdf.py` | 収束形態を URDF として書き出す |
 
