@@ -1,0 +1,56 @@
+{
+  "name": "StackelbergPPO (akita_sp + Claude Code)",
+
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      // ⚠️ 実環境のイメージ名に合わせて変更すること。
+      //    ホスト側で `docker images | grep akita_sp` で確認できる。
+      //    このリポジトリ外の Dockerfile.add_akita_sp が生成しているイメージ。
+      "BASE_IMAGE": "akita_sp:latest",
+      "NODE_MAJOR": "22"
+    }
+  },
+
+  // 実行ユーザーは root のまま（既存の研究環境と /root/.claude に合わせる）
+  "containerUser": "root",
+  "remoteUser": "root",
+
+  // 既存コンテナのレイアウトに合わせる。ここを変えると docs 内の
+  // 絶対パス（/userdir/StackelbergPPO/...）が全て食い違うので固定する。
+  "workspaceFolder": "/userdir/StackelbergPPO",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/userdir/StackelbergPPO,type=bind,consistency=cached",
+
+  // ⚠️ 以下は稼働中コンテナの実測値に合わせてある。環境が違う場合は要調整。
+  //    GPU が渡らないと PyTorch 2.7+cu128 の学習が動かない（RTX 5060 Ti / sm_120）。
+  "runArgs": [
+    "--gpus", "all",
+    // PyTorch の DataLoader / 並列ワーカーが /dev/shm を使う。既定の 64MB では足りない。
+    "--shm-size", "8g"
+  ],
+
+  "containerEnv": {
+    // Choreonoid の GUI/オフスクリーン描画に必要（稼働中コンテナの実測値）
+    "DISPLAY": ":1",
+    "NVIDIA_VISIBLE_DEVICES": "all",
+    "NVIDIA_DRIVER_CAPABILITIES": "compute,utility,graphics,display"
+  },
+
+  // ビルド時にできない手順（プラグイン導入・認証が絡むもの）はここで回す。
+  // 失敗してもコンテナ作成は成功する（fail soft）。再実行は
+  //   bash .devcontainer/post-create.sh
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "ms-python.python"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/bin/python3",
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  }
+}
