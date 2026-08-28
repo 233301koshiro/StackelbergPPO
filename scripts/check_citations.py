@@ -111,7 +111,10 @@ def main():
             print(f'    {a} {y}')
         print()
 
-    todo = open(BIB, encoding='utf-8').read().count('要確認')
+    # 実際の未確認マークは `[要確認: 何が不明か]` のようにコロン付きで書く。
+    # 説明文中の言及（バッククォートで囲んだ `[要確認]`）や完了済みチェック項目を拾わないよう、
+    # **コロンを必須**にする（2026-08-28: 全件確認後も 2 と表示され続けたため厳密化）。
+    todo = len(re.findall(r'\[要確認\s*[:：]', open(BIB, encoding='utf-8').read()))
     if todo:
         print(f'⚠️ 書誌情報が未確認の箇所: {todo} 件（提出前に一次情報で確認すること）')
     if not missing and not uncited:
