@@ -43,6 +43,7 @@
 | `rank_settle.py` | **判定所要エポックの較正**（第4章 4.3.4.2）。学習不要、log_train.txt を読むだけ |
 | `audit_runs.sh` | 全 run の一次データ表。**md より先にこれを見る** |
 | `check_docs_consistency.py` | **docs とログの突き合わせ。** 古い状態語・数値の食い違い・記録漏れを検出。値を更新したら必ず走らせる |
+| `check_citations.py` | **本文の引用と参考文献リストを双方向で照合**。リスト起点で本文を探す方向（確実）と、本文から抽出してリストに無いものを探す方向（取りこぼし検出）の2つ。不一致で終了コード 1 |
 | `compare_morphology.py` | 複数 run の収束形態を並べて比較 |
 | `boundary_compare.py` | 境界張り付きの条件間比較（matched epoch） |
 | `eval_cnoid_numerical.py` | 数値で成功率・報酬を確認 |
