@@ -224,7 +224,10 @@ def check_C(runs):
         for m in re.finditer(r'single_run/([A-Za-z0-9_]+)[^\n]{0,60}?(削除|無効|廃止)', t):
             deleted.add(m.group(1))
     known |= deleted
-    cand = re.compile(r'single_run/([A-Za-z0-9_]+)')
+    # `single_run/archive/*/models` のようなパス表記の中間要素を run 名と誤認しない。
+    # ワイルドカードや既知のサブディレクトリ名で終わる形は run の参照ではない
+    # （2026-08-28: デバッグ戦記の `single_run/archive/*/models` を run 名 "models" と誤検出した）。
+    cand = re.compile(r'single_run/(?!archive/)([A-Za-z0-9_]+)')
     # 「もう存在しない」と本文が示している行は報告しない。過去の失敗 run の記録は
     # 消さずに残す方針（実験系譜の裏取りに使う）なので、それを毎回警告しても意味がない
     DEAD = re.compile(r'❌|停止|失敗|削除|無効|廃止|旧版|旧 run|未着手')
@@ -235,6 +238,9 @@ def check_C(runs):
                 continue
             for m in cand.finditer(line):
                 n = m.group(1)
+                # models / log / archive はパス表記の一部であって run 名ではない
+                if n in ('models', 'log', 'archive', 'logs'):
+                    continue
                 if n in known or n in INTENTIONAL_RUNS or n.startswith(('comparison', 'queue', 'diag', 'boundary')):
                     continue
                 # ログ・成果物ファイルへのパス（single_run/xxx.log 等）は run ではない
