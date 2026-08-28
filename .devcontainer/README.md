@@ -11,6 +11,22 @@ Claude Code CLI と Ponytail プラグインを載せるための devcontainer �
 
 ### 経路A: 稼働中のコンテナにそのまま入れる（推奨・低リスク）
 
+> ✅ **2026-08-28 に経路Aで導入完了。以下は実測値。**
+>
+> | 項目 | 実測 | 要件 |
+> |---|---|---|
+> | node | `/usr/bin/node` **v22.23.2** | node >= 22 ✅ |
+> | 非対話シェルからの可視性 | `bash -c` ✅ / **`env -i` でも見える** ✅ | Ponytail フックの前提 ✅ |
+> | claude | **2.1.250** | ✅ |
+> | ponytail | **4.9.0**  scope=user  status=enabled | ✅ |
+> | プラグインの配置 | `/root/.claude/plugins`（5.6M） | 実行ユーザーの $HOME 配下 ✅ |
+>
+> `env -i /bin/sh -c 'command -v node'` が通る＝**PATH 設定に一切依存しない**ため、
+> VS Code 拡張が spawn するプロセスからも確実に見える。nvm を採らなかった判断の妥当性が実証された。
+>
+> ⚠️ **この状態はコンテナの書き込み層にある。** コンテナを作り直すと消えるので、
+> そのときは経路B（下の devcontainer 定義）を使うか、上のコマンドを再実行すること。
+
 ```bash
 # ホストから
 docker exec -it akita_sp_ppo bash -lc '
