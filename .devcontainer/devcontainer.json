@@ -4,10 +4,8 @@
   "build": {
     "dockerfile": "Dockerfile",
     "args": {
-      // ⚠️ 実環境のイメージ名に合わせて変更すること。
-      //    ホスト側で `docker images | grep akita_sp` で確認できる。
-      //    このリポジトリ外の Dockerfile.add_akita_sp が生成しているイメージ。
-      "BASE_IMAGE": "akita_sp:latest",
+      // 実イメージ名（2026-08-28 に docker inspect で確認）
+      "BASE_IMAGE": "akita_sp",
       "NODE_MAJOR": "22"
     }
   },
@@ -16,22 +14,43 @@
   "containerUser": "root",
   "remoteUser": "root",
 
-  // 既存コンテナのレイアウトに合わせる。ここを変えると docs 内の
-  // 絶対パス（/userdir/StackelbergPPO/...）が全て食い違うので固定する。
+  // ⚠️ /userdir には StackelbergPPO 以外のプロジェクトも同居している
+  //    （TA_assembler・dataset・dnn_weight 等）。リポジトリだけをマウントすると
+  //    それらが見えなくなるので、**/userdir 全体**をマウントして作業フォルダだけ絞る。
+  //    ホスト側パスは稼働中コンテナの Mounts から取得した実値。
   "workspaceFolder": "/userdir/StackelbergPPO",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/userdir/StackelbergPPO,type=bind,consistency=cached",
+  "workspaceMount": "source=/home/irsl/irsl_docker_irsl_system/userdir,target=/userdir,type=bind,consistency=cached",
 
-  // ⚠️ 以下は稼働中コンテナの実測値に合わせてある。環境が違う場合は要調整。
-  //    GPU が渡らないと PyTorch 2.7+cu128 の学習が動かない（RTX 5060 Ti / sm_120）。
-  "runArgs": [
-    "--gpus", "all",
-    // PyTorch の DataLoader / 並列ワーカーが /dev/shm を使う。既定の 64MB では足りない。
-    "--shm-size", "8g"
+  "mounts": [
+    // Choreonoid の GUI・可視化に必要（DISPLAY=:1 のソケット）
+    "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind",
+    "source=/sys/fs/cgroup,target=/sys/fs/cgroup,type=bind,readonly",
+    // Claude Code の設定・履歴はコンテナの書き込み層にあるため、
+    // 名前付きボリュームに逃がしてリビルドを跨いで保持する。
+    // 初回はからっぽなので、既存の内容を戻すこと（.devcontainer/README.md 参照）。
+    "source=stackelbergppo-claude-home,target=/root/.claude,type=volume"
   ],
 
+  // ⚠️ 稼働中コンテナの HostConfig から写した実値。**削ると動かなくなるものがある**。
+  //    network=host: ROS が ROS_MASTER_URI=http://localhost:11311 前提
+  //    privileged / cap-add / seccomp: 研究室イメージ irsl_system の前提
+  //    shm-size は既定（64MB）のまま。稼働実績があるので変更しない
+  "runArgs": [
+    "--network", "host",
+    "--privileged",
+    "--cap-add", "SYS_ADMIN",
+    "--security-opt", "seccomp=unconfined",
+    "--security-opt", "label=disable",
+    "--gpus", "all"
+  ],
+
+  // 稼働中コンテナの Config.Env から、**再現が必要なものだけ**を写した。
+  // PATH・LD_LIBRARY_PATH・PYTHONPATH 等はイメージ側で定義済みなので上書きしない。
   "containerEnv": {
-    // Choreonoid の GUI/オフスクリーン描画に必要（稼働中コンテナの実測値）
     "DISPLAY": ":1",
+    "QT_X11_NO_MITSHM": "1",
+    "ROS_IP": "localhost",
+    "ROS_MASTER_URI": "http://localhost:11311",
     "NVIDIA_VISIBLE_DEVICES": "all",
     "NVIDIA_DRIVER_CAPABILITIES": "compute,utility,graphics,display"
   },
