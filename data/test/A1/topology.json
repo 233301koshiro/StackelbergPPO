@@ -1,0 +1,122 @@
+{
+  "description": "3-joint serial arm (from mesh)",
+  "bodies": [
+    {
+      "name": "upper_arm",
+      "parent": "root",
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "range": [
+          -90.0,
+          90.0
+        ],
+        "note": "Z軸回転（水平 XY 面プッシャータスク用）。元メッシュ: upper_arm.stl"
+      },
+      "bone_offset": [
+        0.4768,
+        0.0,
+        0.0
+      ],
+      "geom": {
+        "type": "capsule",
+        "size": 0.0501,
+        "ext_start": 0.0,
+        "source_mesh": "data/test/A1/meshes/upper_arm.stl"
+      },
+      "actuator": {
+        "gear": 100.0
+      }
+    },
+    {
+      "name": "forearm",
+      "parent": "upper_arm",
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "range": [
+          -90.0,
+          90.0
+        ],
+        "note": "Z軸回転（水平 XY 面プッシャータスク用）。元メッシュ: forearm.stl"
+      },
+      "bone_offset": [
+        0.3961,
+        0.0,
+        0.0
+      ],
+      "geom": {
+        "type": "capsule",
+        "size": 0.0466,
+        "ext_start": 0.0,
+        "source_mesh": "data/test/A1/meshes/forearm.stl"
+      },
+      "actuator": {
+        "gear": 100.0
+      }
+    },
+    {
+      "name": "hand",
+      "parent": "forearm",
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "range": [
+          -90.0,
+          90.0
+        ],
+        "note": "Z軸回転（水平 XY 面プッシャータスク用）。元メッシュ: hand.stl"
+      },
+      "bone_offset": [
+        0.2763,
+        0.0,
+        0.0
+      ],
+      "geom": {
+        "type": "capsule",
+        "size": 0.0535,
+        "ext_start": 0.0,
+        "source_mesh": "data/test/A1/meshes/hand.stl"
+      },
+      "actuator": {
+        "gear": 100.0
+      }
+    }
+  ],
+  "stackelberg_param_bounds": {
+    "bone_offset_xy": {
+      "lb": [
+        -0.5,
+        -0.5
+      ],
+      "ub": [
+        0.5,
+        0.5
+      ]
+    },
+    "geom_size": {
+      "lb": 0.03,
+      "ub": 0.1
+    },
+    "geom_ext_start": {
+      "lb": 0.0,
+      "ub": 0.2
+    },
+    "actuator_gear": {
+      "lb": 20,
+      "ub": 400
+    }
+  }
+}

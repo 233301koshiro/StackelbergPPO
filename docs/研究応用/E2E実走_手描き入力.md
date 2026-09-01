@@ -537,6 +537,10 @@ data/test/A1/
 
 学習用 XML だけは既存の置き場に合わせて `assets/mujoco_envs/e2e_<名前>.xml` に出る。
 
+⚠️ **`data/` は本来 `.gitignore` されているが、`data/test/` だけ追跡対象に戻してある。**
+手描き（実験の入力）・M1 出力・GLB は**一次証拠**であり、消えると E2E の主張を裏づけられない。
+ただし `meshes/`（M3 が吐く STL）は XML から再生成できるので除外している。
+
 **実行するときの OUT_DIR は `data/test/<名前>`。**
 
 ```bash

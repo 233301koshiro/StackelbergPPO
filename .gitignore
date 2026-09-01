@@ -1,5 +1,9 @@
 # Project-specific
-data/
+data/*
+# E2E 実走の入力と生成物は一次証拠なので追跡する（実験系譜 9-18）。
+# 手描き（実験の入力）・M1 出力・GLB が消えると E2E の主張を裏づけられなくなる。
+!data/test/
+data/test/*/meshes/
 single_run/
 hyper/
 debug/
