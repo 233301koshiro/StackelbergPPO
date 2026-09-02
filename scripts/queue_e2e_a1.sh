@@ -9,6 +9,7 @@
 #   1. 平面版 seed=0（稼働中） … pj_short/mid/long との比較用。既存実験に接続する
 #   2. 縦型版 seed=0            … 発表用の「スケッチが動く」映像 + 6.4.2(1) の限界解消
 #   3. 縦型版 seed=1            … 2 シード化
+#   4. 関節固定 seed=0（両タスク）… 第3層の助言を閉ループで検証する（9-20）
 #
 # なぜ平面版を捨てないか: 既に走っており、pj_* との比較は縦型では成立しない
 #   （形態クラスが違う）。両方あれば 9-18b の比較と非平面の証拠が両立する。
@@ -22,7 +23,7 @@ set -u
 cd /userdir/StackelbergPPO
 LOG=single_run/queue_e2e_a1.log
 MIN_FREE_GB=20
-DEADLINE=$(date -d '2026-09-04 12:00' +%s)
+DEADLINE=$(date -d '2026-09-05 12:00' +%s)
 
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 done_p() { grep -q "training done!" "single_run/$1/log/log_train.txt" 2>/dev/null; }
@@ -76,4 +77,18 @@ stage e2e_a1_reach e2e_a1_pusher \
 stage e2e_a1v_reach e2e_a1v_pusher \
   "e2e_a1v_reach_s2 1 reach e2e_a1v" \
   "e2e_a1v_pusher_s2 1 pusher e2e_a1v"
+
+# 第3段: 関節固定の助言を閉ループで検証する（実験系譜 9-20）。
+#   第3層は e2e_a1 の Reach で「関節3 は可動域の 7 % しか使っていない。固定してよい」と
+#   提案した。一方 Pusher では 41 % 使っており提案は出ていない。
+#   **両タスクを回すのが要点**である:
+#     Reach  … 固定しても性能が落ちなければ助言は有効
+#     Pusher … 固定して性能が落ちれば、診断が「使う関節／使わない関節」を
+#              **タスクごとに使い分けている**ことまで言える
+#   片方だけでは「固定しても平気」しか言えない。
+#   比較対象は e2e_a1（同 seed=0）。xml_name 以外すべて同一。
+stage e2e_a1v_reach_s2 e2e_a1v_pusher_s2 \
+  "e2e_a1_fix3_reach 0 reach e2e_a1_fix3" \
+  "e2e_a1_fix3_pusher 0 pusher e2e_a1_fix3"
+
 log "キュー完了: 予定していた投入をすべて終えた"
