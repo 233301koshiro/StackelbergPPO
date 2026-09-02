@@ -122,7 +122,8 @@ def bone_offset_from_obb(params: dict) -> list:
 
 def build_topology(parts: list, names: list, scale: float,
                    ranges: list, gears: list,
-                   output_path: str, link_lengths: dict = None) -> dict:
+                   output_path: str, link_lengths: dict = None,
+                   vertical: bool = False) -> dict:
     """
     parts  : [(path, mesh), ...]  根元→先端順
     names  : [str, ...]
@@ -145,6 +146,13 @@ def build_topology(parts: list, names: list, scale: float,
                   f"{boff[0]:.4f} → {true_len:.4f} m "
                   f"（OBB は {(boff[0]/true_len-1)*100:+.1f} % 過大。Bug 27）")
             boff = [true_len, 0.0, 0.0]
+
+        # 縦型モード（2026-09-02）: ボーンを +Z に立て、根元をヨー・以降をピッチにする。
+        # 従来は軸を (0,0,1) 決め打ち・ボーンを +X 固定にしていたため、
+        # **入力メッシュが縦型でも必ず水平面内の平面アームになっていた**。
+        # 構造は tripo_arm_v3（第4章 4.3.5）と同じ。
+        if vertical:
+            boff = [0.0, 0.0, boff[0]]
         parent = 'root' if i == 0 else names[i - 1]
 
         lo, hi = ranges[i]
@@ -161,9 +169,11 @@ def build_topology(parts: list, names: list, scale: float,
             "parent": parent,
             "joint": {
                 "type": "hinge",
-                "axis": [0.0, 0.0, 1.0],
-                "range": [float(lo), float(hi)],
-                "note": f"Z軸回転（水平 XY 面プッシャータスク用）。元メッシュ: {Path(path).name}"
+                "axis": ([0.0, 0.0, 1.0] if (not vertical or i == 0) else [0.0, 1.0, 0.0]),
+                "range": ([-180.0, 180.0] if (vertical and i == 0) else [float(lo), float(hi)]),
+                "note": (("根元ヨー（鉛直軸）" if i == 0 else "ピッチ（水平軸）") if vertical
+                         else "Z軸回転（水平 XY 面プッシャータスク用）")
+                        + f"。元メッシュ: {Path(path).name}"
             },
             "bone_offset": boff,
             "geom": {
@@ -176,8 +186,13 @@ def build_topology(parts: list, names: list, scale: float,
         })
 
     topo = {
-        "description": f"{len(parts)}-joint serial arm (from mesh)",
+        "description": (f"{len(parts)}-joint vertical serial arm (from mesh, "
+                        f"root yaw + pitch chain)" if vertical
+                        else f"{len(parts)}-joint serial arm (from mesh)"),
         "bodies": bodies,
+        # 縦型では台座リンク自体が高さを持つので、ルートは接地面近くへ置く
+        # （tripo_arm_v3 と同じ 0.02 m）。水平型は従来どおり topology_to_xml の既定 0.15 m。
+        **({"root": {"fixed_base": True, "pos": [0.0, 0.0, 0.02]}} if vertical else {}),
         "stackelberg_param_bounds": {
             "bone_offset_xy": {"lb": [-0.5, -0.5], "ub": [0.5, 0.5]},
             "geom_size":      {"lb": 0.03, "ub": 0.10},
@@ -214,6 +229,10 @@ def main():
                         help='各リンクの名前（デフォルト: link0, link1, ...）')
     parser.add_argument('--output',   required=True,
                         help='出力 topology.json のパス')
+    parser.add_argument('--vertical', action='store_true',
+                        help='縦型で出力する（根元ヨー + 以降ピッチ、ボーンは +Z）。'
+                             '省略すると従来どおり水平面内の平面アーム（全関節ヨー・ボーン +X）。'
+                             '⚠️ 台座が可動リンクになるので FIXED_BASE は 0 にすること')
     parser.add_argument('--joints-json', default=None,
                         help='glb_to_links が出す joints.json。関節間距離で bone_offset を'
                              '置き換える（Bug 27 の是正）。省略すると OBB 主軸長を使う')
@@ -256,8 +275,10 @@ def main():
     else:
         print("[mesh_to_params] ⚠️ --joints-json 未指定。bone_offset に OBB 主軸長を使う"
               "（マーカー球のぶん 18〜20 % 過大になる。Bug 27）")
+    if args.vertical:
+        print("[mesh_to_params] 縦型モード: 根元ヨー + 以降ピッチ、ボーンは +Z")
     topo = build_topology(parts, names, args.scale, ranges, gears, args.output,
-                          link_lengths=link_lengths)
+                          link_lengths=link_lengths, vertical=args.vertical)
 
     if args.validate:
         print("\n[mesh_to_params] --validate: MuJoCo XML を生成して検証中...")

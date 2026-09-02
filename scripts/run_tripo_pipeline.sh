@@ -106,6 +106,11 @@ STEP2_ARGS=(
 # Bug 27（2026-09-02）: OBB 主軸長は分割境界のマーカー球を含んで 18〜20 % 過大。
 # Step 1 が出す関節間距離で bone_offset を置き換える。
 [ -f "$OUT_DIR/meshes/joints.json" ] && STEP2_ARGS+=(--joints-json "$OUT_DIR/meshes/joints.json")
+# VERTICAL=1: 根元ヨー + 以降ピッチ、ボーンは +Z（tripo_arm_v3 と同じ構造）。
+# 従来は軸を (0,0,1) 決め打ち・ボーンを +X 固定にしていたため、入力メッシュが縦型でも
+# 必ず水平面内の平面アームになっていた（2026-09-02 是正）。
+# ⚠️ 台座が可動リンクになるので FIXED_BASE=0 にすること。
+[ "${VERTICAL:-0}" = "1" ] && STEP2_ARGS+=(--vertical)
 [ -n "$MP_NAMES" ] && STEP2_ARGS+=(--names $MP_NAMES)
 [ -n "$GEARS"      ] && STEP2_ARGS+=(--gears $GEARS)
 
