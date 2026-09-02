@@ -103,6 +103,9 @@ STEP2_ARGS=(
   --output   "$OUT_DIR/topology.json"
   --validate
 )
+# Bug 27（2026-09-02）: OBB 主軸長は分割境界のマーカー球を含んで 18〜20 % 過大。
+# Step 1 が出す関節間距離で bone_offset を置き換える。
+[ -f "$OUT_DIR/meshes/joints.json" ] && STEP2_ARGS+=(--joints-json "$OUT_DIR/meshes/joints.json")
 [ -n "$MP_NAMES" ] && STEP2_ARGS+=(--names $MP_NAMES)
 [ -n "$GEARS"      ] && STEP2_ARGS+=(--gears $GEARS)
 

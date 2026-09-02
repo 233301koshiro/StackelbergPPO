@@ -28,6 +28,7 @@ glb_to_links.py: Tripo3D GLB → per-link STL (link-local 座標) + Choreonoid U
 import argparse
 from pathlib import Path
 
+import json
 import numpy as np
 import trimesh
 
@@ -351,6 +352,25 @@ def main():
         local.export(str(stl_path))
         ext = local.bounding_box.extents
         print(f"  [{name}] extents={ext.round(3)} → {stl_path}")
+
+    # Bug 27（2026-09-02）: 分割境界はマーカー球の中心にあるため、各リンクの分割片は
+    # 両端の球の半分ずつを含む。腕が傾いているとこの半球がリンク軸方向へも張り出し、
+    # 下流（mesh_to_params）の OBB 主軸長が 18〜20 % 過大になる。
+    # 関節の 3D 座標はここで既に求まっているので、**関節間距離**を JSON で下流へ渡す。
+    # 子関節を持たない先端リンクだけは距離が定義できないため OBB のままとする。
+    joints_json = out_dir / 'joints.json'
+    link_len = {}
+    for i, name in enumerate(names[:-1]):
+        link_len[name] = float(np.linalg.norm(frame_origins[i + 1] - frame_origins[i]))
+    joints_json.write_text(json.dumps({
+        'frame_origins': {n: fo.tolist() for n, fo in zip(names, frame_origins)},
+        'joint_positions': [j.tolist() for j in joint_globals],
+        # 子関節を持つリンクの「関節間距離」。先端リンクは含まない（OBB を使う）
+        'link_lengths': link_len,
+    }, indent=2), encoding='utf-8')
+    print(f"[glb_to_links] 関節間距離 → {joints_json}")
+    for n, d in link_len.items():
+        print(f"    {n}: {d:.4f} m")
 
     if args.urdf:
         try:

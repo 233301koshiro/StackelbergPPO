@@ -24,11 +24,11 @@
       <geom pos="0 0 0" size="0.1" type="sphere"/>
       <body name="1" pos="0.000000 0.000000 0.000000">
         <joint name="1_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-90.0 90.0"/>
-        <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.476800 0.000000 0.000000" size="0.0501"/>
-        <body name="11" pos="0.476800 0.000000 0.000000">
+        <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.403100 0.000000 0.000000" size="0.0501"/>
+        <body name="11" pos="0.403100 0.000000 0.000000">
           <joint name="11_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-90.0 90.0"/>
-          <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.396100 0.000000 0.000000" size="0.0466"/>
-          <body name="111" pos="0.396100 0.000000 0.000000">
+          <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.330800 0.000000 0.000000" size="0.0466"/>
+          <body name="111" pos="0.330800 0.000000 0.000000">
             <joint name="111_joint" type="hinge" pos="0 0 0" axis="0.000000 0.000000 1.000000" range="-90.0 90.0"/>
             <geom type="capsule" fromto="0.000000 0.000000 0.000000  0.276300 0.000000 0.000000" size="0.0535"/>
           </body>
