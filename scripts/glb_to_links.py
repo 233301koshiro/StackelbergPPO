@@ -324,10 +324,22 @@ def main():
     segments = _split_by_z(mesh, joint_z_vals)
 
     z_min = float(mesh.vertices[:, 2].min())
-    frame_origins = [np.array([0.0, 0.0, z_min])]
+    joint_xyz = []
     for jz in joint_z_vals:
         jxy = _joint_xyz(mesh, jz, color_rgb, args.joint_tol)
-        frame_origins.append(np.array([jxy[0], jxy[1], jz]))
+        joint_xyz.append(np.array([jxy[0], jxy[1], jz]))
+
+    # Bug 28（2026-09-02）: 根元リンクのローカル原点を XY=(0,0) 決め打ちにしていた。
+    # GLB の原点が台座の真下にあるとは限らない。A1 では台座が x∈[-0.332,-0.157] にあり、
+    # 原点が形状の 0.157 m **外**に出たため、ヨー回転で台座が自分の外側を公転した。
+    # 第1関節の XY（= ヨー軸が通る位置）を使う。台座は第1関節の真下にあるはずで、
+    # 実測でも両者の XY のずれは A1 で 3.6 mm、v2c で 0.5 mm しかない。
+    if joint_xyz:
+        base_xy = (float(joint_xyz[0][0]), float(joint_xyz[0][1]))
+    else:                                   # 関節が無い場合は形状の XY 重心へ
+        c = mesh.vertices[:, :2].mean(axis=0)
+        base_xy = (float(c[0]), float(c[1]))
+    frame_origins = [np.array([base_xy[0], base_xy[1], z_min])] + joint_xyz
 
     joint_globals = frame_origins[1:]  # = frame_origins of child links
 
