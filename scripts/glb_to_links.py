@@ -31,6 +31,7 @@ from pathlib import Path
 import json
 import numpy as np
 import trimesh
+from scipy.spatial import cKDTree
 
 # Y-up → Z-up: (x, y, z)_Yup → (x, -z, y)_Zup
 _R_YUP_ZUP = np.array([[1, 0, 0],
@@ -112,6 +113,75 @@ def _auto_calibrate_joint_color(mesh: trimesh.Trimesh,
     print(f"  [auto-color] マゼンタ色相域クラスタ: {n} 頂点 ({frac:.1f}%) "
           f"→ 目標色 {color}, tol={tol}")
     return color, tol
+
+
+def _marker_mask(mesh, color_rgb, tol):
+    """マーカー色に一致する頂点のマスク。失敗時は None。"""
+    try:
+        vc = mesh.visual.vertex_colors[:, :3].astype(int)
+    except Exception:
+        return None
+    r, g, b = color_rgb
+    mask = ((np.abs(vc[:, 0] - r) <= tol) &
+            (np.abs(vc[:, 1] - g) <= tol) &
+            (np.abs(vc[:, 2] - b) <= tol))
+    return mask if mask.any() else None
+
+
+def _detect_joints_3d(mesh: trimesh.Trimesh, color_rgb=(255, 0, 255), tol=40,
+                      link_radius=0.02, min_frac=0.02):
+    """マーカー頂点を **3 次元で**連結成分に分け、各成分の重心を関節位置として返す。
+
+    Returns: Z 昇順に並べた 3D 座標の配列（Z-up frame）。
+
+    **なぜ 3D なのか（2026-09-02、B1 で判明）**: 従来は Z 座標だけを見て、
+    隣接値の差が閾値を超えた位置で区切っていた。しかしマーカー球は有限の大きさを持つため、
+    **リンクが短く腕が傾いていると隣り合う球の Z 範囲が重なり、2 個が 1 個に融合する**。
+    実測（B1）では球の Z 方向の広がり約 0.14 に対し関節間の Z 差が 0.127 しかなく、
+    3 個のうち 2 個が融合して検出が 2 個になった。
+
+    球どうしは **3 次元では必ずリンク長ぶん離れている**（B1 で 0.24〜0.26、球の半径 0.07）
+    ため、3D の連結成分で分ければ確実に分離できる。実測では連結半径 0.01〜0.03 の
+    いずれでも同じ 3 個を返し、閾値に鈍感であることを確認した。
+
+    この改良は第3章 3.8 節が「関節間隔やメッシュの外接寸法に対する相対量として
+    定義し直すことは残された改良点」と述べていた箇所に対応する。
+
+    link_radius: 連結とみなす距離。メッシュの外接寸法に対する相対量で与える。
+    min_frac  : 採用する最小頂点数の割合（色滲みの迷い頂点を捨てる）。
+    """
+    mask = _marker_mask(mesh, color_rgb, tol)
+    if mask is None:
+        return np.empty((0, 3))
+
+    P = np.asarray(mesh.vertices[mask], dtype=float)
+    scale = float(np.linalg.norm(mesh.bounds[1] - mesh.bounds[0]))
+    r = link_radius * scale
+
+    tree = cKDTree(P)
+    parent = np.arange(len(P))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for i, js in enumerate(tree.query_ball_point(P, r)):
+        ri = find(i)
+        for j in js:
+            rj = find(j)
+            if ri != rj:
+                parent[rj] = ri
+                ri = find(ri)
+
+    lab = np.array([find(i) for i in range(len(P))])
+    min_count = max(10, int(min_frac * len(P)))
+    centres = [P[lab == u].mean(axis=0)
+               for u in np.unique(lab) if (lab == u).sum() >= min_count]
+    if not centres:
+        return np.empty((0, 3))
+    return np.array(sorted(centres, key=lambda c: c[2]))
 
 
 def _detect_joint_z(mesh: trimesh.Trimesh, color_rgb=(255, 0, 255), tol=40, gap=0.05,
@@ -268,6 +338,12 @@ def main():
     p.add_argument('--joint-color', nargs=3, type=int, default=[255, 0, 255],
                    metavar=('R', 'G', 'B'))
     p.add_argument('--joint-tol', type=int, default=40)
+    p.add_argument('--cluster-mode', choices=['3d', 'z'], default='3d',
+                   help='マーカーのクラスタリング方法。既定の 3d は 3 次元の連結成分で分ける。'
+                        'z は旧方式（Z 座標のみ）で、リンクが短く腕が傾いていると'
+                        '隣り合う球が融合する（2026-09-02、B1 で実測）')
+    p.add_argument('--cluster-radius', type=float, default=0.02,
+                   help='3d モードで連結とみなす距離。メッシュの外接寸法に対する相対量')
     p.add_argument('--auto-color', action='store_true',
                    help='マーカー色をメッシュから自動キャリブレーション'
                         '（マゼンタ色相域 285-345° の支配クラスタを検出。'
@@ -300,12 +376,20 @@ def main():
         else:
             print("  [auto-color] マゼンタ色相域クラスタなし → 指定色にフォールバック "
                   f"{color_rgb} (tol={joint_tol})")
+    joint_pts = None
     if args.joints:
         joint_z_vals = sorted(args.joints)
         print(f"[glb_to_links] 関節 Z（手動）: {joint_z_vals}")
     else:
-        print(f"[glb_to_links] マーカー検出 color={color_rgb} (tol={joint_tol})...")
-        joint_z_vals = _detect_joint_z(mesh, color_rgb, joint_tol)
+        print(f"[glb_to_links] マーカー検出 color={color_rgb} (tol={joint_tol}), "
+              f"mode={args.cluster_mode}...")
+        if args.cluster_mode == '3d':
+            joint_pts = _detect_joints_3d(mesh, color_rgb, joint_tol,
+                                          link_radius=args.cluster_radius)
+            joint_z_vals = [float(p[2]) for p in joint_pts]
+        else:
+            joint_pts = None
+            joint_z_vals = _detect_joint_z(mesh, color_rgb, joint_tol)
         if not joint_z_vals:
             p.error(
                 "magenta マーカーが見つかりません。\n"
@@ -324,10 +408,14 @@ def main():
     segments = _split_by_z(mesh, joint_z_vals)
 
     z_min = float(mesh.vertices[:, 2].min())
-    joint_xyz = []
-    for jz in joint_z_vals:
-        jxy = _joint_xyz(mesh, jz, color_rgb, args.joint_tol)
-        joint_xyz.append(np.array([jxy[0], jxy[1], jz]))
+    if joint_pts is not None and len(joint_pts) == len(joint_z_vals):
+        # 3D クラスタリング済みなら重心をそのまま使う（XY を測り直さない）
+        joint_xyz = [np.asarray(p, dtype=float) for p in joint_pts]
+    else:
+        joint_xyz = []
+        for jz in joint_z_vals:
+            jxy = _joint_xyz(mesh, jz, color_rgb, args.joint_tol)
+            joint_xyz.append(np.array([jxy[0], jxy[1], jz]))
 
     # Bug 28（2026-09-02）: 根元リンクのローカル原点を XY=(0,0) 決め打ちにしていた。
     # GLB の原点が台座の真下にあるとは限らない。A1 では台座が x∈[-0.332,-0.157] にあり、
@@ -374,6 +462,18 @@ def main():
     link_len = {}
     for i, name in enumerate(names[:-1]):
         link_len[name] = float(np.linalg.norm(frame_origins[i + 1] - frame_origins[i]))
+
+    # 先端リンクは子関節が無いので関節間距離が定義できない。当初は OBB 主軸長のまま
+    # 通していたが（A1 では誤差 +0.7 %）、**リンクが短く球が相対的に大きいと破綻する**。
+    # B1 では OBB 0.4316 m に対し実距離 0.2828 m（+52.6 %）だった。
+    # 分割面が球の中心を通るため上半球が全方向へ張り出し、腕が傾いていると
+    # OBB の主軸がその張り出しを拾ってしまう（Bug 27 の先端リンク版、2026-09-02）。
+    # 運動学的な寄与は「最後の関節から最も遠い点までの距離」なのでそれを使う。
+    if len(names) >= 2 and len(segments) == len(names):
+        tip_v = np.asarray(segments[-1].vertices, dtype=float)
+        if len(tip_v):
+            link_len[names[-1]] = float(
+                np.linalg.norm(tip_v - frame_origins[-1], axis=1).max())
     joints_json.write_text(json.dumps({
         'frame_origins': {n: fo.tolist() for n, fo in zip(names, frame_origins)},
         'joint_positions': [j.tolist() for j in joint_globals],
