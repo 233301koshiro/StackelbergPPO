@@ -132,7 +132,8 @@ def build_topology(parts: list, names: list, scale: float,
     link_lengths : {リンク名: 関節間距離 [m]}。glb_to_links が出す joints.json 由来。
         与えられたリンクは bone_offset をこの値にする（Bug 27 の是正）。
         OBB 主軸長は分割境界にあるマーカー球の半分ずつを含むため 18〜20 % 過大になる。
-        子関節を持たない先端リンクは距離が定義できないので OBB のまま。
+        先端リンクは「最後の関節からの最遠点距離」を使う
+        （リンクが短い B1 では OBB が +52.6 % 過大だった）。
     """
     link_lengths = link_lengths or {}
     bodies = []
