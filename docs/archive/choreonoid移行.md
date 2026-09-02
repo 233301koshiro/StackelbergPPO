@@ -1,5 +1,8 @@
 # StackelbergPPO を Choreonoid で動かす作業まとめ
 
+> 🗄 **アーカイブ（2026-07 時点）。作業の参照先にしないこと。**
+> MuJoCo → Choreonoid 移行の作業記録。移行は完了済み。現行の構成は [リポジトリ説明/choreonoidシミュレーション.md](../リポジトリ説明/choreonoidシミュレーション.md)
+
 ## 目的
 
 StackelbergPPO（形態・制御の共設計を行う強化学習リポジトリ）は MuJoCo + conda で動作している。

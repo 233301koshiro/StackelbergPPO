@@ -1,5 +1,8 @@
 # Tripo3D → Choreonoid 可視化パイプライン
 
+> 🗄 **アーカイブ（2026-07-09 時点）。作業の参照先にしないこと。**
+> **参照している `skeleton_extract.py` は既に存在しない。** 技術的知見（Y-up→Z-up 変換・URDF の joint origin・リンクローカル STL・マゼンタ規約）はすべて [研究応用/メッシュXMLパイプライン.md](../研究応用/メッシュXMLパイプライン.md) に統合済み
+
 ## 概要
 
 Gemini で生成したロボットアーム画像を Tripo3D で 3D モデル化し、URDF + STL として Choreonoid で可視化するまでの手順と知見。
