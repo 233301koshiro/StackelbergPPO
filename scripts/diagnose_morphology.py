@@ -63,7 +63,7 @@ def parse_arm_xml(xml_path):
 
     base_pos = np.array([float(x) for x in arm_root.get('pos', '0 0 0').split()])
 
-    lengths, radii, axes, offsets, dirs = [], [], [], [], []
+    lengths, radii, axes, offsets, dirs, ranges = [], [], [], [], [], []
     node = arm_root
     while True:
         child = node.find('body')
@@ -83,6 +83,8 @@ def parse_arm_xml(xml_path):
         j = child.find('joint')
         if j is not None:
             axes.append(tuple(round(float(x)) for x in j.get('axis', '0 0 1').split()))
+            rg = j.get('range')
+            ranges.append(tuple(float(x) for x in rg.split()) if rg else None)
         node = child
 
     cube_info = None
@@ -93,7 +95,7 @@ def parse_arm_xml(xml_path):
         cube_info = dict(pos=cpos, half=half)
 
     return dict(base_pos=base_pos, lengths=lengths, radii=radii, axes=axes,
-                offsets=offsets, dirs=dirs, cube=cube_info)
+                offsets=offsets, dirs=dirs, cube=cube_info, ranges=ranges)
 
 
 def kinematic_reach(lengths, offsets):
@@ -374,6 +376,47 @@ def layer3(trace, task):
             findings.append(('warn',
                 f'目標付近には行きますが、{final_mm:.0f} mm ずれた位置で止まっています'
                 f'（{conv} ステップで 10 mm 以内には入りました）。'))
+    findings += _joint_usage(trace)
+    return findings
+
+
+# 使われていないと見なす閾値。可動域の何割しか動かなかったら報告するか。
+UNUSED_FRAC = 0.10
+
+
+def _joint_usage(trace):
+    """各関節が可動域のどれだけを使ったかを報告する（2026-09-02 追加）。
+
+    **動機**: 第1層は「腕を N 倍に伸ばせ」という反実仮想的な助言を返せるが、
+    第2層・第3層は「何が起きたか」を報告できるだけで、
+    「設計をどう変えれば結果が変わるか」を出せていなかった（3.12.5 節）。
+    関節の使用率は、その穴を**設計を減らす方向**で部分的に埋める。
+    使われていない関節が分かれば「固定してよい」と言えるからである。
+
+    ⚠️ **断定はしない。** 「動いていない」と「動く必要がない」は違い、
+    学習が不十分で動かせていないだけの可能性がある。第3層は学習の帰結を見る
+    確率的な層なので、断定する権限を持たない（5.5.1 節「確率的な層は
+    断定してはならない」）。したがって報告は警告に留め、成否の判断はしない。
+
+    検証は第1層の助言と同じ閉ループで行う。すなわち提案どおり関節を固定した
+    形態を作って再学習し、性能が落ちないことを確認する（4.4.2 節と同じ手順）。
+    """
+    use = trace.get('joint_use')
+    if not use:
+        return []
+    findings = []
+    detail = '、'.join(f'関節{i+1} {u*100:.0f}%' for i, u in enumerate(use))
+    idle = [i for i, u in enumerate(use) if u < UNUSED_FRAC]
+    if idle:
+        names = '・'.join(f'関節{i+1}' for i in idle)
+        findings.append(('warn',
+            f'**{names} がほとんど動いていません**（{detail}）。\n'
+            f'      → その関節を固定すれば、質量と制御の自由度を減らせる可能性があります。\n'
+            f'      　（ただし「動かせていないだけ」の可能性もあります。'
+            f'固定した形で学習し直して確かめてください）'))
+    else:
+        findings.append(('info',
+            f'すべての関節が可動域を使っています（{detail}）。'))
     return findings
 
 
@@ -424,7 +467,7 @@ def main():
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
 
     if run:
-        groups += _run_layers23(run, args.task)
+        groups += _run_layers23(run, args.task, geo)
 
     report(f'{args.xml} / タスク={args.task}', groups)
     print()
@@ -441,7 +484,7 @@ def main():
         os._exit(0)
 
 
-def _run_layers23(run, task):
+def _run_layers23(run, task, geo=None):
     """Choreonoid 上でのみ動く第2・3層。import 時点で Choreonoid が要るため関数内で読み込む。"""
     import yaml
     import torch
@@ -478,6 +521,8 @@ def _run_layers23(run, task):
 
     # 行動トレース
     trace, xs, dists = {}, [], []
+    n_j = len((geo or {}).get('axes') or [])   # 腕の関節数（qpos の先頭がこの順に並ぶ）
+    qhist = []
     target = np.array([cfg.env_specs.get('target_x', 0.8),
                        cfg.env_specs.get('target_y', 0.0),
                        cfg.env_specs.get('target_z', 0.15)])
@@ -488,6 +533,10 @@ def _run_layers23(run, task):
         with torch.no_grad():
             a = ag.policy_net.select_action(sv, mean_action=True).numpy().astype(np.float64)
         st, _, done, _, _ = env.step(a)
+        try:                         # 関節角の履歴（第3層の使用率判定に使う）
+            qhist.append(np.array(env.data.qpos[:n_j], dtype=float))
+        except Exception:
+            pass
         if task == 'pusher':
             xs.append(float(env.get_body_com('cube')[0]))
         else:
@@ -505,6 +554,15 @@ def _run_layers23(run, task):
     if dists:
         trace['dist'] = dists
         trace['conv_step'] = next((i for i, d in enumerate(dists) if d < 0.01), None)
+    if qhist:
+        Q = np.array(qhist)
+        span = Q.max(axis=0) - Q.min(axis=0)          # 実際に振れた幅 [rad]
+        lim = []
+        for r in (geo or {}).get('ranges') or []:
+            # XML の range は度。指定が無ければ ±180° とみなす
+            lim.append(np.deg2rad(r[1] - r[0]) if r else 2 * np.pi)
+        lim = np.array(lim[:len(span)]) if lim else np.full(len(span), 2 * np.pi)
+        trace['joint_use'] = [float(min(1.0, s_ / l)) for s_, l in zip(span, lim) if l > 0]
     f3 = layer3(trace, task)
     return [('第2層: 学習が選んだ設計から分かること', f2),
             ('第3層: 実際の動きから分かること', f3)]
