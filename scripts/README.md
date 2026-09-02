@@ -21,8 +21,8 @@
 | スクリプト | 役割 |
 |---|---|
 | `run_tripo_pipeline.sh` | **GLB → XML を一発で通す。** 通常はこれを使う |
-| `glb_to_links.py` | M3: 色検出で関節を見つけメッシュを分割 |
-| `mesh_to_params.py` | M4: OBB からリンク長・カプセル半径を抽出 → topology.json |
+| `glb_to_links.py` | M3: 色検出で関節を見つけメッシュを分割 |。**2026-09-02 変更**: `meshes/joints.json` に関節の 3D 座標と**関節間距離**を出力するようになった（Bug 27）。根元リンクのローカル原点も XY=(0,0) 決め打ちから**第1関節の XY** へ変更（Bug 28）
+| `mesh_to_params.py` | M4: OBB からリンク長・カプセル半径を抽出 → topology.json |。**2026-09-02 変更**: `--joints-json` で bone_offset に OBB 主軸長ではなく**関節間距離**を使う（Bug 27）。`--vertical` で**根元ヨー + 以降ピッチ・ボーン +Z** の縦型を出力する（Bug 29。`FIXED_BASE=0` と併用）
 | `topology_to_xml.py` | M5: topology.json → MuJoCo 互換 XML |
 | `run_2axis_mvp.sh` | rrbot 用の一気通貫（topology.json → XML/body → 学習） |
 | `eval_pipeline_robustness.py` | **M3 の頑健性評価**（第4章 4.2.2 = 軸1）。色ドリフトに対する許容幅を tolerance 掃引で測る。表 4.4・4.5 と 図 4.1 の出典 |
@@ -87,6 +87,7 @@
 | スクリプト | 状態 |
 |---|---|
 | `experiment_queue.sh` | ✅ **現行。** 完走マーカーで判定する版（Bug 19 対応済み） |
+| `queue_e2e_a1.sh` | ✅ **現行（2026-09-02）。** A1 の学習を **2 本ずつ直列**に投入する（平面 seed=0 → 縦型 seed=0 → 縦型 seed=1）。4 本同時では **GPU が 92 % で頭打ち**になり `T_update` が 2.4 倍に伸びたため。完走判定は `training done!` の有無（`pgrep -f` / `pkill -f` は自分のコマンドラインに当たって誤爆する。Bug 19） |
 | `queue_pjd_pusher.sh` | ✅ **現行（2026-08-24）。** 配分判別の Pusher 版4本を空きを見て順に投入（9-17）。投入前に `audit_xml_reach.py` で XML を検算する |
 | `weekend_queue.sh` | ✅ **現行（2026-08-07 追加）。** 空きメモリを見て軸3 の補強実験を順に投入する無人運転用。メモリ・ディスクの下限と投入期限を持つ |
 | `ns1_scheduler.sh` | ❌ 廃止。`experiment_queue.sh` に統合済み |
