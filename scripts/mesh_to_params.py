@@ -122,18 +122,29 @@ def bone_offset_from_obb(params: dict) -> list:
 
 def build_topology(parts: list, names: list, scale: float,
                    ranges: list, gears: list,
-                   output_path: str) -> dict:
+                   output_path: str, link_lengths: dict = None) -> dict:
     """
     parts  : [(path, mesh), ...]  根元→先端順
     names  : [str, ...]
     ranges : [[lo, hi], ...]  各関節の可動域 [deg]
     gears  : [float, ...]
+    link_lengths : {リンク名: 関節間距離 [m]}。glb_to_links が出す joints.json 由来。
+        与えられたリンクは bone_offset をこの値にする（Bug 27 の是正）。
+        OBB 主軸長は分割境界にあるマーカー球の半分ずつを含むため 18〜20 % 過大になる。
+        子関節を持たない先端リンクは距離が定義できないので OBB のまま。
     """
+    link_lengths = link_lengths or {}
     bodies = []
     for i, (path, mesh) in enumerate(parts):
         params = obb_params(mesh, scale)
         boff   = bone_offset_from_obb(params)
         radius = round(params['radius'], 4)
+        if names[i] in link_lengths:
+            true_len = round(link_lengths[names[i]] * scale, 4)
+            print(f"  [{names[i]}] bone_offset を関節間距離で置換: "
+                  f"{boff[0]:.4f} → {true_len:.4f} m "
+                  f"（OBB は {(boff[0]/true_len-1)*100:+.1f} % 過大。Bug 27）")
+            boff = [true_len, 0.0, 0.0]
         parent = 'root' if i == 0 else names[i - 1]
 
         lo, hi = ranges[i]
@@ -203,6 +214,9 @@ def main():
                         help='各リンクの名前（デフォルト: link0, link1, ...）')
     parser.add_argument('--output',   required=True,
                         help='出力 topology.json のパス')
+    parser.add_argument('--joints-json', default=None,
+                        help='glb_to_links が出す joints.json。関節間距離で bone_offset を'
+                             '置き換える（Bug 27 の是正）。省略すると OBB 主軸長を使う')
     parser.add_argument('--scale',    type=float, default=1.0,
                         help='長さの単位変換係数（mm→m なら 0.001）')
     parser.add_argument('--ranges',   nargs='+', default=None, type=parse_range,
@@ -234,7 +248,16 @@ def main():
         parts.append((path, mesh))
 
     print(f"\n[mesh_to_params] OBB からパラメータを抽出中（scale={args.scale}）...")
-    topo = build_topology(parts, names, args.scale, ranges, gears, args.output)
+    link_lengths = {}
+    if args.joints_json:
+        import json
+        link_lengths = json.load(open(args.joints_json)).get('link_lengths', {})
+        print(f"[mesh_to_params] 関節間距離を読み込み: {args.joints_json}")
+    else:
+        print("[mesh_to_params] ⚠️ --joints-json 未指定。bone_offset に OBB 主軸長を使う"
+              "（マーカー球のぶん 18〜20 % 過大になる。Bug 27）")
+    topo = build_topology(parts, names, args.scale, ranges, gears, args.output,
+                          link_lengths=link_lengths)
 
     if args.validate:
         print("\n[mesh_to_params] --validate: MuJoCo XML を生成して検証中...")
