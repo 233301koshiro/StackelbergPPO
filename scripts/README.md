@@ -21,8 +21,8 @@
 | スクリプト | 役割 |
 |---|---|
 | `run_tripo_pipeline.sh` | **GLB → XML を一発で通す。** 通常はこれを使う |
-| `glb_to_links.py` | M3: 色検出で関節を見つけメッシュを分割 |。**2026-09-02 変更**: `meshes/joints.json` に関節の 3D 座標と**関節間距離**を出力するようになった（Bug 27）。根元リンクのローカル原点も XY=(0,0) 決め打ちから**第1関節の XY** へ変更（Bug 28）
-| `mesh_to_params.py` | M4: OBB からリンク長・カプセル半径を抽出 → topology.json |。**2026-09-02 変更**: `--joints-json` で bone_offset に OBB 主軸長ではなく**関節間距離**を使う（Bug 27）。`--vertical` で**根元ヨー + 以降ピッチ・ボーン +Z** の縦型を出力する（Bug 29。`FIXED_BASE=0` と併用）
+| `glb_to_links.py` | M3: 色検出で関節を見つけメッシュを分割 |。**2026-09-02 変更**: `meshes/joints.json` に関節の 3D 座標と**関節間距離**を出力するようになった（Bug 27）。根元リンクのローカル原点も XY=(0,0) 決め打ちから**第1関節の XY** へ変更（Bug 28）。**2026-09-02（2回目）**: マーカーのクラスタリングを **3 次元の連結成分**へ（Bug 30。Z のみだと短い腕で隣の球と融合する）。先端リンクの長さも「最後の関節からの最遠点距離」を `joints.json` に出す（Bug 31）
+| `mesh_to_params.py` | M4: OBB からリンク長・カプセル半径を抽出 → topology.json |。**2026-09-02 変更**: `--joints-json` で bone_offset に OBB 主軸長ではなく**関節間距離**を使う（Bug 27）。`--vertical` で**根元ヨー + 以降ピッチ・ボーン +Z** の縦型を出力する（Bug 29。`FIXED_BASE=0` と併用）。**2026-09-02（2回目）**: 先端リンクも `--joints-json` の値を使うようになった（Bug 31。OBB は短い腕で +52.6 % 過大）
 | `topology_to_xml.py` | M5: topology.json → MuJoCo 互換 XML |
 | `run_2axis_mvp.sh` | rrbot 用の一気通貫（topology.json → XML/body → 学習） |
 | `eval_pipeline_robustness.py` | **M3 の頑健性評価**（第4章 4.2.2 = 軸1）。色ドリフトに対する許容幅を tolerance 掃引で測る。表 4.4・4.5 と 図 4.1 の出典 |
