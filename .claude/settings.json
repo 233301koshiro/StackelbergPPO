@@ -9,6 +9,17 @@
       "Bash(break)",
       "Bash(sed -n '/診断レポート:/,$p' single_run/diag_validation/tripo_pjp_long.txt)",
       "Bash(grep -vE \"^\\\\s*$\")"
+    ],
+    "defaultMode": "auto",
+    "deny": [
+      "Bash(rm -rf single_run*)",
+      "Bash(rm -rf /userdir/StackelbergPPO/single_run*)",
+      "Bash(rm -r single_run*)",
+      "Bash(rm -rf data/test*)",
+      "Bash(rm -rf /userdir/StackelbergPPO/data*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git reset --hard*)"
     ]
   }
 }
