@@ -610,8 +610,15 @@ E2E 実走からは上表の形で残す。
 ## 手順（1枚あたり）
 
 ```bash
+# M0: 描いた紙を測って data/test/<名前>/sketch/measured.json を書く
+#     ratios_base1（台座高=1 のリンク長・実測値）/ emphasis（normal|short|long）
+#     / arm_over_bbox（腕の長さ ÷ 絵全体の最大寸法 = 予測される絶対リーチ）
+
 # M1: 手描き → Gemini（Web） → 設計図スタイル画像
+#     プロンプトはスクリプトで組み立てる（md に貼らない。正本は scripts/make_m1_prompt.py）
+python3 scripts/make_m1_prompt.py --sketch <名前>
 #     ⚠️ 生成後に目視確認: マゼンタ球が3個か / リンク長の比がスケッチ通りか
+#        / 台座が縮められていないか / 罫線が混入していないか
 
 # M2: 画像 → Tripo3D（Web） → GLB
 #     GLB は data/test/<名前>/3D/<名前>.glb に置く
