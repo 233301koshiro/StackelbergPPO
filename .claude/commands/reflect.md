@@ -64,6 +64,12 @@ python3 scripts/check_citations.py          # 引用と参考文献の双方向�
 python3 scripts/check_stale_claims.py       # 事実と食い違う主張・IME 誤変換
 ```
 
+**週に1回は棚卸しも走らせる**（CLAUDE.md §4-2 定期棚卸し）。
+
+```bash
+python3 scripts/check_docs_inventory.py    # 孤立ファイル・壊れリンク・archive の注記漏れ
+```
+
 ### 5. 漏れがあれば直し、無ければ「無し」と報告する
 
 **取り繕わない。** 漏れが無かったならそう言う。あったなら、
