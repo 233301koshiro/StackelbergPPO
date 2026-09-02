@@ -569,9 +569,17 @@ E2E 実走からは上表の形で残す。
 #     ⚠️ 生成後に目視確認: マゼンタ球が3個か / リンク長の比がスケッチ通りか
 
 # M2: 画像 → Tripo3D（Web） → GLB
+#     GLB は data/test/<名前>/3D/<名前>.glb に置く
 
 # M3〜M5: GLB → XML（ここから自動）
 bash scripts/run_tripo_pipeline.sh <GLB> data/e2e_<名前> e2e_<名前>
+
+# ⚠️ M3 で関節が検出できないときのフォールバック（E2E手順書.md から統合、2026-09-02）
+#   既定は自動キャリブレーション（--auto-color）。検出 0 なら順に試す:
+#     1) JOINT_TOL=60 bash scripts/run_tripo_pipeline.sh ...     許容幅を広げる
+#     2) JOINT_COLOR="230 40 220" ...                            実測色を直接指定（GIMP 等でスポイト）
+#     3) JOINTS="-0.07 0.277" ...                                関節 Z を手動指定（最後の手段）
+#   マーカー色は生成過程でずれる（純マゼンタは保存されない。実測で最大 86/チャネル）
 
 # 生成した XML の健全性を必ず検算（Bug 23 の再発防止）
 python3 scripts/audit_xml_reach.py assets/mujoco_envs/e2e_<名前>.xml
