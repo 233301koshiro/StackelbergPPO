@@ -35,12 +35,24 @@ launch() {  # $1=run名 $2=seed $3=task $4=xml名
   else
     EXTRA="+reward_specs.ctrl_cost_coeff=0.2 +reward_specs.contact_weight=0 +reward_specs.init_contact_penalty=50 +env_specs.arm_safe_init=true"
   fi
+  # 縦型 XML は関節が1本多く depth 4 に達する。pusher_gearonly は max_body_depth=4
+  # （添字 0〜3）なので get_attr_fixed() が IndexError で即死する（9/2 に 2 本これで落ちた）。
+  # 縦型用の cfg は既にある（xz オフセット・床貫通チェック・depth 6）のでそれを使う。
+  case "$4" in
+    *v) CFG=pusher_tripo_v3
+        # 床貫通ペナルティは正直な最悪リターンより悪くしないと「貫通した方が得」になる（9-14）。
+        # 幾何から逆算: 肩 0.239 m・水平伸展 1.010 m・目標 (0.8,0,0.15)
+        #   最遠距離 = |S-T| + 1.010 = 1.815 m → 正直な最悪 = -1815 → 1900 を採用
+        # ⚠️ Pusher は正直な試行が正（0〜+270）なので既定 50 のままでよい。付けると比較が壊れる。
+        [ "$3" = "reach" ] && EXTRA="$EXTRA +reward_specs.init_contact_penalty=1900" ;;
+    *)  CFG=pusher_gearonly ;;
+  esac
   nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
     --no-window --python scripts/choreonoid_train.py \
-    cfg=pusher_gearonly xml_name="$4" num_threads=4 max_epoch_num=200 \
+    cfg="$CFG" xml_name="$4" num_threads=4 max_epoch_num=200 \
     enable_wandb=false fix_skeleton=true seed="$2" +robot_param_scale=1 $EXTRA \
     hydra.run.dir="single_run/$1" > "single_run/$1/stdout.log" 2>&1 &
-  log "$1 launched (PID $!, seed=$2, $3, xml=$4)"
+  log "$1 launched (PID $!, seed=$2, $3, xml=$4, cfg=$CFG)"
 }
 
 wait_free() {
@@ -63,7 +75,10 @@ stage() {  # $1 $2 = 前段として完走を待つ run 名、以降 "run seed t
   log "前段が完走: $a / $b"
   for spec in "$@"; do
     set -- $spec
-    if [ -d "single_run/$1/log" ]; then log "$1 は既存。スキップ"; continue; fi
+    # ⚠️ ディレクトリの有無だけで判定すると、起動直後にクラッシュした run が
+    # 空の log を残して**永久に再試行を塞ぐ**（9/2 に縦型2本がこれで17時間止まった）。
+    # log_train.txt が空でないことを「実施済み」の条件にする。
+    if [ -s "single_run/$1/log/log_train.txt" ]; then log "$1 は既存。スキップ"; continue; fi
     wait_free
     launch "$1" "$2" "$3" "$4"
     sleep 60
