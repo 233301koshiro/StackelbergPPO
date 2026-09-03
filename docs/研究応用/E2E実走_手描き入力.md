@@ -720,6 +720,11 @@ bash scripts/run_tripo_pipeline.sh <GLB> data/e2e_<名前> e2e_<名前>
 #     3) JOINTS="-0.07 0.277" ...                                関節 Z を手動指定（最後の手段）
 #   マーカー色は生成過程でずれる（純マゼンタは保存されない。実測で最大 86/チャネル）
 
+# ★ M2 の直後に姿勢を検査する（9-23。腕が寝ていると M3 の分割が原理的に通らない）
+python3 scripts/check_glb_pose.py data/test/<名前>/3D/<名前>.glb --joints 3
+#   ❌ が出たら **まず同じ M1 画像で Tripo3D をやり直す**（再構成にはばらつきがある）。
+#   2 回目も同じなら入力側（M1 画像の構図）を見直す
+
 # 生成した XML の健全性を必ず検算（Bug 23 の再発防止）
 python3 scripts/audit_xml_reach.py assets/mujoco_envs/e2e_<名前>.xml
 
