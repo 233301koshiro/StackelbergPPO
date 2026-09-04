@@ -33,6 +33,21 @@ DEADLINE=$(date -d '2026-09-06 18:00' +%s)
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 done_p() { grep -q "training done!" "single_run/$1/log/log_train.txt" 2>/dev/null; }
 
+# その run の学習プロセスが今も生きているか。
+# ⚠️ パターンではなく hydra.run.dir で照合する。`[c]` で grep 自身にマッチさせない（Bug 19）。
+# 末尾を ( |$) で閉じないと e2e_a2v_reach が e2e_a2v_reach_s2 にも当たる。
+alive_p() {
+  ps -eo args 2>/dev/null | grep -qE "[c]horeonoid_train\.py.*hydra\.run\.dir=single_run/$1( |\$)"
+}
+
+# models/epoch_NNNN.p の最大値。途中再開の epoch 指定に使う
+latest_ckpt() {
+  local n
+  n=$(ls "single_run/$1"/models/epoch_*.p 2>/dev/null \
+      | sed 's|.*/epoch_||; s|\.p$||' | sort -n | tail -1)
+  [ -n "$n" ] && echo $((10#$n))
+}
+
 # 縦型 Reach の床貫通ペナルティ。**XML ごとに違う**（9-14 の原則）。
 # 正直な最悪リターンより悪くしないと「貫通した方が得」になる。
 #   最遠距離 = |肩 − 目標| + 肩から先の腕の長さ、正直な最悪 = −1000 × 最遠距離
@@ -51,7 +66,7 @@ floor_penalty() {
   esac
 }
 
-launch() {  # $1=run名 $2=seed $3=task $4=xml名
+launch() {  # $1=run名 $2=seed $3=task $4=xml名 $5=追加引数（途中再開用、省略可）
   mkdir -p "single_run/$1"
   if [ "$3" = "reach" ]; then
     EXTRA="+reward_specs.use_reach=true +reward_specs.target_x=0.8 +reward_specs.target_y=0.0 +reward_specs.target_z=0.15 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false"
@@ -76,9 +91,9 @@ launch() {  # $1=run名 $2=seed $3=task $4=xml名
   nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
     --no-window --python scripts/choreonoid_train.py \
     cfg="$CFG" xml_name="$4" num_threads=4 max_epoch_num=200 \
-    enable_wandb=false fix_skeleton=true seed="$2" +robot_param_scale=1 $EXTRA \
-    hydra.run.dir="single_run/$1" > "single_run/$1/stdout.log" 2>&1 &
-  log "$1 launched (PID $!, seed=$2, $3, xml=$4, cfg=$CFG)"
+    enable_wandb=false fix_skeleton=true seed="$2" +robot_param_scale=1 $EXTRA ${5:-} \
+    hydra.run.dir="single_run/$1" >> "single_run/$1/stdout.log" 2>&1 &
+  log "$1 launched (PID $!, seed=$2, $3, xml=$4, cfg=$CFG${5:+, $5})"
 }
 
 wait_free() {
@@ -101,12 +116,31 @@ stage() {  # $1 $2 = 前段として完走を待つ run 名、以降 "run seed t
   log "前段が完走: $a / $b"
   for spec in "$@"; do
     set -- $spec
-    # ⚠️ ディレクトリの有無だけで判定すると、起動直後にクラッシュした run が
-    # 空の log を残して**永久に再試行を塞ぐ**（9/2 に縦型2本がこれで17時間止まった）。
-    # log_train.txt が空でないことを「実施済み」の条件にする。
-    if [ -s "single_run/$1/log/log_train.txt" ]; then log "$1 は既存。スキップ"; continue; fi
+    # ⚠️ **「ログがあるか」の2値で判定すると必ずどこかで固まる。** 4 状態に分ける。
+    #   ① 完走済み            → スキップ
+    #   ② 稼働中              → スキップ（キューを二重起動しても二重投入しない）
+    #   ③ 途中で死んだ+ckptあり → **そこから再開**（コンテナ停止がこれ。Bug 35）
+    #   ④ 途中で死んだ+ckptなし → ログを退避して最初から
+    # ②③④を「既存」で一括スキップしていたため、③でキューが期限まで無言で待ち続けた。
+    RESUME=""
+    if done_p "$1"; then
+      log "$1 は完走済み。スキップ"; continue
+    elif alive_p "$1"; then
+      log "$1 は稼働中。スキップ"; continue
+    elif [ -s "single_run/$1/log/log_train.txt" ]; then
+      CK=$(latest_ckpt "$1")
+      if [ -n "$CK" ]; then
+        # `reset_epoch` は付けない（epoch カウンタを継続させる。引き継ぎ書 §2 の再開手順）
+        RESUME="+restore_dir=single_run/$1 epoch=$CK"
+        log "$1 は epoch $CK まで進んで止まっている → そこから再開する"
+      else
+        D="single_run/$1.dead_$(date +%m%d%H%M)"
+        mv "single_run/$1" "$D"
+        log "$1 は途中で死んで checkpoint も無い → $D へ退避し最初から投入する"
+      fi
+    fi
     wait_free
-    launch "$1" "$2" "$3" "$4"
+    launch "$1" "$2" "$3" "$4" "$RESUME"
     sleep 60
   done
 }
