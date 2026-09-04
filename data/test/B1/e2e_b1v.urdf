@@ -1,0 +1,98 @@
+<?xml version="1.0"?>
+<robot name="tripo_arm">
+
+  <link name="world"/>
+
+  <joint name="world_to_base" type="continuous">
+    <parent link="world"/>
+    <child link="base"/>
+    <origin xyz="0.000000 0.000000 0.020000" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="100" velocity="5"/>
+  </joint>
+
+  <!-- ===== base ===== -->
+  <link name="base">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/base.stl"/>
+      </geometry>
+      <material name="red"><color rgba="0.7 0.2 0.2 1.0"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="meshes/base.stl"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="joint_to_upper_arm" type="revolute">
+    <parent link="base"/>
+    <child link="upper_arm"/>
+    <origin xyz="0.000000 0.000000 0.530971" rpy="0 0 0"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-1.5708" upper="1.5708" effort="100" velocity="5"/>
+  </joint>
+
+  <!-- ===== upper_arm ===== -->
+  <link name="upper_arm">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/upper_arm.stl"/>
+      </geometry>
+      <material name="blue"><color rgba="0.2 0.2 0.8 1.0"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="meshes/upper_arm.stl"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="joint_to_forearm" type="revolute">
+    <parent link="upper_arm"/>
+    <child link="forearm"/>
+    <origin xyz="0.001009 0.128770 0.229118" rpy="0 0 0"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-1.5708" upper="1.5708" effort="100" velocity="5"/>
+  </joint>
+
+  <!-- ===== forearm ===== -->
+  <link name="forearm">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/forearm.stl"/>
+      </geometry>
+      <material name="green"><color rgba="0.2 0.7 0.2 1.0"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="meshes/forearm.stl"/></geometry>
+    </collision>
+  </link>
+
+  <joint name="joint_to_hand" type="revolute">
+    <parent link="forearm"/>
+    <child link="hand"/>
+    <origin xyz="-0.001646 0.208030 0.126588" rpy="0 0 0"/>
+    <axis xyz="0.0000 1.0000 0.0000"/>
+    <limit lower="-1.5708" upper="1.5708" effort="100" velocity="5"/>
+  </joint>
+
+  <!-- ===== hand ===== -->
+  <link name="hand">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes/hand.stl"/>
+      </geometry>
+      <material name="yellow"><color rgba="0.8 0.8 0.2 1.0"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="meshes/hand.stl"/></geometry>
+    </collision>
+  </link>
+
+</robot>
