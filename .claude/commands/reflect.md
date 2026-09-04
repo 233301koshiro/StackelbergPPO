@@ -47,6 +47,24 @@ git log --oneline -30 | grep -iE "訂正|取り下げ|反証|撤回|誤り|解�
 **知見の現在地は [知見総括表.md](../../docs/研究応用/知見総括表.md) を見る。**
 とくに **E 節「反証・取り下げた主張」**に、いま言ってはいけない読みが集めてある。
 
+### 0-2. 学習が完走していたら、**解釈を書く前に収束形態を実測する**
+
+**best 値だけを見て解釈を書くと交絡を見落とす。** 2026-09-04 に実際に踏んだ:
+「縦型は平面より Reach が悪く Pusher が良い」→「自由度が Reach では負債、Pusher では資産」
+と結論して記録したが、**収束形態を実測したら縦型はリンク長も最適化されて腕が約 2 倍に
+伸びていた**（`pusher_tripo_v3` の `body_params.offset`、平面は `{}` で凍結）。
+**方向はリンク長だけで説明がつき、解釈は取り下げになった。**
+
+```bash
+COMPARE_RUNS="single_run/A:single_run/B" COMPARE_LABELS="A:B" \
+USE_CHOREONOID=1 /choreonoid_ws/install/bin/choreonoid --no-window \
+  --python scripts/compare_morphology.py
+```
+
+**とくに条件間で cfg が違うときは、`design_opt/cfg/*.yml` の
+`body_params` / `geom_params` / `actuator_params` を直接見比べる。**
+「何が最適化対象か」が違えば、best の比較は別物どうしの比較になる。
+
 ### 1. 踏んだトリガーを判定する
 
 直前の作業を見て、次のどれに当たるかを**すべて**挙げる（複数可）。

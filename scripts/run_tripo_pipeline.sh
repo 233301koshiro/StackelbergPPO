@@ -13,7 +13,7 @@
 # 出力:
 #   <OUT_DIR>/meshes/link_0.stl, link_1.stl, ...  (link-local STL)
 #   <OUT_DIR>/<XML_NAME>.urdf                       (Choreonoid 可視化用)
-#   <OUT_DIR>/topology.json                         (Stackelberg 形式)
+#   <OUT_DIR>/<XML_NAME>_topology.json              (Stackelberg 形式)
 #   assets/mujoco_envs/<XML_NAME>.xml               (RL 学習用)
 #
 # オプション環境変数:
@@ -98,9 +98,15 @@ if [ -z "${PARTS// /}" ]; then
   exit 1
 fi
 
+# ⚠️ Bug 34（2026-09-04）: 出力名を run 名で分ける。
+# 以前は $OUT_DIR/topology.json 固定だったので、**同じスケッチを平面と縦型の両方で通すと
+# 後の方が前を黙って上書きした**（B1・B2・A2 で実際に起きた）。XML は run 名なので残るが、
+# 中間ファイルから作り直すと別物が出る。XML と中間の対応が壊れるのが危ない。
+TOPO="$OUT_DIR/${XML_NAME}_topology.json"
+
 STEP2_ARGS=(
   --parts    $PARTS
-  --output   "$OUT_DIR/topology.json"
+  --output   "$TOPO"
   --validate
 )
 # Bug 27（2026-09-02）: OBB 主軸長は分割境界のマーカー球を含んで 18〜20 % 過大。
@@ -133,7 +139,7 @@ echo ""
 echo "[Step 3] topology.json → MuJoCo XML"
 
 python3 scripts/topology_to_xml.py \
-  --topology "$OUT_DIR/topology.json" \
+  --topology "$TOPO" \
   --output   "assets/mujoco_envs/${XML_NAME}.xml" \
   --validate
 
