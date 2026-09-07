@@ -28,7 +28,7 @@ set -u
 cd /userdir/StackelbergPPO
 LOG=single_run/queue_e2e_a1.log
 MIN_FREE_GB=20
-DEADLINE=$(date -d '2026-09-06 18:00' +%s)
+DEADLINE=$(date -d '2026-09-09 12:00' +%s)
 
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 done_p() { grep -q "training done!" "single_run/$1/log/log_train.txt" 2>/dev/null; }
@@ -191,5 +191,20 @@ stage e2e_a1_fix3_reach e2e_a1_fix3_pusher \
 stage e2e_a2v_reach e2e_a2v_pusher \
   "e2e_b2v_reach 0 reach e2e_b2v" \
   "e2e_b2v_pusher 0 pusher e2e_b2v"
+
+# 第7段: A2v・B2v の seed 1（2026-09-07 追加）。
+#   9-29 で Pusher が 348（A1v）→ 151（A2v）→ 184（B2v）と**逆転**したが、
+#   **A2v・B2v はどちらも 1 seed** なので、逆転が形態由来か seed 由来か分けられない。
+#   A1v の seed 幅は 8.17 しかないので、逆転（33 の差）が本物なら seed では説明できない。
+#   ⚠️ **Pusher を先に回す。** Reach は 3 点が単調（-13.97 → -14.64 → -19.67）で
+#   差も小さく、seed を足しても読みは変わりにくい。差が大きく逆転しているのは Pusher。
+stage e2e_b2v_reach e2e_b2v_pusher \
+  "e2e_a2v_pusher_s2 1 pusher e2e_a2v" \
+  "e2e_b2v_pusher_s2 1 pusher e2e_b2v"
+
+# 第8段: Reach 側の seed 1。単調性の確認（優先度は下）。
+stage e2e_a2v_pusher_s2 e2e_b2v_pusher_s2 \
+  "e2e_a2v_reach_s2 1 reach e2e_a2v" \
+  "e2e_b2v_reach_s2 1 reach e2e_b2v"
 
 log "キュー完了: 予定していた投入をすべて終えた"
