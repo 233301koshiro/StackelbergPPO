@@ -14,7 +14,7 @@ Yanning Dai*, Yuhui Wang*, Dylan R. Ashley, Jürgen Schmidhuber — ICLR 2026
 
 | 項目 | 内容 |
 |------|------|
-| Docker イメージ | `akita_sp`（`irsl_system:noetic` ベース）|
+| Docker イメージ | `akita_sp`（`irsl_system:24.04_one` ベース）※ ビルドは [docker/](docker/) |
 | Python | 3.12 |
 | シミュレータ | Choreonoid 2.3 |
 | PyTorch | 2.7.0+cu128 |
