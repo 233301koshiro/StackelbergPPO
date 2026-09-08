@@ -35,6 +35,23 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # 1 枚ごとの強調。狙いが「短い」「長い」の枚は、生成側が親切心で補正するのを止める必要がある。
+# 先端の形。ホッケー用は円盤ヘッド（マレット）にする。
+# ⚠️ 円盤直径が先端長の 2/3 を超えると、OBB の最長辺と次辺の差が 1.5 倍を割り、
+# mesh_to_params.py が主軸を決められず警告を出す（実測で hockey は 1.56 と際どい）。
+TIP = {
+    'capsule': '- 各リンクは円柱カプセル。先端リンクのみ、やや太い円柱でよい',
+    'mallet': (
+        '- リンク1・2 は円柱カプセル\n'
+        '- **先端リンクはマレット**: 細くない柄の先に、平たい円盤のヘッドが付いた形\n'
+        '  - **柄は前腕と同程度の太さにすること。細い棒にしない**\n'
+        '    （細いと三次元化で潰れ、手首の関節球と円盤がくっついて関節を誤検出する）\n'
+        '  - **円盤の直径は、先端リンク全体の長さの 0.6 倍を超えないこと**\n'
+        '    （超えると後段が先端の向きを決められなくなる）\n'
+        '  - 円盤は薄い円盤であって、球やハンマーの頭のような塊にしない\n'
+        '  - 柄と円盤は**同じ色**で塗ること（別色にすると別リンクとして検出される）'
+    ),
+}
+
 EMPHASIS = {
     'normal': 'この比を変えないこと',
     # 短さは「腕 ÷ 絵全体の最大寸法」で決まり、その分母の大半が台座である。
@@ -63,7 +80,7 @@ TEMPLATE = """添付した手描きスケッチのロボットアームを、下
 【形状・姿勢 — 最重要】
 - 固定台座から垂直に伸びるシリアルチェーンアーム（根元が下・先端が上）
 - **腕全体を寝かせない。** 元のスケッチが寝ていても立てること（上の【最優先】の例外を参照）
-- 各リンクは円柱カプセル。先端リンクのみ、やや太い円柱でよい
+{tip}
 - 関節が同じ高さに並ばないよう、各リンクに角度をつけて描くこと
 
 【関節マーカー — 最重要・省略厳禁】
@@ -101,16 +118,28 @@ JOINTS_3 = """1. 台座と上腕（赤）の間
 2. 上腕（赤）と前腕（青）の間
 3. 前腕（青）と先端（緑）の間 ← ここも省略しないこと"""
 
+JOINTS_3_MALLET = """1. 台座と上腕（赤）の間
+2. 上腕（赤）と前腕（青）の間
+3. 前腕（青）とマレットの柄（緑）の間 ← ここも省略しないこと"""
 
-def build(ratios, emphasis):
+
+def build(ratios, emphasis, tip='capsule'):
     if len(ratios) != 3:
         raise SystemExit('リンクは 3 本を前提にしている（--ratios を 3 つ指定）')
-    return TEMPLATE.format(
+    out = TEMPLATE.format(
         ratios=' / '.join(f'{r:g}' for r in ratios),
         emphasis=EMPHASIS[emphasis],
         n=len(ratios),
-        joint_list=JOINTS_3,
+        joint_list=JOINTS_3_MALLET if tip == 'mallet' else JOINTS_3,
+        tip=TIP[tip],
     )
+    if tip == 'mallet':
+        out = out.replace('- 指・グリッパ・ハンド・分岐（先端はリンクのまま終わる）',
+                          '- 指・グリッパ・分岐（先端は円盤で終わる）\n'
+                          '- ホッケー台・パック・ゴール（アーム単体のみを描くこと）')
+        out = out.replace('- リンク3（先端）: 鮮明な緑 (#22CC22)',
+                          '- リンク3（柄と円盤ヘッド）: 鮮明な緑 (#22CC22)  ※柄と円盤は同じ緑にする')
+    return out
 
 
 def main():
@@ -121,9 +150,11 @@ def main():
                     help='台座高を 1 としたときのリンク長（実測値）')
     ap.add_argument('--emphasis', choices=sorted(EMPHASIS), default='normal',
                     help='1 枚ごとの強調。short/long は生成側の「親切な補正」を止める')
+    ap.add_argument('--tip', choices=sorted(TIP), default='capsule',
+                    help='先端の形。ホッケー用は mallet（円盤ヘッド）')
     args = ap.parse_args()
 
-    ratios, emphasis = args.ratios, args.emphasis
+    ratios, emphasis, tip = args.ratios, args.emphasis, args.tip
     if args.sketch:
         f = ROOT / 'data' / 'test' / args.sketch / 'sketch' / 'measured.json'
         if not f.exists():
@@ -134,6 +165,7 @@ def main():
         d = json.loads(f.read_text(encoding='utf-8'))
         ratios = d['ratios_base1']
         emphasis = d.get('emphasis', 'normal')
+        tip = d.get('tip', tip)
         print(f'# {args.sketch}: {f.relative_to(ROOT)} より', file=sys.stderr)
         if 'arm_over_bbox' in d:
             r = d['arm_over_bbox']
@@ -146,7 +178,7 @@ def main():
 
     if not ratios:
         raise SystemExit('--sketch か --ratios のどちらかを指定すること')
-    print(build(ratios, emphasis))
+    print(build(ratios, emphasis, tip))
 
 
 if __name__ == '__main__':
