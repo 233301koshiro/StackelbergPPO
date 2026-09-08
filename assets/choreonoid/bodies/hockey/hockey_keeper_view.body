@@ -23,7 +23,7 @@ links:
   -
     name: keeper_base
     joint_type: fixed
-    translation: [ 1.85, 0, 0 ]        # ゴール（x=2.0）の少し手前
+    translation: [ 1.45, 0, 0.10 ]     # ゴール（x=1.55）の少し手前。盤面の上
     mass: 10.0
     center_of_mass: [ 0, 0, 0 ]
     inertia: [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ]

@@ -15,12 +15,11 @@ name: hockey_table_view
 #   choreonoid --urdf data/test/hockey/e2e_hockeyv.urdf \
 #              assets/choreonoid/bodies/hockey/hockey_table_view.body
 #
-# 寸法は実物のエアホッケー台に合わせた（幅 1.0 m × 奥行き 2.0 m、
-# ロボットは手前 y=0 側、ゴールは正面 x=+2.0 の中央）。
-# ⚠️ **cube は一辺 0.3 m あり、この台に対して大きすぎる。**
-# さらに学習済み方策は cube を 15 m 吹き飛ばす（9-28 の記録）。
-# 台に載せて見ると**すぐ外へ出る**が、それは第3層が
-# 「一撃で吹き飛ばす」と分類している戦略そのものである。
+# ⚠️ **2026-09-08 更新: 寸法を実験のコート（9-38 の B+C+D）に合わせた。**
+#   コート  x 0.15〜1.55（奥行き 1.4 m）、y ±0.5（幅 1.0 m）
+#   盤面 z = 0.10 … パック（一辺 0.10 m、中心 z=0.15）の底面と一致する
+# これで `assets/mujoco_envs/e2e_hockey_court.xml` と**見た目が一致する**。
+# ⚠️ 旧 `e2e_hockeyv.xml`（一辺 0.3 m・2.7 kg・16 m 飛ぶ）とは合わない。
 
 root_link: table_base
 
@@ -28,7 +27,7 @@ links:
   -
     name: table_base
     joint_type: fixed
-    translation: [ 1.0, 0, 0 ]        # ロボットの正面に置く
+    translation: [ 0.85, 0, 0.10 ]     # コート中心。盤面をパック底面 z=0.10 に合わせる
     mass: 50.0
     center_of_mass: [ 0, 0, 0 ]
     inertia: [ 10, 0, 0, 0, 10, 0, 0, 0, 10 ]
@@ -37,40 +36,40 @@ links:
       -
         type: Shape
         translation: [ 0, 0, 0.005 ]
-        geometry: { type: Box, size: [ 2.0, 1.0, 0.01 ] }
+        geometry: { type: Box, size: [ 1.4, 1.0, 0.01 ] }
         appearance: { material: { diffuse: [ 0.85, 0.90, 0.95 ] } }
       # side walls (y = ±0.5)
       -
         type: Shape
         translation: [ 0, 0.51, 0.04 ]
-        geometry: { type: Box, size: [ 2.0, 0.02, 0.07 ] }
+        geometry: { type: Box, size: [ 1.4, 0.02, 0.07 ] }
         appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
       -
         type: Shape
         translation: [ 0, -0.51, 0.04 ]
-        geometry: { type: Box, size: [ 2.0, 0.02, 0.07 ] }
+        geometry: { type: Box, size: [ 1.4, 0.02, 0.07 ] }
         appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
       # end wall (robot side, x = -1.0)
       -
         type: Shape
-        translation: [ -1.01, 0, 0.04 ]
+        translation: [ -0.71, 0, 0.04 ]
         geometry: { type: Box, size: [ 0.02, 1.0, 0.07 ] }
         appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
       # goal end (x = +1.0): 左右の壁だけ残し、中央 0.3 m を開ける
       -
         type: Shape
-        translation: [ 1.01, 0.35, 0.04 ]
+        translation: [ 0.71, 0.35, 0.04 ]
         geometry: { type: Box, size: [ 0.02, 0.3, 0.07 ] }
         appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
       -
         type: Shape
-        translation: [ 1.01, -0.35, 0.04 ]
+        translation: [ 0.71, -0.35, 0.04 ]
         geometry: { type: Box, size: [ 0.02, 0.3, 0.07 ] }
         appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
       # ゴール口を示す赤い床（中央 0.3 m）
       -
         type: Shape
-        translation: [ 0.98, 0, 0.011 ]
+        translation: [ 0.68, 0, 0.011 ]
         geometry: { type: Box, size: [ 0.06, 0.3, 0.002 ] }
         appearance: { material: { diffuse: [ 0.9, 0.2, 0.2 ] } }
       # センターライン
