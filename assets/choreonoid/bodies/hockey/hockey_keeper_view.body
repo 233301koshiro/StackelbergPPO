@@ -1,0 +1,55 @@
+format: ChoreonoidBody
+format_version: 2.0
+angle_unit: degree
+name: hockey_keeper_view
+
+# ⚠️ **表示専用。学習には使わない。**
+#
+# ⚠️ **キーパーを学習に入れると、いまの観測では学習不能になる。**
+# 方策が受け取る観測は `get_sim_obs()` の
+#   relative_dis = get_body_com("cube") - 先端位置
+# だけで、**キーパーの位置は観測に含まれない**。
+# 見えない障害物が動き回ると、方策から見れば「たまに理由なく失敗する」だけになり、
+# **避ける戦略を学習できない**（cube_y_noise を入れられたのは cube が観測できるため。9-33）。
+# 入れるなら観測にキーパーの位置を足す必要があり、それは観測次元の変更＝
+# **既存の全 run と比較できなくなる**。
+#
+# ゴール前を左右に動かすには、Choreonoid の Joint Displacement で
+# `keeper_slide`（y 方向、±0.35 m）を動かす。物理シミュレーションではなく手動確認用。
+
+root_link: keeper_base
+
+links:
+  -
+    name: keeper_base
+    joint_type: fixed
+    translation: [ 1.85, 0, 0 ]        # ゴール（x=2.0）の少し手前
+    mass: 10.0
+    center_of_mass: [ 0, 0, 0 ]
+    inertia: [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ]
+    elements: []
+  -
+    name: keeper
+    parent: keeper_base
+    joint_name: keeper_slide
+    joint_type: prismatic
+    joint_id: 0
+    joint_axis: [ 0, 1, 0 ]            # 左右（y）にスライド
+    joint_range: [ -0.35, 0.35 ]
+    translation: [ 0, 0, 0 ]
+    mass: 0.5
+    center_of_mass: [ 0, 0, 0.04 ]
+    inertia: [ 0.002, 0, 0, 0, 0.002, 0, 0, 0, 0.002 ]
+    elements:
+      # 打面（ゴール幅 0.3 m に対し 0.18 m ＝ 完全には塞げない）
+      -
+        type: Shape
+        translation: [ 0, 0, 0.04 ]
+        geometry: { type: Box, size: [ 0.03, 0.18, 0.07 ] }
+        appearance: { material: { diffuse: [ 0.15, 0.35, 0.85 ] } }
+      # 目印の柱
+      -
+        type: Shape
+        translation: [ 0, 0, 0.12 ]
+        geometry: { type: Cylinder, radius: 0.015, height: 0.10 }
+        appearance: { material: { diffuse: [ 0.1, 0.2, 0.6 ] } }

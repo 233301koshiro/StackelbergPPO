@@ -1,0 +1,33 @@
+format: ChoreonoidBody
+format_version: 2.0
+angle_unit: degree
+name: hockey_puck_view
+
+# ⚠️ **表示専用。学習には使わない。**
+# 学習で使っているのは `assets/mujoco_envs/e2e_hockeyv.xml` の `cube`
+# （**一辺 0.3 m の箱**）であって、この円盤ではない。
+#
+# ⚠️ **大きさが全然違う。** 実物のエアホッケーのパックは直径 8 cm・厚さ 1 cm 程度で、
+# 学習中の cube（0.3 m 角）は**その 4 倍近い**。台（2.0 × 1.0 m）に対して cube は大きすぎる。
+# 学習側を円盤に差し替えると **既存の Pusher 全 run と物理が変わり比較が壊れる**ので、
+# 差し替えるなら「Shot 系だけの新しい系列」として扱うこと。
+#
+#   choreonoid data/test/hockey/e2e_hockeyv.urdf \
+#     assets/choreonoid/bodies/hockey/hockey_table_view.body \
+#     assets/choreonoid/bodies/hockey/hockey_puck_view.body
+
+root_link: puck
+
+links:
+  -
+    name: puck
+    joint_type: free
+    translation: [ 1.0, 0, 0.016 ]
+    mass: 0.05
+    center_of_mass: [ 0, 0, 0 ]
+    inertia: [ 2.2e-05, 0, 0, 0, 2.2e-05, 0, 0, 0, 4.0e-05 ]
+    elements:
+      -
+        type: Shape
+        geometry: { type: Cylinder, radius: 0.04, height: 0.012 }
+        appearance: { material: { diffuse: [ 0.85, 0.15, 0.15 ] } }
