@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import build_thesis_pdf as B   # 変換ロジックを再利用（重複実装を作らない）
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC_DIR = ROOT / 'docs' / '研究応用'
+SRC_DIR = ROOT / 'docs' / '研究応用' / '執筆'   # 2026-09-08 に 研究応用/ をサブフォルダ化
 BUILD_DIR = ROOT / 'build_pdf'
 TARGETS = ['論文2枚.md', '論文6枚.md']
 

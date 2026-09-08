@@ -10,7 +10,7 @@ eval_reach_hover.py: Reach 系 run の「収束床の内訳」を判別するプ
   EVAL_RESTORE_DIR=single_run/rrbot_arm_reach_G3 EVAL_NUM_EPISODES=3 \
     USE_CHOREONOID=1 choreonoid --no-window --python scripts/eval_reach_hover.py
 
-背景: docs/研究応用/形態比較.md「未決の問い」（2026-07-10）
+背景: docs/研究応用/台帳/形態比較.md「未決の問い」（2026-07-10）
 """
 import os
 import sys
