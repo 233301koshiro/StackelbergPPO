@@ -98,8 +98,14 @@ def main() -> int:
             print(f"      {p.relative_to(DOCS)}")
 
     # 4. archive にあるのに現役から参照されている
+    # ⚠️ **判断済みのものを毎週出さない。** 冒頭に「archive にあるが今も参照されている」と
+    # 明記したファイルは、2026-09-02 の棚卸しで「内容が生きているので残す」と決めたもの。
+    # 毎回同じ件数が出る検査は読まれなくなる（CLAUDE.md §4-2）。
+    ACK = 'archive にあるが今も参照されている'
     live_refs = {}
     for p in arch:
+        if ACK in text[p][:600]:
+            continue
         refs = [q.relative_to(DOCS) for q, t in text.items()
                 if 'archive' not in q.parts and q != TOC and p.name in t]
         if refs:
