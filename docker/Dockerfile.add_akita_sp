@@ -1,0 +1,52 @@
+FROM repo.irsl.eiiris.tut.ac.jp/irsl_system:24.04_one
+# Ubuntu 24.04 / Python 3.12 / Choreonoid 2.3
+# Choreonoid Python bindings compiled for Python 3.12:
+#   no separate Python install, no ZMQ bridge needed.
+#
+# Base image already contains:
+#   numpy 1.26.4, scipy, matplotlib, lxml, pyzmq
+
+# System deps for MuJoCo (optional fallback) and headless Choreonoid
+RUN apt-get update && apt-get install -y \
+        libosmesa6-dev libgl1 libglfw3 libglew-dev patchelf \
+        xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# MuJoCo 2.1.0 binary (HOME=/ros_home in this image)
+# Used by xml_robot.py utilities; simulation runs in Choreonoid.
+RUN mkdir -p /ros_home/.mujoco && \
+    wget -q https://github.com/deepmind/mujoco/releases/download/2.1.0/mujoco210-linux-x86_64.tar.gz \
+         -O /tmp/mujoco.tar.gz && \
+    tar -xf /tmp/mujoco.tar.gz -C /ros_home/.mujoco && \
+    rm /tmp/mujoco.tar.gz
+
+ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/ros_home/.mujoco/mujoco210/bin:/usr/lib/nvidia"
+
+# NVIDIA Container Runtime に OpenGL（GLX）ライブラリも挿入するよう指示
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,display
+
+# PyTorch 2.7.0 with CUDA 12.8 (supports sm_120 Blackwell / RTX 5060 Ti)
+RUN pip install --break-system-packages torch==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+
+# torch-geometric (latest compatible with torch 2.7)
+RUN pip install --break-system-packages torch-geometric
+
+# StackelbergPPO dependencies (Python 3.12 compatible)
+RUN pip install --break-system-packages \
+    "gym==0.26.2" \
+    opencv-python \
+    glfw \
+    pyyaml \
+    tensorboard \
+    "cython<3" \
+    hydra-core==1.2.0 \
+    hydra-submitit-launcher==1.2.0 \
+    hydra-joblib-launcher \
+    "wandb==0.14.0" \
+    ipykernel \
+    seaborn \
+    datasketch
+
+# mujoco-py: optional MuJoCo simulation backend (USE_CHOREONOID=0 のとき使用)
+# Python 3.12 + mujoco-py のビルドに失敗しても継続する
+RUN pip install --break-system-packages "mujoco-py<2.2,>=2.1" || echo "[INFO] mujoco-py build failed; Choreonoid backend will be used"
