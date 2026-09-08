@@ -1,0 +1,161 @@
+{
+  "description": "4-joint vertical serial arm (from mesh, root yaw + pitch chain)",
+  "bodies": [
+    {
+      "name": "base",
+      "parent": "root",
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "range": [
+          -180.0,
+          180.0
+        ],
+        "note": "根元ヨー（鉛直軸）。元メッシュ: base.stl"
+      },
+      "bone_offset": [
+        0.0,
+        0.0,
+        0.1935
+      ],
+      "geom": {
+        "type": "capsule",
+        "size": 0.0694,
+        "ext_start": 0.0,
+        "source_mesh": "/userdir/StackelbergPPO/data/test/_hockey_v2/meshes/base.stl"
+      },
+      "actuator": {
+        "gear": 100.0
+      }
+    },
+    {
+      "name": "upper_arm",
+      "parent": "base",
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "range": [
+          -90.0,
+          90.0
+        ],
+        "note": "ピッチ（水平軸）。元メッシュ: upper_arm.stl"
+      },
+      "bone_offset": [
+        0.0,
+        0.0,
+        0.2944
+      ],
+      "geom": {
+        "type": "capsule",
+        "size": 0.0438,
+        "ext_start": 0.0,
+        "source_mesh": "/userdir/StackelbergPPO/data/test/_hockey_v2/meshes/upper_arm.stl"
+      },
+      "actuator": {
+        "gear": 100.0
+      }
+    },
+    {
+      "name": "forearm",
+      "parent": "upper_arm",
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "range": [
+          -90.0,
+          90.0
+        ],
+        "note": "ピッチ（水平軸）。元メッシュ: forearm.stl"
+      },
+      "bone_offset": [
+        0.0,
+        0.0,
+        0.3191
+      ],
+      "geom": {
+        "type": "capsule",
+        "size": 0.0339,
+        "ext_start": 0.0,
+        "source_mesh": "/userdir/StackelbergPPO/data/test/_hockey_v2/meshes/forearm.stl"
+      },
+      "actuator": {
+        "gear": 100.0
+      }
+    },
+    {
+      "name": "hand",
+      "parent": "forearm",
+      "joint": {
+        "type": "hinge",
+        "axis": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "range": [
+          -90.0,
+          90.0
+        ],
+        "note": "ピッチ（水平軸）。元メッシュ: hand.stl"
+      },
+      "bone_offset": [
+        0.0,
+        0.0,
+        0.2339
+      ],
+      "geom": {
+        "type": "capsule",
+        "size": 0.0586,
+        "ext_start": 0.0,
+        "source_mesh": "/userdir/StackelbergPPO/data/test/_hockey_v2/meshes/hand.stl"
+      },
+      "actuator": {
+        "gear": 100.0
+      }
+    }
+  ],
+  "root": {
+    "fixed_base": true,
+    "pos": [
+      0.0,
+      0.0,
+      0.02
+    ]
+  },
+  "stackelberg_param_bounds": {
+    "bone_offset_xy": {
+      "lb": [
+        -0.5,
+        -0.5
+      ],
+      "ub": [
+        0.5,
+        0.5
+      ]
+    },
+    "geom_size": {
+      "lb": 0.03,
+      "ub": 0.1
+    },
+    "geom_ext_start": {
+      "lb": 0.0,
+      "ub": 0.2
+    },
+    "actuator_gear": {
+      "lb": 20,
+      "ub": 400
+    }
+  }
+}
