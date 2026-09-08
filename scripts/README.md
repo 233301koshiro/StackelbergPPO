@@ -135,7 +135,7 @@
 ## build_thesis_pdf.py の注意（節番号の罠）
 
 ```bash
-python3 scripts/build_thesis_pdf.py --out docs/修論ドラフト_YYYYMMDD.pdf
+python3 scripts/build_thesis_pdf.py --out docs/pdf/修論ドラフト_YYYYMMDD.pdf
 ```
 
 ⚠️ **本スクリプトは md の節番号を捨て、LaTeX に振り直させる**（`strip_heading_number`）。
@@ -158,7 +158,7 @@ python3 scripts/build_thesis_pdf.py --out docs/修論ドラフト_YYYYMMDD.pdf
 **ビルド後の検証手順**:
 
 ```bash
-pdftotext -f 1 -l 5 docs/修論ドラフト_YYYYMMDD.pdf - | grep -E "^\s*3\.[0-9]+"
+pdftotext -f 1 -l 5 docs/pdf/修論ドラフト_YYYYMMDD.pdf - | grep -E "^\s*3\.[0-9]+"
 ```
 
 で目次を出し、**md の節番号と一致するか**を見る。とくに他章から参照されている節

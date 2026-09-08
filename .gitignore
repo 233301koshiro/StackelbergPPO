@@ -89,4 +89,4 @@ pip-log.txt
 pip-delete-this-directory.txt
 # Thesis build artifacts (regenerable via scripts/build_thesis_pdf.py)
 build_pdf/
-docs/修論ドラフト_*.pdf
+docs/pdf/修論ドラフト_*.pdf

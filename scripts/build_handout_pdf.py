@@ -110,7 +110,8 @@ def build(md_name):
             if line.startswith('!'):
                 print(f'    {line}')
         return None
-    out = ROOT / 'docs' / f'{stem}.pdf'
+    out = ROOT / 'docs' / 'pdf' / f'{stem}.pdf'
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(pdf.read_bytes())
     pages = subprocess.run(['pdfinfo', str(out)], capture_output=True, text=True).stdout
     n = re.search(r'Pages:\s+(\d+)', pages)
