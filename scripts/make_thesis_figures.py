@@ -310,11 +310,58 @@ def fig_marker_tolerance():
     return 'marker_tolerance.png'
 
 
+def fig_margin_ladder():
+    """余裕の梯子（9-11）＋制御コスト対照（9-15）。S8-(3) と第4章 4.4.3 の図。
+
+    ⚠️ **①原本（log_train.txt の best）から読む。** 値を手で書かない。
+    到達タスクは残存距離のほうが直感的なので、best を 1000 step で割って mm に直す。
+    """
+    # (ラベル, 余裕 %, seed=0 の run, seed=1 の run)
+    ctrl02 = [('0 %', 0.0, 'tripo_pjr199', 'tripo_pjr199_s2'),
+              ('5.3 %', 5.3, 'tripo_pjr209', 'tripo_pjr209_s2'),
+              ('10 %', 10.0, 'tripo_pj_mid', 'tripo_pj_mid_s2')]
+    ctrl00 = [('0 %', 0.0, 'tripo_pjr199_c0', 'tripo_pjr199_c0_s2'),
+              ('10 %', 10.0, 'tripo_pj_mid_c0', 'tripo_pj_mid_c0_s2')]
+
+    def resid(run):
+        """best exec_R_eps → 平均残存距離 [mm]。Reach 報酬は -dist の 1000 step 積算なので
+        best/1000 [m] がそのまま平均残存距離。mm にするので ×1000 と相殺して -best になる。"""
+        try:
+            _, y = curve(run)
+        except FileNotFoundError:
+            return None
+        return None if len(y) == 0 else float(-np.max(y))
+
+    fig, ax = plt.subplots(figsize=(6.4, 4.0))
+    for pts, col, mk, lab in [(ctrl02, '#c0392b', 'o', '制御コスト 0.2（標準）'),
+                              (ctrl00, '#2980b9', 's', '制御コスト 0（対照）')]:
+        xs, lo, hi = [], [], []
+        for _, m, r0, r1 in pts:
+            v = [d for d in (resid(r0), resid(r1)) if d is not None]
+            if not v:
+                continue
+            xs.append(m); lo.append(min(v)); hi.append(max(v))
+        ax.plot(xs, lo, mk + '-', color=col, label=lab, zorder=3)
+        ax.fill_between(xs, lo, hi, color=col, alpha=0.18, zorder=2)
+        for x, a, b in zip(xs, lo, hi):
+            ax.plot([x, x], [a, b], color=col, lw=2.2, zorder=3)
+
+    ax.set_xlabel('目標に対する余裕 [%]')
+    ax.set_ylabel('平均残存距離 [mm]（小さいほど良い）')
+    ax.set_title('余裕を広げるほど到達精度は単調に悪化する\n（帯は 2 シードの幅）', fontsize=11)
+    ax.set_xticks([0, 5.3, 10]); ax.set_xticklabels(['0', '5.3', '10'])
+    ax.grid(alpha=0.3); ax.legend(fontsize=9)
+    fig.savefig(os.path.join(OUT, 'margin_ladder.png'))
+    plt.close(fig)
+    return 'margin_ladder.png'
+
+
 FIGS = {'matrix': fig_matrix_reversal,
         'transfer': fig_transfer_decomposition,
         'diagnosis': fig_diagnosis_validation,
         'separation': fig_task_separation,
-        'tolerance': fig_marker_tolerance}
+        'tolerance': fig_marker_tolerance,
+        'ladder': fig_margin_ladder}
 
 if __name__ == '__main__':
     os.makedirs(OUT, exist_ok=True)
