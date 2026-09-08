@@ -58,6 +58,9 @@
 
 | `record_arm_trace.py` | 学習済み方策を1エピソード実行し、各リンクのワールド変換・**最適化後の** `bone_offset`・cube・目標を npz に落とす。デモ動画の前半 |
 | `render_arm_video.py` | その npz と**実物メッシュ**（STL）から mp4 を書き出す。近似の円柱ではない。使い方と踏んだ罠は [評価スクリプト.md](../docs/リポジトリ説明/評価スクリプト.md) |
+| `extract_gear.py` | 指定 run の checkpoint から、収束した gear・リンク長を取り出す |
+| `check_stale_claims.py` | docs 全体から「事実と食い違う主張」を横断検出。**限界・未達の状態が変わったら必ず** |
+| `validate_diagnosis.sh` | 診断 M7 の三層すべてを既知の run に当てて回帰確認（第3章 3.12） |
 
 ## 4. 一度きりの調査（probe 系。結論は docs にあるので再実行は通常不要）
 
@@ -71,6 +74,8 @@
 | `probe_v3_contact_check.py` | v3 の初期接触判定（Bug 16 関連） | デバッグ戦記 Bug 16 |
 | `probe_joint_axes.py` | 関節軸の平面性 | — |
 | `collect_m_ablation_results.py` | M系 ablation の集計 | 第5章 5.4 |
+| `probe_m2_variance.py` | 同じ M1 画像から n 個の GLB を通し、**三次元化だけの分散**を測る | 実験系譜 9-39（±0.7 %。18 % は M1 由来と判明） |
+| `probe_cube_y_noise.py` | `cube_y_noise` が**実機で**効いているか（パックの y が実際に振れるか） | 実験系譜 9-33 |
 | `analyze_reach_kinematics.py` / `check_strategy.py` / `eval_reach_hover.py` | 個別調査 | — |
 
 ## 5. 一度きりの起動スクリプト（履歴。**再利用しない**）
@@ -84,6 +89,9 @@
 `auto_launch_next_transfer.sh` `auto_launch_queue2.sh` `auto_launch_v2b_reach.sh`
 `auto_launch_pj_pusher_matrix.sh` `auto_launch_queue_20260804.sh`
 `resume_after_reboot_20260731.sh`（**再開手順の参考としては今も有用**）
+`august_queue.sh`（2026-08-10〜15 の無人運転）`launch_mechanism_probe.sh`（08-19 の3本）
+`queue_fix4.sh`（09-08、第3層の境界判断の検証。実験系譜 9-32）
+`queue_hockey.sh`（09-08、ホッケー系4本。実験系譜 9-33/9-38）
 
 ## 6. スケジューラ（現行は1つだけ）
 
@@ -110,6 +118,9 @@
 
 | スクリプト | 役割 |
 |---|---|
+| `make_hockey_court_xml.py` | ホッケー系の XML を `e2e_hockeyv.xml` から生成（実験系譜 9-38 の B+C+D） |
+| `draw_hockey_template.py` | ホッケー用アームの**下書きテンプレート**を描く。⚠️ 研究の入力ではない（下敷き） |
+| `test_cube_y_noise.py` | `cube_y_noise` の実装・範囲・評価時の決定性の自己チェック（`python3` で直接実行） |
 | `smoke_test_cnoid.py` | Choreonoid 接続のスモークテスト |
 | `cnoid_transfer.py` | 転用まわりの補助 |
 | `monitor_training.py` | 学習監視（現在は使っていない） |

@@ -25,6 +25,10 @@ condaenv.*.requirements.txt
 # MuJoCo
 mujoco_py/
 *.xml.bak
+# ⚠️ ただし Bug 27 の一次証拠だけは追跡する。デバッグ戦記が参照しており、
+# **本体（修正前の e2e_a1.xml）はもう存在しない**ので、これが失われると
+# 「修正前はこうだった」を裏づけられなくなる。
+!assets/mujoco_envs/e2e_a1_bug27.xml.bak
 
 # Python
 __pycache__/
