@@ -680,6 +680,17 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             extra     = self.np_random.uniform(-cube_x_noise, cube_x_noise) if add_noise else 0.0
             qpos[cube_x_idx] = base + extra
 
+        # Shot（エアホッケー、実験系譜 9-33）: パックが毎回違う y に来る。
+        # **報酬は Pusher と同じ**で、変えるのは初期条件だけ（変数を1つに保つ）。
+        # 方策は get_sim_obs() の relative_dis（cube - 先端）で cube を観測しているので、
+        # これは**学習可能な変動**であって盲目のノイズではない。
+        # 既定 0.0 なので、指定しない限り既存の run と挙動は一致する。
+        cube_y_noise = self.env_specs.get('cube_y_noise', 0.0)
+        if cube_y_noise != 0.0:
+            cube_y_idx = self.model.nq - 1
+            extra = self.np_random.uniform(-cube_y_noise, cube_y_noise) if add_noise else 0.0
+            qpos[cube_y_idx] = float(self.init_qpos[cube_y_idx]) + extra
+
         # Safe initial arm pose: set shoulder to π/2 so arm points in +y direction.
         # Prevents penetration-impulse exploit when morphology optimizer grows arm toward
         # +x (cube direction): at qpos[0]=π/2 the arm always starts pointing away from cube,
