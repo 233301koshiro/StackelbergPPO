@@ -142,6 +142,19 @@ def check_run(run_dir: Path, prev_state: dict, args) -> dict:
             f'(最新 epoch={current_epoch}, exec_R_eps={latest["exec_R_eps"]:.5f})'
         )
 
+    # --- 対象物が一度も動いていない（2026-09-09 追加、9-41 の見逃しを受けて）---
+    # ホッケーは 32 epoch 全区間で fwd_cube=0.0000 だったのに、既存の検査は
+    # 「exec_R_eps が 200 epoch 連続ゼロ」で、200ep の run では原理的に発火しなかった。
+    # 対象物が動いたかは exec_R_eps より直接的で、報酬設計の失敗を最速で捕まえられる。
+    cubes = [e for e in epochs if e['fwd_cube'] is not None]
+    if len(cubes) >= args.cube_zero_epochs:
+        if all(abs(e['fwd_cube']) < 1e-5 for e in cubes):
+            alerts.append(
+                f'🔴 CUBE NEVER MOVED: fwd_cube が {len(cubes)} epoch 全区間でゼロ。'
+                f'幾何（届くか）と報酬スケール（コスト/ペナルティが報酬の上限を超えていないか）を疑う。'
+                f'実例: 9-41 は ctrl_cost が上限報酬の 29 倍で「動かないのが最適」になっていた'
+            )
+
     # --- best.p の停滞 ---
     best_epoch, best_reward = get_best_epoch(run_dir)
     if best_epoch is not None and current_epoch - best_epoch >= args.stall_epochs:
@@ -190,10 +203,12 @@ def check_run(run_dir: Path, prev_state: dict, args) -> dict:
 def main():
     parser = argparse.ArgumentParser(description='学習プロセス監視スクリプト')
     parser.add_argument('--runs', nargs='+', required=True, help='監視する run ディレクトリ')
-    parser.add_argument('--interval', type=int, default=600, help='チェック間隔（秒）')
-    parser.add_argument('--stall-epochs', type=int, default=150,
+    parser.add_argument('--interval', type=int, default=300, help='チェック間隔（秒）')
+    parser.add_argument('--stall-epochs', type=int, default=60,
                         help='best.p がこの epoch 数更新されなければ STALL')
-    parser.add_argument('--zero-epochs', type=int, default=200,
+    parser.add_argument('--cube-zero-epochs', type=int, default=12,
+                        help='fwd_cube が全区間ゼロのまま何 epoch 続いたら警告するか')
+    parser.add_argument('--zero-epochs', type=int, default=25,
                         help='exec_R_eps がゼロ近傍でこの epoch 数続いたら STALL')
     parser.add_argument('--exec-thresh', type=float, default=0.05,
                         help='exec_R_eps がこの値を超えたら PROGRESS 通知')
