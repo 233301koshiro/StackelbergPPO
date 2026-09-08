@@ -3,7 +3,7 @@
 import os, csv, pickle, glob
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, 'docs', 'm_ablation_results.csv')
+OUT = os.path.join(ROOT, 'docs', 'data', 'm_ablation_results.csv')
 
 RUN_PATTERN = [
     'single_run/rrbot_arm_pusher_M1_lenonly*',

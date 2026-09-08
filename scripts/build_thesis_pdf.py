@@ -4,7 +4,7 @@
 
 使い方:
   python3 scripts/build_thesis_pdf.py
-  python3 scripts/build_thesis_pdf.py --out docs/thesis_draft.pdf
+  python3 scripts/build_thesis_pdf.py --out docs/pdf/thesis_draft.pdf
 """
 import os, re, subprocess, argparse, shutil, textwrap, unicodedata
 from pathlib import Path
@@ -312,7 +312,7 @@ def main():
     import datetime
     today = datetime.date.today().strftime('%Y%m%d')
     p = argparse.ArgumentParser()
-    p.add_argument('--out', default=str(ROOT / 'docs' / f'修論ドラフト_{today}.pdf'))
+    p.add_argument('--out', default=str(ROOT / 'docs' / 'pdf' / f'修論ドラフト_{today}.pdf'))
     args = p.parse_args()
 
     BUILD_DIR.mkdir(exist_ok=True)

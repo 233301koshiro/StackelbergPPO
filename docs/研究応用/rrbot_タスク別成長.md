@@ -7,7 +7,7 @@
 
 ## 作成物
 
-- 比較図: [docs/rrbot_task_growth_story.png](rrbot_task_growth_story.png)
+- 比較図: [figures/rrbot_task_growth_story.png](../../figures/rrbot_task_growth_story.png)
 - Pusher 動画:
   - [形態動画](../../single_run/rrbot_arm_pusher_H1/videos/eval_morphology.mp4)
   - [実行動画](../../single_run/rrbot_arm_pusher_H1/videos/eval_execution.mp4)
