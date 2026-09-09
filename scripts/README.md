@@ -118,7 +118,7 @@
 
 | スクリプト | 役割 |
 |---|---|
-| `make_hockey_court_xml.py` | ホッケー系の XML を `e2e_hockeyv.xml` から生成（実験系譜 9-38 の B+C+D） |
+| `make_hockey_court_xml.py` | ホッケー系の XML を `e2e_hockeyv.xml` から生成（9-38）。`--wall` で**側壁・ゴール口・ゴール前の板**を物理に入れる（9-55）。⚠️ **同時に表示用 `.body` 2 種も生成する**（9-58）。`assets/choreonoid/bodies/hockey/` の台とパックは**この生成物なので手で編集しない** |
 | `draw_hockey_template.py` | ホッケー用アームの**下書きテンプレート**を描く。⚠️ 研究の入力ではない（下敷き） |
 | `test_cube_y_noise.py` | `cube_y_noise` の実装・範囲・評価時の決定性の自己チェック（`python3` で直接実行） |
 | `smoke_test_cnoid.py` | Choreonoid 接続のスモークテスト |

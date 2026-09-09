@@ -27,6 +27,11 @@ import xml.etree.ElementTree as ET
 SRC = pathlib.Path('assets/mujoco_envs/e2e_hockeyv.xml')
 DST = pathlib.Path('assets/mujoco_envs/e2e_hockey_court.xml')
 DST_WALL = pathlib.Path('assets/mujoco_envs/e2e_hockey_wall.xml')  # --wall（9-55）
+# 表示用の .body も**同じパラメータから生成する**（9-58）。手で書くとズレる:
+# 実際に 9-37 で手書きした版は 側壁 ±0.50（実際は ±0.45）・ゴール口 0.4 m（実際は 0.3 m）で、
+# しかも **goal_board が描かれていなかった**。⚠️ **これは XML の派生物であり、正は XML。**
+DST_BODY = pathlib.Path('assets/choreonoid/bodies/hockey/hockey_table_view.body')
+DST_PUCK = pathlib.Path('assets/choreonoid/bodies/hockey/hockey_puck_view.body')
 
 # コート（表示用 body と揃える）。ロボットは原点、正面が +x。
 COURT_X = (0.15, 1.55)      # 奥行き 1.4 m
@@ -86,6 +91,95 @@ def _add_walls(root, js):
                        f'{x_goal + 0.25 - PUCK_POS[0]:.4f}')
 
 
+def _write_body(js):
+    """Choreonoid で見るための .body を XML と同じ寸法から書き出す（**表示専用**）。
+
+    ⚠️ **物理には一切入らない。** 学習が使うのは `e2e_hockey_wall.xml` だけである。
+    ⚠️ **このファイルは生成物。手で編集しない**（次の再生成で消える）。
+    """
+    t, zc, zh = 0.03, PUCK_POS[2], 0.06
+    y_in = COURT_Y[1] - PUCK_HALF
+    x_goal = COURT_X[1]
+    xc, xh = (COURT_X[0] + x_goal) / 2, (x_goal - COURT_X[0]) / 2
+    board_h = GOAL_HALF * 2 * 0.70 / 2
+    surf = zc - PUCK_HALF                                   # 盤面 = パック底面
+
+    def shape(name, pos, size, rgb):
+        return (f"      -\n"
+                f"        type: Shape\n"
+                f"        translation: [ {pos[0]-xc:.4f}, {pos[1]:.4f}, {pos[2]-surf:.4f} ]\n"
+                f"        geometry: {{ type: Box, size: [ {size[0]*2:.4f}, {size[1]*2:.4f}, {size[2]*2:.4f} ] }}\n"
+                f"        appearance: {{ material: {{ diffuse: [ {rgb} ] }} }}   # {name}\n")
+
+    els = [shape('surface', (xc, 0.0, surf - 0.005), (xh, y_in + 2*t, 0.005), '0.85, 0.90, 0.95')]
+    for sgn in (+1, -1):
+        sfx = 'p' if sgn > 0 else 'm'
+        els.append(shape(f'wall_side_{sfx}', (xc, sgn*(y_in+t), zc), (xh, t, zh), '0.35, 0.35, 0.40'))
+        y0, y1 = GOAL_HALF, y_in + 2*t
+        els.append(shape(f'wall_goal_{sfx}', (x_goal+t, sgn*(y0+y1)/2, zc), (t, (y1-y0)/2, zh),
+                         '0.35, 0.35, 0.40'))
+    els.append(shape('goal_board', (x_goal-0.60, 0.0, zc), (t, board_h, zh), '0.20, 0.40, 0.90'))
+    els.append(shape('goal_mouth', (x_goal+t, 0.0, surf), (t, GOAL_HALF, 0.003), '0.90, 0.20, 0.20'))
+
+    DST_BODY.parent.mkdir(parents=True, exist_ok=True)
+    DST_BODY.write_text(
+        "format: ChoreonoidBody\n"
+        "format_version: 2.0\n"
+        "angle_unit: degree\n"
+        "name: hockey_table_view\n"
+        "\n"
+        "# ⚠️ **自動生成物。手で編集しないこと**（`make_hockey_court_xml.py --wall` が上書きする）。\n"
+        "# ⚠️ **表示専用で、物理には一切入らない。** 学習が使うのは\n"
+        "#    `assets/mujoco_envs/e2e_hockey_wall.xml` であり、**そちらが正**。\n"
+        "# 寸法は XML と同じ定数から出しているのでズレない（9-58）。\n"
+        "#\n"
+        "#   choreonoid data/test/hockey/e2e_hockeyv.urdf \\\n"
+        "#     assets/choreonoid/bodies/hockey/hockey_table_view.body\n"
+        "\n"
+        "root_link: table_base\n"
+        "\n"
+        "links:\n"
+        "  -\n"
+        "    name: table_base\n"
+        "    joint_type: fixed\n"
+        f"    translation: [ {xc:.4f}, 0, {surf:.4f} ]\n"
+        "    mass: 50.0\n"
+        "    center_of_mass: [ 0, 0, 0 ]\n"
+        "    inertia: [ 10, 0, 0, 0, 10, 0, 0, 0, 10 ]\n"
+        "    elements:\n" + ''.join(els), encoding='utf-8')
+    print(f'{DST_BODY}  （表示専用・自動生成）')
+
+    # パックも同じ定数から。⚠️ 手書き版は高さ 0.116（実際 0.2125）・直径 0.08（実際 0.10）
+    # と二重にずれていた。**物理は「箱」なので、見た目も箱にする**（円盤にすると当たりが嘘になる）。
+    DST_PUCK.write_text(
+        "format: ChoreonoidBody\n"
+        "format_version: 2.0\n"
+        "angle_unit: degree\n"
+        "name: hockey_puck_view\n"
+        "\n"
+        "# ⚠️ **自動生成物。手で編集しないこと**（`make_hockey_court_xml.py --wall` が上書きする）。\n"
+        "# ⚠️ **表示専用。** 物理側の実体は `e2e_hockey_wall.xml` の body `cube`。\n"
+        "# ⚠️ **形は箱である。** 実物のパックは円盤だが、物理が箱なので見た目も箱にする\n"
+        "#    （円盤で描くと当たる瞬間が嘘になる。9-37 で一度その案を出して撤回した）。\n"
+        "\n"
+        "root_link: puck\n"
+        "\n"
+        "links:\n"
+        "  -\n"
+        "    name: puck\n"
+        "    joint_type: free\n"
+        f"    translation: [ {PUCK_POS[0]:.4f}, {PUCK_POS[1]:.4f}, {PUCK_POS[2]:.4f} ]\n"
+        f"    mass: {(2*PUCK_HALF)**3 * PUCK_DENSITY:.4f}\n"
+        "    center_of_mass: [ 0, 0, 0 ]\n"
+        "    inertia: [ 5.0e-05, 0, 0, 0, 5.0e-05, 0, 0, 0, 5.0e-05 ]\n"
+        "    elements:\n"
+        "      -\n"
+        "        type: Shape\n"
+        f"        geometry: {{ type: Box, size: [ {2*PUCK_HALF:.4f}, {2*PUCK_HALF:.4f}, {2*PUCK_HALF:.4f} ] }}\n"
+        "        appearance: { material: { diffuse: [ 0.85, 0.15, 0.15 ] } }\n", encoding='utf-8')
+    print(f'{DST_PUCK}  （表示専用・自動生成）')
+
+
 def main(wall_mode=False):
     root = ET.parse(SRC).getroot()
     cube = root.find(".//body[@name='cube']")
@@ -117,6 +211,8 @@ def main(wall_mode=False):
         _add_walls(root, js)
 
     (DST_WALL if wall_mode else DST).write_bytes(ET.tostring(root))
+    if wall_mode:
+        _write_body(js)          # 9-58: 表示用 .body も同じ定数から生成する
     m = (2 * PUCK_HALF) ** 3 * PUCK_DENSITY
     print(f'{DST_WALL if wall_mode else DST}')
     print(f'  パック  一辺 {2*PUCK_HALF:.2f} m / {m:.3f} kg  位置 {PUCK_POS}')
