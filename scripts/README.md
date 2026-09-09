@@ -76,6 +76,7 @@
 | `collect_m_ablation_results.py` | M系 ablation の集計 | 第5章 5.4 |
 | `probe_m2_variance.py` | 同じ M1 画像から n 個の GLB を通し、**三次元化だけの分散**を測る | 実験系譜 9-39（±0.7 %。18 % は M1 由来と判明） |
 | `probe_cube_y_noise.py` | `cube_y_noise` が**実機で**効いているか（パックの y が実際に振れるか） | 実験系譜 9-33 |
+| `probe_shot_geometry.py` | 撃ち出し角を振って**「反射が必須」になる初期位置**を測る（幾何のみ・物理エンジン不要） | 実験系譜 9-55 追記の再現 + 9-59 |
 | `analyze_reach_kinematics.py` / `check_strategy.py` / `eval_reach_hover.py` | 個別調査 | — |
 
 ## 5. 一度きりの起動スクリプト（履歴。**再利用しない**）

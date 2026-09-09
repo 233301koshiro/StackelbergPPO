@@ -14,7 +14,7 @@ links:
   -
     name: puck
     joint_type: free
-    translation: [ 0.7000, 0.0000, 0.2125 ]
+    translation: [ 0.5500, 0.0000, 0.2125 ]
     mass: 0.0300
     center_of_mass: [ 0, 0, 0 ]
     inertia: [ 5.0e-05, 0, 0, 0, 5.0e-05, 0, 0, 0, 5.0e-05 ]
