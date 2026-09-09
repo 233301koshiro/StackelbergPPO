@@ -168,7 +168,7 @@ def scale_advice(need):
     return math.ceil(need * 100) / 100
 
 
-def layer1(geo, task, target, length_frozen=True):
+def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
     """第1層: 幾何だけで即答できる不適合。(所見リスト, 致命的か) を返す。"""
     findings = []
     fatal = False
@@ -291,6 +291,37 @@ def layer1(geo, task, target, length_frozen=True):
                     f'      → 学習の起動時に `arm_safe_init=true` を付けて、腕を対象から逸らした姿勢で始めてください。'))
             else:
                 findings.append(('ok', '対象に届き、かつ初期状態でめり込みません'))
+
+            # 9-46: タスクが対象に分布を持たせる場合（Shot の cube_y_noise）、
+            # 判定すべきは中央の一点ではなく**分布の最遠点**である。
+            # 既定 0.0 なので、指定しない限り既存の判定は一切動かない。
+            if spread_y > 1e-9:
+                far = float(np.linalg.norm(
+                    np.array([cpos[0] - base[0], cpos[1] + spread_y - base[1]]))) - half
+                findings.append(('info',
+                    f'このタスクは対象を y 方向に ±{spread_y:.2f} m ばらつかせます'
+                    f'（分布の幅 {2*spread_y:.2f} m）。**判定は分布の最遠点で行います**。\n'
+                    f'      中央 {near:.3f} m（伸展率 {near/r_max*100:.0f}%）'
+                    f' → 端 {far:.3f} m（伸展率 {far/r_max*100:.0f}%）'))
+                # 届く範囲に収まる最大のばらつき: |[dx, s]| - half <= r_max
+                dx = float(cpos[0] - base[0])
+                s_ok = float(np.sqrt(max(0.0, (r_max + half) ** 2 - dx ** 2)))
+                if far > r_max:
+                    fatal = True
+                    findings.append(('fatal',
+                        f'**対象が端に来たとき腕が届きません**'
+                        f'（届く範囲 {r_max:.3f} m、端の対象は {far:.3f} m 先）。\n'
+                        f'      中央だけなら届くので、**この形態はこのタスクには使えません**。\n'
+                        f'      → 腕を **{scale_advice(far / r_max):.2f} 倍**に伸ばすか、'
+                        f'対象のばらつきを **±{s_ok:.2f} m 以下**に狭めてください。'))
+                elif far / r_max > 0.9:
+                    findings.append(('warn',
+                        f'端では腕をほぼ伸ばしきります（伸展率 {far/r_max*100:.0f}%）。\n'
+                        f'      到達はしますが、**伸びきった姿勢で速度を出せるかは本層では判定できません**。\n'
+                        f'      　（打つ・弾く系のタスクでは実測が要ります。実験系譜 9-46）'))
+                else:
+                    findings.append(('ok',
+                        f'対象が端に来ても余裕があります（伸展率 {far/r_max*100:.0f}%）'))
     return findings, fatal
 
 
@@ -466,6 +497,9 @@ def main():
     ap.add_argument('--xml', help='assets/mujoco_envs 内の XML 名（拡張子なし）')
     ap.add_argument('--task', default='reach', choices=['reach', 'pusher'])
     ap.add_argument('--target', nargs=3, type=float, default=[0.8, 0.0, 0.15])
+    ap.add_argument('--spread-y', type=float, default=0.0,
+                    help='対象の y 方向のばらつき（Shot の cube_y_noise）。'
+                         '指定すると分布の最遠点で判定する（9-46）')
     ap.add_argument('--length-free', action='store_true',
                     help='リンク長も最適化対象として判定する（--run 指定時は cfg から自動判定）')
     args, _ = ap.parse_known_args()
@@ -486,12 +520,20 @@ def main():
             args.target = [rs.get('target_x', 0.8), rs.get('target_y', 0.0), rs.get('target_z', 0.15)]
         else:
             args.task = 'pusher'
+            # 9-46: pusher 系は目標を XML の対象位置から取る（既定 [0.8,0,0.15] は
+            # 実際のパック高さ 0.2125 と食い違い、非平面の水平限界を誤らせていた）。
+            es = cfgd.get('env_specs') or {}
+            if not args.spread_y:
+                args.spread_y = float(es.get('cube_y_noise', 0.0) or 0.0)
         # cfg の robot.body_params が空なら bone_offset は凍結されている
         bp = ((cfgd.get('robot') or {}).get('body_params')) or {}
         length_frozen = not bool(bp)
 
     geo = parse_arm_xml(os.path.join(ASSET_DIR, f'{args.xml}.xml'))
-    f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float), length_frozen)
+    if args.task == 'pusher' and geo.get('cube') is not None:
+        args.target = list(map(float, geo['cube']['pos']))     # 9-46
+    f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float),
+                       length_frozen, spread_y=args.spread_y)
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
 
     if run:
