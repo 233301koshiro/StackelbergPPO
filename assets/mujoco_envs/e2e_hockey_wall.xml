@@ -39,17 +39,12 @@
         </body>
       </body>
     </body>
-    <!-- ゴール前方 60 cm の板（2026-09-09、ユーザー指定）。
-         ゴールライン x=1.56 は表示用 hockey_table_view.body から。学習 XML にゴールは無い。
-         長さはゴール口 0.3 m の 70 % = 0.210 m。静的（body でなく worldbody 直下の geom）。
-         ⚠️ 両脇の隙間は各 4.5 cm で、パック幅 10 cm より狭い（下の検算を見よ）。 -->
-    <geom name="goal_board" type="box" pos="0.9600 0 0.2125" size="0.01 0.1050 0.06" rgba="0.2 0.4 0.9 1.0" contype="1" conaffinity="1" friction="0.5 0.1 0.1" />
     <body name="cube" pos="0.700000 0.000000 0.212500">
-      <joint name="cube_slide" type="slide" axis="1 0 0" damping="0.02" range="-0.5000 0.8000" />
+      <joint name="cube_slide" type="slide" axis="1 0 0" damping="0.02" range="-0.5000 1.1000" />
       <joint name="cube_slide2" type="slide" axis="0 1 0" damping="0.02" range="-0.4500 0.4500" />
       <geom name="cube_geom" type="box" size="0.05 0.05 0.05" rgba="0.85 0.15 0.15 1.0" friction="0.5 0.1 0.1" density="30.0" contype="1" conaffinity="1" />
     </body>
-  </worldbody>
+  <geom name="wall_side_p" type="box" pos="0.8500 0.4800 0.2125" size="0.7000 0.0300 0.0600" rgba="0.35 0.35 0.40 1" contype="1" conaffinity="2" friction="0.5 0.1 0.1" /><geom name="wall_goal_p" type="box" pos="1.5800 0.3300 0.2125" size="0.0300 0.1800 0.0600" rgba="0.35 0.35 0.40 1" contype="1" conaffinity="2" friction="0.5 0.1 0.1" /><geom name="wall_side_m" type="box" pos="0.8500 -0.4800 0.2125" size="0.7000 0.0300 0.0600" rgba="0.35 0.35 0.40 1" contype="1" conaffinity="2" friction="0.5 0.1 0.1" /><geom name="wall_goal_m" type="box" pos="1.5800 -0.3300 0.2125" size="0.0300 0.1800 0.0600" rgba="0.35 0.35 0.40 1" contype="1" conaffinity="2" friction="0.5 0.1 0.1" /><geom name="goal_board" type="box" pos="0.9500 0.0000 0.2125" size="0.0300 0.1050 0.0600" rgba="0.20 0.40 0.90 1" contype="1" conaffinity="2" friction="0.5 0.1 0.1" /></worldbody>
   <actuator>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1_joint" gear="100.0" name="1_joint" />
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint" gear="100.0" name="11_joint" />
