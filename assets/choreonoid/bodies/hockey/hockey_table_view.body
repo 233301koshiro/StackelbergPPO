@@ -3,23 +3,13 @@ format_version: 2.0
 angle_unit: degree
 name: hockey_table_view
 
-# ⚠️ **表示専用。学習には一切使わない。**
-# Shot（実験系譜 9-33）は台も壁も足さず、**パックの初期 y を振るだけ**の設計である
-# （変数を1つに保つため。5.2.1 の「報酬を複雑にするな」を構造的に回避する）。
-# 学習環境（assets/mujoco_envs/e2e_hockeyv.xml）にこの台は存在しない。
+# ⚠️ **自動生成物。手で編集しないこと**（`make_hockey_court_xml.py --wall` が上書きする）。
+# ⚠️ **表示専用で、物理には一切入らない。** 学習が使うのは
+#    `assets/mujoco_envs/e2e_hockey_wall.xml` であり、**そちらが正**。
+# 寸法は XML と同じ定数から出しているのでズレない（9-58）。
 #
-# ここに置くのは「もしエアホッケー台があったらこう見える」を確認するためだけのもの。
-# **これを学習に読み込ませないこと。** 読み込ませると Pusher との比較が壊れる。
-#
-# 見方:
-#   choreonoid --urdf data/test/hockey/e2e_hockeyv.urdf \
-#              assets/choreonoid/bodies/hockey/hockey_table_view.body
-#
-# ⚠️ **2026-09-08 更新: 寸法を実験のコート（9-38 の B+C+D）に合わせた。**
-#   コート  x 0.15〜1.55（奥行き 1.4 m）、y ±0.5（幅 1.0 m）
-#   盤面 z = 0.10 … パック（一辺 0.10 m、中心 z=0.15）の底面と一致する
-# これで `assets/mujoco_envs/e2e_hockey_court.xml` と**見た目が一致する**。
-# ⚠️ 旧 `e2e_hockeyv.xml`（一辺 0.3 m・2.7 kg・16 m 飛ぶ）とは合わない。
+#   choreonoid data/test/hockey/e2e_hockeyv.urdf \
+#     assets/choreonoid/bodies/hockey/hockey_table_view.body
 
 root_link: table_base
 
@@ -27,54 +17,43 @@ links:
   -
     name: table_base
     joint_type: fixed
-    translation: [ 0.85, 0, 0.10 ]     # コート中心。盤面をパック底面 z=0.10 に合わせる
+    translation: [ 0.8500, 0, 0.1625 ]
     mass: 50.0
     center_of_mass: [ 0, 0, 0 ]
     inertia: [ 10, 0, 0, 0, 10, 0, 0, 0, 10 ]
     elements:
-      # 盤面
       -
         type: Shape
-        translation: [ 0, 0, 0.005 ]
-        geometry: { type: Box, size: [ 1.4, 1.0, 0.01 ] }
-        appearance: { material: { diffuse: [ 0.85, 0.90, 0.95 ] } }
-      # side walls (y = ±0.5)
+        translation: [ 0.0000, 0.0000, -0.0050 ]
+        geometry: { type: Box, size: [ 1.4000, 1.0200, 0.0100 ] }
+        appearance: { material: { diffuse: [ 0.85, 0.90, 0.95 ] } }   # surface
       -
         type: Shape
-        translation: [ 0, 0.51, 0.04 ]
-        geometry: { type: Box, size: [ 1.4, 0.02, 0.07 ] }
-        appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
+        translation: [ 0.0000, 0.4800, 0.0500 ]
+        geometry: { type: Box, size: [ 1.4000, 0.0600, 0.1200 ] }
+        appearance: { material: { diffuse: [ 0.35, 0.35, 0.40 ] } }   # wall_side_p
       -
         type: Shape
-        translation: [ 0, -0.51, 0.04 ]
-        geometry: { type: Box, size: [ 1.4, 0.02, 0.07 ] }
-        appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
-      # end wall (robot side, x = -1.0)
+        translation: [ 0.7300, 0.3300, 0.0500 ]
+        geometry: { type: Box, size: [ 0.0600, 0.3600, 0.1200 ] }
+        appearance: { material: { diffuse: [ 0.35, 0.35, 0.40 ] } }   # wall_goal_p
       -
         type: Shape
-        translation: [ -0.71, 0, 0.04 ]
-        geometry: { type: Box, size: [ 0.02, 1.0, 0.07 ] }
-        appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
-      # goal end (x = +1.0): 左右の壁だけ残し、中央 0.3 m を開ける
+        translation: [ 0.0000, -0.4800, 0.0500 ]
+        geometry: { type: Box, size: [ 1.4000, 0.0600, 0.1200 ] }
+        appearance: { material: { diffuse: [ 0.35, 0.35, 0.40 ] } }   # wall_side_m
       -
         type: Shape
-        translation: [ 0.71, 0.35, 0.04 ]
-        geometry: { type: Box, size: [ 0.02, 0.3, 0.07 ] }
-        appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
+        translation: [ 0.7300, -0.3300, 0.0500 ]
+        geometry: { type: Box, size: [ 0.0600, 0.3600, 0.1200 ] }
+        appearance: { material: { diffuse: [ 0.35, 0.35, 0.40 ] } }   # wall_goal_m
       -
         type: Shape
-        translation: [ 0.71, -0.35, 0.04 ]
-        geometry: { type: Box, size: [ 0.02, 0.3, 0.07 ] }
-        appearance: { material: { diffuse: [ 0.2, 0.2, 0.25 ] } }
-      # ゴール口を示す赤い床（中央 0.3 m）
+        translation: [ 0.1000, 0.0000, 0.0500 ]
+        geometry: { type: Box, size: [ 0.0600, 0.2100, 0.1200 ] }
+        appearance: { material: { diffuse: [ 0.20, 0.40, 0.90 ] } }   # goal_board
       -
         type: Shape
-        translation: [ 0.68, 0, 0.011 ]
-        geometry: { type: Box, size: [ 0.06, 0.3, 0.002 ] }
-        appearance: { material: { diffuse: [ 0.9, 0.2, 0.2 ] } }
-      # センターライン
-      -
-        type: Shape
-        translation: [ 0, 0, 0.011 ]
-        geometry: { type: Box, size: [ 0.01, 1.0, 0.002 ] }
-        appearance: { material: { diffuse: [ 0.5, 0.6, 0.7 ] } }
+        translation: [ 0.7300, 0.0000, 0.0000 ]
+        geometry: { type: Box, size: [ 0.0600, 0.3000, 0.0060 ] }
+        appearance: { material: { diffuse: [ 0.90, 0.20, 0.20 ] } }   # goal_mouth

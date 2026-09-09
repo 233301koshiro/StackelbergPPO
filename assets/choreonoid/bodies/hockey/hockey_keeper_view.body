@@ -4,6 +4,9 @@ angle_unit: degree
 name: hockey_keeper_view
 
 # ⚠️ **表示専用。学習には使わない。**
+# ⚠️ **これだけは手書き（生成物ではない）。** 同じフォルダの `hockey_table_view.body` と
+#    `hockey_puck_view.body` は `scripts/make_hockey_court_xml.py --wall` の生成物だが、
+#    キーパーは**物理側に対応する実体が無い**ので生成できない。編集してよい唯一のファイル。
 #
 # ⚠️ **キーパーを学習に入れると、いまの観測では学習不能になる。**
 # 方策が受け取る観測は `get_sim_obs()` の
