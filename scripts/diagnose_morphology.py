@@ -499,7 +499,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--xml', help='assets/mujoco_envs 内の XML 名（拡張子なし）')
     ap.add_argument('--task', default='reach', choices=['reach', 'pusher'])
-    ap.add_argument('--target', nargs=3, type=float, default=[0.8, 0.0, 0.15])
+    ap.add_argument('--target', nargs=3, type=float, default=None,
+                    help='目標位置。既定は reach が [0.8,0,0.15]、'
+                         'pusher は XML の対象位置（9-46）')
     ap.add_argument('--spread-y', type=float, default=0.0,
                     help='対象の y 方向のばらつき（Shot の cube_y_noise）。'
                          '指定すると分布の最遠点で判定する（9-46）')
@@ -533,8 +535,14 @@ def main():
         length_frozen = not bool(bp)
 
     geo = parse_arm_xml(os.path.join(ASSET_DIR, f'{args.xml}.xml'))
-    if args.task == 'pusher' and geo.get('cube') is not None:
-        args.target = list(map(float, geo['cube']['pos']))     # 9-46
+    if args.target is None:
+        # 9-46: pusher 系の既定は XML の対象位置。以前の既定 [0.8,0,0.15] は
+        # 実際の対象の高さと食い違い、非平面の水平限界を誤らせていた。
+        # ⚠️ **明示的に --target が渡されたら上書きしない**（渡した値を黙って捨てない）。
+        if args.task == 'pusher' and geo.get('cube') is not None:
+            args.target = list(map(float, geo['cube']['pos']))
+        else:
+            args.target = [0.8, 0.0, 0.15]
     f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float),
                        length_frozen, spread_y=args.spread_y)
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
