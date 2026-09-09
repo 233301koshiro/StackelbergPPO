@@ -261,7 +261,10 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
             if length_frozen and margin > 0.4:
                 findings.append(('warn',
                     f'ただし腕が目標に対してかなり長めです（余裕 {margin*100:.0f}%）。\n'
-                    f'      → 過剰な長さは慣性を増やし、到達までに時間がかかる原因になります。'))
+                    f'      → 実測では**余裕が大きいほど到達精度は単調に悪化**します'
+                    f'（余裕 0 / 5.3 / 10 % で −0.27〜−0.33 / −1.19〜−1.41 / −1.66〜−3.42、各2seed。9-11）。\n'
+                    f'      　⚠️ **機序は未解明です。**「慣性が増える」では説明できません'
+                    f'（長さ 1.6 倍でも実効慣性の増加は 1.5 %。9-49）'))
 
         if planar and dz > 1e-3:
             fatal = True
