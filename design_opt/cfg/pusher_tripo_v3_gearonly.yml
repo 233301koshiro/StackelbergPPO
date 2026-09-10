@@ -1,0 +1,64 @@
+# pusher_tripo_v3_gearonly: pusher_tripo_v3 から **body_params だけ**を空にしたもの。
+#
+# 目的（実験系譜 9-64）: 縦型の結果が「リンク長が 2 倍に伸びたこと」で説明できてしまう
+# 問題を切る。第6章 6.4.2(1) が自認している限界で、知見総括表 E 節の取り下げ済み主張
+# 「自由度は Reach では負債・Pusher では資産」の復活条件でもある。
+#
+# ⚠️ **pusher_tripo_v3 との差は body_params: {} の 1 点のみ。**
+#   max_body_depth は 6 のまま（4 に落とすと Bug 32 の IndexError で即死する）。
+#   check_floor_penetration も残す（e2e_a1v_* との対照を 1 変数に保つため）。
+#
+# ⚠️ **pusher_gearonly（平面）とは max_body_depth と check_floor_penetration が違う。**
+#   平面と縦型を比べるときは「リンク長が凍結されている」点だけが揃っている状態で、
+#   深さと床チェックは縦型の必須要件として残っている。
+env_specs:
+  check_floor_penetration: true   # 縦型: Leader の床めり込み形態にペナルティ（-init_contact_penalty）
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 6
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+
+  # ★ ここだけが pusher_tripo_v3 との差。リンク長・向きを設計変数から外し、
+  #   パイプラインが出した XML の寸法のまま凍結する。
+  body_params: {}
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      lb: 20
+      ub: 400
