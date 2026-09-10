@@ -38,7 +38,12 @@ sys.excepthook = _exit_on_exception
 
 restore_dir = os.environ.get('EVAL_RESTORE_DIR')
 num_episodes = int(os.environ.get('EVAL_NUM_EPISODES', '3'))
-epoch = os.environ.get('EVAL_EPOCH', 'best')
+_ep = os.environ.get('EVAL_EPOCH', 'best')
+# ⚠️ **int で渡さないと数値エポックが読めない**（9-66 で発覚）。
+#   load_checkpoint は int なら models/epoch_0010.p、str なら models/10.p を探す。
+#   ここで文字列のまま渡していたため EVAL_EPOCH=10 が FileNotFoundError になり、
+#   **best 以外を再生できなかった**。中核の loader 側は正しい。
+epoch = int(_ep) if _ep.isdigit() else _ep
 
 if not restore_dir:
     print("Error: set EVAL_RESTORE_DIR")
