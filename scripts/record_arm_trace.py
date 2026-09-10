@@ -51,6 +51,7 @@ cfg.morph_prior = False
 torch.set_default_dtype(torch.float64)
 set_global_seed(cfg.seed)
 
+# ⚠️ int で渡さないと models/epoch_0010.p ではなく models/10.p を探しに行く（9-66）
 ckpt_arg = int(checkpoint) if checkpoint != 'best' else 'best'
 agent = BodyGenAgent(cfg=cfg, dtype=torch.float64, device=torch.device('cpu'),
                      seed=cfg.seed, num_threads=1, training=False, checkpoint=ckpt_arg)
@@ -106,3 +107,13 @@ print(f'[trace] 最適化後のボーン長: ' +
       ' / '.join(f'{np.linalg.norm(b):.4f}' for b in bone) +
       f'  合計 {sum(np.linalg.norm(b) for b in bone):.4f} m')
 print(f'[trace] 実行ステップ {len(xpos)}  → {out}')
+
+# ⚠️ **os._exit で落とす。** Choreonoid（Qt）のイベントループが残り、
+#   出力を書き終えた後もプロセスが生き続ける。2026-09-10 の確認で
+#   **9 月 4 日から 5 日 18 時間、孤児プロセスが 414 MB 抱えたまま残っていた**
+#   （Bug 26 と同型。1 本あたり約 800 MB）。
+#   CLAUDE.md §5-2 ⑤-3 で「結果を論じる前に再生する」を規律にしたので、
+#   **これを直さないと再生のたびに漏れる。**
+#   `eval_reach_hover.py` は既に同じ手当てをしている。
+sys.stdout.flush()
+os._exit(0)
