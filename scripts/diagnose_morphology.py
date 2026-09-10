@@ -219,13 +219,32 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
             a = a / (np.linalg.norm(a) + 1e-12)
             (par if abs(float(np.dot(dv, a))) > 0.99 else perp).append(l)
         if par and perp:
-            l_h = sum(perp)
-            shoulder_z = float(base[2]) + sum(par)
+            # ⚠️ **設計モードでは「寄与するリンクだけ」を伸ばす**（2026-09-11 修正、9-73）。
+            #   旧実装は r_max に全リンクを伸ばした値を入れた直後、ここで**伸ばしていない**
+            #   perp の合計から lim を出して min を取っていた。結果として
+            #   **設計モードでも凍結モードと同じ判定になり**、「届かない側だけが確実」と
+            #   表示しながら成長で救えるはずの形態を棄却していた（e2e_b1v で実測）。
+            #   根元の鉛直リンクは伸ばしても水平到達に効かない（Bug 24 と同じ理由）ので、
+            #   伸ばす対象は perp に限る。
+            if length_frozen:
+                l_h = sum(perp)
+                shoulder_z = float(base[2]) + sum(par)
+                grow_note = ''
+            else:
+                l_h = sum(float(np.hypot(l + OFFSET_HALF, OFFSET_HALF)) for l in perp)
+                shoulder_z = float(base[2]) + sum(par)
+                grow_note = (f'（水平に効くリンクだけを最大まで伸ばした場合。'
+                             f'伸ばす前は {sum(perp):.3f} m）')
             msg = (f'この腕は非平面です（関節軸が複数種類）。**上の総リーチ {r_max:.3f} m は水平リーチではありません**。\n'
                    f'      根元の関節軸に平行なリンク {sum(par):.3f} m は肩の高さを上げるだけで、'
-                   f'水平に伸びるのは残り {l_h:.3f} m です（肩の高さ {shoulder_z:.3f} m）。')
+                   f'水平に伸びるのは残り {l_h:.3f} m です{grow_note}（肩の高さ {shoulder_z:.3f} m）。')
             if target is not None and len(target) >= 3:
-                dz_s = abs(float(target[2]) - shoulder_z)
+                if length_frozen:
+                    dz_s = abs(float(target[2]) - shoulder_z)
+                else:
+                    # 設計モードでは par も伸縮でき肩の高さを選べるので、
+                    # **上限としては目標と同じ高さに置けると仮定する**（最も有利な側）。
+                    dz_s = 0.0
                 lim = float(np.sqrt(max(0.0, l_h ** 2 - dz_s ** 2)))
                 msg += (f'\n      → 目標の高さ {float(target[2]):.3f} m での**水平到達限界は約 {lim:.3f} m**。'
                         f'以降の判定はこの値で行います。')
