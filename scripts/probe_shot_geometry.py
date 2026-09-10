@@ -12,14 +12,25 @@
     python3 scripts/probe_shot_geometry.py --x 0.55
 """
 import argparse
+import pathlib
 import numpy as np
 
-# e2e_hockey_wall.xml と同じ定数（make_hockey_court_xml.py が正）
-PUCK_HALF = 0.05
-COURT_X = (0.15, 1.55)
-WALL_IN_Y = 0.45          # 側壁の内面
-BOARD_X, BOARD_HY, BOARD_HT = 0.95, 0.105, 0.03
-GOAL_X, GOAL_HY = 1.55, 0.15
+# ⚠️ **定数は make_hockey_court_xml.py から取り込む。ここに写さない。**
+#   2026-09-10 まで BOARD_HT=0.03 と写し取っており、Bug 39 で板を 0.10 に
+#   厚くしたときに**このファイルだけ古いまま**になった（CLAUDE.md §4-2 の
+#   「2 箇所に同じことを書く構造」そのもの）。
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location(
+    '_court', pathlib.Path(__file__).with_name('make_hockey_court_xml.py'))
+_court = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_court)
+
+PUCK_HALF = _court.PUCK_HALF
+COURT_X = _court.COURT_X
+WALL_IN_Y = _court.WALL_FACE_Y                     # 側壁の内面（Bug 39 で 0.45 → 0.50）
+BOARD_X = _court.COURT_X[1] - 0.60
+BOARD_HY = _court.GOAL_HALF * 2 * 0.70 / 2
+BOARD_HT = _court.BOARD_T                          # Bug 39 で 0.03 → 0.10
+GOAL_X, GOAL_HY = _court.COURT_X[1], _court.GOAL_HALF
 
 
 def shoot(x0, y0, deg, step=0.002, max_len=12.0):

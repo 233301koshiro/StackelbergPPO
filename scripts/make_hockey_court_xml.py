@@ -45,6 +45,21 @@ PUCK_POS = (0.55, 0.0, 0.2125)   # z は肩の高さ（9-42）。**XML を直接
 PUCK_DAMPING = 0.02              # τ=m/b を旧条件(1.35s)に保つ値（9-45）。質量 90 分の1 に対応
 GOAL_HALF = 0.15                 # ゴール口の半幅（表示用 hockey_table_view.body のマーカーと一致）
 
+# ⚠️ ここから下は **Bug 39 で直した壁の寸法**。値は
+# `scripts/probe_hockey_containment.py` が実測で決めたもので、**憶測で変えないこと**。
+# 変えたら必ずプローブを回し、PASS してから学習を投入する。
+WALL_FACE_Y = COURT_Y[1]    # 側壁の内面。⚠️ **0.45（= COURT_Y[1]-PUCK_HALF）ではない。**
+                            #   0.45 はパック「中心」の可動域であり、そこへ壁面を置くと
+                            #   限界に着いた瞬間にパックが 5 cm めり込む（Bug 39 ①）
+WALL_T = 0.20               # 側壁・ゴール端の半厚。4 m/s のパックは接触の時定数（2×timestep
+                            #   =0.02 s）で 0.083 m めり込むので、旧値 0.03（全厚 0.06）では
+                            #   突き抜けた（Bug 39 ②）。**内面は face+T で決まるので外へ伸びるだけ**
+BOARD_T = 0.10              # 中央の板の半厚。旧値 0.03 では同じ理由で抜ける。
+                            #   ⚠️ 厚くすると回り込む幾何が変わるので `probe_shot_geometry.py` を再走させる
+PUCK_Y_BACKSTOP = 0.55      # cube_slide2 の可動域。**壁より外側に置く。**
+                            #   壁と同じ 0.45 にすると、跳ね返る前に関節が止めてしまい
+                            #   「反射」が起きない。かつ側方への脱出をプローブが検出できなくなる
+
 
 def _box(parent, name, pos, size, rgba):
     """静的な板（worldbody 直下の geom）。
@@ -73,20 +88,20 @@ def _add_walls(root, js):
     # 実測で内面から約 3 cm めり込む。timestep=0.01 では solref の時定数を 0.02 未満に
     # できない（MuJoCo の推奨下限が 2×dt）ので、**厚みですり抜けを防ぐ**。
     # timestep を下げると既存 110 run と物理が変わるので触らない。
-    t, zc, zh = 0.03, PUCK_POS[2], 0.06
-    y_in = COURT_Y[1] - PUCK_HALF                 # 側壁の内面 = パック中心の可動域と同じ 0.45
+    t, zc, zh = WALL_T, PUCK_POS[2], 0.06
+    y_face = WALL_FACE_Y                          # 側壁の内面（Bug 39 ① で 0.45 → 0.50）
     x_goal = COURT_X[1]                           # ゴールライン
     xc, xh = (COURT_X[0] + x_goal) / 2, (x_goal - COURT_X[0]) / 2
     for sgn in (+1, -1):
         _box(wb, f'wall_side_{"p" if sgn > 0 else "m"}',
-             (xc, sgn * (y_in + t), zc), (xh, t, zh), '0.35 0.35 0.40 1')
+             (xc, sgn * (y_face + t), zc), (xh, t, zh), '0.35 0.35 0.40 1')
         # ゴール端: 中央 GOAL_HALF*2 を開けて左右だけ塞ぐ
-        y0, y1 = GOAL_HALF, y_in + 2 * t
+        y0, y1 = GOAL_HALF, y_face + 2 * t
         _box(wb, f'wall_goal_{"p" if sgn > 0 else "m"}',
              (x_goal + t, sgn * (y0 + y1) / 2, zc), (t, (y1 - y0) / 2, zh), '0.35 0.35 0.40 1')
     # ゴール前方 60 cm の板（ユーザー指定、長さはゴール口の 70 %）
     _box(wb, 'goal_board', (x_goal - 0.60, 0.0, zc),
-         (t, GOAL_HALF * 2 * 0.70 / 2, zh), '0.20 0.40 0.90 1')
+         (BOARD_T, GOAL_HALF * 2 * 0.70 / 2, zh), '0.20 0.40 0.90 1')
     # ゴール口を抜けたパックが前へ進めるよう x の可動域を延ばす。
     # 外したパックはゴール端の壁で中心 x=1.49 で止まるので、**通した方が報酬が大きくなる**。
     # 報酬（v_x の積算＝総移動距離）を変えずに「入れる」を得にする — 5.2.1 の罠を避ける形。
@@ -100,8 +115,8 @@ def _write_body(js):
     ⚠️ **物理には一切入らない。** 学習が使うのは `e2e_hockey_wall.xml` だけである。
     ⚠️ **このファイルは生成物。手で編集しない**（次の再生成で消える）。
     """
-    t, zc, zh = 0.03, PUCK_POS[2], 0.06
-    y_in = COURT_Y[1] - PUCK_HALF
+    t, zc, zh = WALL_T, PUCK_POS[2], 0.06
+    y_face = WALL_FACE_Y
     x_goal = COURT_X[1]
     xc, xh = (COURT_X[0] + x_goal) / 2, (x_goal - COURT_X[0]) / 2
     board_h = GOAL_HALF * 2 * 0.70 / 2
@@ -114,14 +129,14 @@ def _write_body(js):
                 f"        geometry: {{ type: Box, size: [ {size[0]*2:.4f}, {size[1]*2:.4f}, {size[2]*2:.4f} ] }}\n"
                 f"        appearance: {{ material: {{ diffuse: [ {rgb} ] }} }}   # {name}\n")
 
-    els = [shape('surface', (xc, 0.0, surf - 0.005), (xh, y_in + 2*t, 0.005), '0.85, 0.90, 0.95')]
+    els = [shape('surface', (xc, 0.0, surf - 0.005), (xh, y_face + 2*t, 0.005), '0.85, 0.90, 0.95')]
     for sgn in (+1, -1):
         sfx = 'p' if sgn > 0 else 'm'
-        els.append(shape(f'wall_side_{sfx}', (xc, sgn*(y_in+t), zc), (xh, t, zh), '0.35, 0.35, 0.40'))
-        y0, y1 = GOAL_HALF, y_in + 2*t
+        els.append(shape(f'wall_side_{sfx}', (xc, sgn*(y_face+t), zc), (xh, t, zh), '0.35, 0.35, 0.40'))
+        y0, y1 = GOAL_HALF, y_face + 2*t
         els.append(shape(f'wall_goal_{sfx}', (x_goal+t, sgn*(y0+y1)/2, zc), (t, (y1-y0)/2, zh),
                          '0.35, 0.35, 0.40'))
-    els.append(shape('goal_board', (x_goal-0.60, 0.0, zc), (t, board_h, zh), '0.20, 0.40, 0.90'))
+    els.append(shape('goal_board', (x_goal-0.60, 0.0, zc), (BOARD_T, board_h, zh), '0.20, 0.40, 0.90'))
     els.append(shape('goal_mouth', (x_goal+t, 0.0, surf), (t, GOAL_HALF, 0.003), '0.90, 0.20, 0.20'))
 
     DST_BODY.parent.mkdir(parents=True, exist_ok=True)
@@ -183,7 +198,7 @@ def _write_body(js):
     print(f'{DST_PUCK}  （表示専用・自動生成）')
 
 
-def main(wall_mode=False):
+def main(wall_mode=False):  # noqa: C901 — wall_mode は可動域の決め方も変える（Bug 39）
     root = ET.parse(SRC).getroot()
     cube = root.find(".//body[@name='cube']")
     if cube is None:
@@ -194,8 +209,10 @@ def main(wall_mode=False):
     # C: 可動域でコートに閉じ込める（パック中心が入れる範囲）
     xlo = COURT_X[0] + PUCK_HALF - PUCK_POS[0]
     xhi = COURT_X[1] - PUCK_HALF - PUCK_POS[0]
-    ylo = COURT_Y[0] + PUCK_HALF
-    yhi = COURT_Y[1] - PUCK_HALF
+    # ⚠️ 壁つきのときは **壁より外**に置く（Bug 39）。壁と同じ位置だと関節が先に止めてしまい
+    #   跳ね返りが起きず、しかも側方への脱出をプローブが検出できなくなる。
+    ylo = -PUCK_Y_BACKSTOP if wall_mode else COURT_Y[0] + PUCK_HALF
+    yhi = +PUCK_Y_BACKSTOP if wall_mode else COURT_Y[1] - PUCK_HALF
     js = cube.findall('joint')
     assert len(js) == 2 and js[0].get('axis').startswith('1'), '関節の並びが想定と違う'
     js[0].set('range', f'{xlo:.4f} {xhi:.4f}')
@@ -222,7 +239,7 @@ def main(wall_mode=False):
     print(f'  コート  x [{COURT_X[0]}, {COURT_X[1]}]  y [{COURT_Y[0]}, {COURT_Y[1]}]')
     print(f'  可動域  x [{js[0].get("range")}]  y [{js[1].get("range")}]（関節値）')
     if wall_mode:
-        print(f'  壁      側壁 内面 y=±{COURT_Y[1]-PUCK_HALF:.2f} / '
+        print(f'  壁      側壁 内面 y=±{WALL_FACE_Y:.2f}（半厚 {WALL_T}）/ '
               f'ゴール口 |y|<={GOAL_HALF} / 板 x={COURT_X[1]-0.60:.2f}・長さ {GOAL_HALF*2*0.70:.3f} m')
         print(f'  ⚠️ x 可動域をゴールの先まで延ばした。外したパックは端の壁で止まるので'
               f'**通した方が総移動距離が大きい**（報酬は変えていない）')
