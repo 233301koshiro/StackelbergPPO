@@ -181,6 +181,17 @@ MuJoCo は capsule / sphere / box / cylinder を使う。StackelbergPPO は **ca
 
 **カプセルフィッティング（主軸ベース）:**
 
+> ⚠️⚠️ **この `fit_capsule` は構想段階の擬似コードであり、`scripts/capsule_fit.py` は存在しない。**
+> **実装は `scripts/mesh_to_params.py`** であり、**下の式とは既に違う。**
+>
+> | | 下の擬似コード | ⭐ 実装（現行） |
+> |---|---|---|
+> | 長さ | OBB の最長辺 | **関節間の距離**（先端は最遠点まで）。Bug 27・Bug 31 |
+> | 太さ | OBB の残る 2 辺の平均 ÷ 2 | **ボーン軸に垂直な断面**の幅の平均 ÷ 2。**9-75** |
+>
+> **`np.argmax(extents)` をボーン軸とみなす発想そのものが誤り**である。
+> 実物では B1 の前腕で 30.6°、B2 の台座で 89.8° ずれる。**このコードを写さないこと。**
+
 ```python
 def fit_capsule(mesh: trimesh.Trimesh) -> dict:
     """メッシュの主軸方向にカプセルをフィッティングする"""

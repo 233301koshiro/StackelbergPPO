@@ -85,8 +85,86 @@ def main():
     print("\n   正しい検算は M3 が既に持っている**関節間の方向**との突き合わせである")
     print("   （OBB 単体では真のボーン軸を知りようがない）。")
     print("\n⚠️ この数字は 1 つの形状族（柄＋円盤）のもの。**普遍則ではない。**")
-    print("⚠️ 現在の実装は **警告を stderr に出すだけで挙動は変えない**。"
-          "誤ったボーン長・向きがそのまま下流へ流れる。")
+
+    verify(L, r, t)
+
+
+def verify(L, r, t):
+    """③ 是正（9-75）の検証。半径をボーン軸に**垂直な断面**から取ると何が直るか。
+
+    ⚠️ **合成メッシュでは再現しなかった。** マレットは回転対称なので、OBB が 29° 傾いても
+    短辺 2 本が似た値のままで、半径が跳ばない（旧の跳び 2.2 %）。
+    **再現したのは実物メッシュの方**だった。そこで検証も実物で行う。
+
+    合否は「正しい半径は幾つか」ではなく**カプセルがメッシュを覆えているか**で見る。
+    これは真値が一意に決まる量である。
+    """
+    import json
+    from pathlib import Path
+
+    print("\n=== ③ 是正の検証: 半径をボーン軸に垂直な断面から取る（9-75）===")
+    print("⚠️ 合成マレットでは再現しなかった（回転対称なので半径が跳ばない）。実物で測る。")
+    print("合否は『正しい半径は幾つか』ではなく**カプセルがメッシュを覆えているか**で見る。\n")
+
+    def outside(mesh, u, l, rad):
+        V = np.asarray(mesh.vertices, dtype=float)
+        t = np.clip(V @ u, 0.0, l)
+        return float((np.linalg.norm(V - np.outer(t, u), axis=1) > rad).mean() * 100)
+
+    print(f"{'例':8s}{'リンク':11s}{'軸ずれ':>7s}{'旧 OBB':>9s}{'新 ⊥':>8s}"
+          f"{'倍':>6s}{'はみ出し 旧':>12s}{'新':>7s}")
+    rows, so, sn = [], 0.0, 0.0
+    for nm in ['A1', 'A2', 'B1', 'B2', 'hockey']:
+        jp = Path(f'data/test/{nm}/meshes/joints.json')
+        if not jp.exists():
+            continue
+        J = json.load(open(jp))
+        fo, LL = J['frame_origins'], J.get('link_lengths', {})
+        names = list(fo.keys())
+        for i, l in enumerate(names):
+            mp = Path(f'data/test/{nm}/meshes/{l}.stl')
+            if not mp.exists():
+                continue
+            mesh = trimesh.load(mp)
+            u = m2p.bone_axis(names, i, fo, mesh)
+            ln = LL.get(l) or float(np.linalg.norm(
+                np.asarray(mesh.vertices, dtype=float), axis=1).max())
+            p = m2p.obb_params(mesh, 1.0)
+            ro, rn = p['radius'], m2p.perp_radius(mesh, u, 1.0)
+            a = np.asarray(p['obb_axes'][0], dtype=float)
+            a /= np.linalg.norm(a)
+            deg = np.degrees(np.arccos(min(1.0, abs(float(u @ a)))))
+            po, pn = outside(mesh, u, ln, ro), outside(mesh, u, ln, rn)
+            so += po; sn += pn
+            rows.append((nm, l, deg, po, pn))
+            print(f"{nm:8s}{l:11s}{deg:6.1f}°{ro:9.4f}{rn:8.4f}"
+                  f"{rn/ro:6.2f}{po:11.1f}%{pn:6.1f}%")
+
+    if not rows:
+        print("❌ 実物メッシュが見つからない。data/test/*/meshes/ を確認。")
+        return 1
+
+    n = len(rows)
+    print(f"\n平均はみ出し率  旧 {so/n:.1f} %  →  新 {sn/n:.1f} %")
+
+    # 判定①: 軸ずれが大きいリンクほど改善が大きいか（=害の再現と是正の対応）
+    flip = [r for r in rows if r[2] > 20.0]
+    print(f"\n軸が入れ替わっているリンク（ずれ > 20°）: {len(flip)} 本")
+    for nm, l, deg, po, pn in flip:
+        print(f"   {nm} {l}: ずれ {deg:.1f}°  はみ出し {po:.1f} % → {pn:.1f} %")
+
+    # 判定②: どのリンクも悪化していないか（丸め相当の 1 pt は許す）
+    worse = [r for r in rows if r[4] > r[3] + 1.0]
+    ok = (sn < so) and not worse and all(pn < po for _, _, _, po, pn in flip)
+    print(f"\n悪化したリンク: {len(worse)} 本")
+    print("✅ 是正は成立している。" if ok else "❌ 期待した挙動になっていない。")
+
+    print("\n⚠️ **残るはみ出しはカプセル近似そのものの限界**で、この修正では縮まない。")
+    print("   B1 hand が 70.9 % 残るのは、手先が平たくカプセル（円柱＋半球）で"
+          "覆いようがないためである。**別の限界として記録する。**")
+    print("⚠️ 台座リンクは軸ずれ 0° でも改善する（B1 base 15.4 → 0.9 %）。"
+          "立方体に近く、OBB の短辺 2 本が関節方向の断面より小さいためである。")
+    return 0 if ok else 1
 
 
 if __name__ == '__main__':

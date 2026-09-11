@@ -477,7 +477,8 @@ def main():
     joints_json.write_text(json.dumps({
         'frame_origins': {n: fo.tolist() for n, fo in zip(names, frame_origins)},
         'joint_positions': [j.tolist() for j in joint_globals],
-        # 子関節を持つリンクの「関節間距離」。先端リンクは含まない（OBB を使う）
+        # 各リンクの長さ。中間は関節間距離、**先端も含む**（最後の関節から最遠点まで。Bug 31）。
+        # ⚠️ Bug 31 以前に書かれた joints.json には先端が無い（A1 がそれ）。読む側は fallback を持つこと
         'link_lengths': link_len,
     }, indent=2), encoding='utf-8')
     print(f"[glb_to_links] 関節間距離 → {joints_json}")
