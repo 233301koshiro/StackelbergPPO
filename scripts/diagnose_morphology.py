@@ -126,7 +126,7 @@ def reach_annulus(lengths):
 OFFSET_HALF = 0.5
 
 
-def max_reach_after_design(lengths):
+def max_reach_after_design(lengths, offset_half=OFFSET_HALF):
     """リンク長が設計変数のとき、最適化で到達しうる最大リーチの「上限の目安」。
 
     offset は初期値相対 ±0.5 m（2成分）なので、単純には1リンクあたり
@@ -136,7 +136,7 @@ def max_reach_after_design(lengths):
     根ボディの offset が運動学的に不活性なこと等が効いていると見られるが、
     正確な上限は解析していない。したがって本関数の値は「これ以上は絶対に届かない」
     という上限としてのみ使い、「届く」の断定には使わない。"""
-    return sum(float(np.hypot(l + OFFSET_HALF, OFFSET_HALF)) for l in lengths)
+    return sum(float(np.hypot(l + offset_half, offset_half)) for l in lengths)
 
 
 def scale_advice(need):
@@ -168,7 +168,50 @@ def scale_advice(need):
     return math.ceil(need * 100) / 100
 
 
-def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
+
+def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61):
+    """B（9-72）: 可動域を入れた平面チェーンが点 (d, dz) に届くか。
+
+    零姿勢でチェーンは「上」(0, 1) を向き、関節 i は累積角 Σθ で回る
+    （縦型アームはリンクが +Z、根元ピッチが ±90°）。
+
+    ⚠️ **棄却の側だけが確実になるように作る。** 格子は連続な姿勢空間の標本でしかないので、
+    「格子上で届かない」だけでは棄却できない。順運動学のリプシッツ定数
+    （関節を δ 動かすと先端は高々 R·δ 動く）から**格子の隙間で届きうる余地**を見積もり、
+    最小残距離がその余地を超えたときだけ「届かない」と言う。
+
+    返り値: (判定できたか, 届くか, 最小残距離, 余地)
+    """
+    n = len(lengths)
+    if n == 0 or n > 4:
+        return False, True, 0.0, 0.0          # 想定外の構成では判定しない
+    R = float(sum(lengths))
+    if R <= 1e-9:
+        return False, True, 0.0, 0.0
+    grids = []
+    for i in range(n):
+        r = ranges_deg[i] if i < len(ranges_deg) and ranges_deg[i] else (-180.0, 180.0)
+        grids.append(np.deg2rad(np.linspace(r[0], r[1], steps)))
+    # 各関節の寄与は「その関節までの累積角」なので、順に積み上げる
+    acc = grids[0]
+    px = lengths[0] * np.sin(grids[0])
+    py = lengths[0] * np.cos(grids[0])
+    for i in range(1, n):
+        acc = acc[:, None] + grids[i][None, :]
+        px = px[:, None] + lengths[i] * np.sin(acc)
+        py = py[:, None] + lengths[i] * np.cos(acc)
+        acc = acc.reshape(-1); px = px.reshape(-1); py = py.reshape(-1)
+    dist = np.hypot(px - d, py - dz)
+    dmin = float(dist.min())
+    # 格子の隙間で届きうる余地: 1 関節あたり半刻み × リプシッツ定数 R、n 関節ぶん
+    step_rad = max(float(np.deg2rad((ranges_deg[i][1] - ranges_deg[i][0]) if i < len(ranges_deg)
+                                    and ranges_deg[i] else 360.0) / (steps - 1))
+                   for i in range(n))
+    slack = R * step_rad * n / 2.0
+    return True, dmin <= slack, dmin, slack
+
+
+def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFSET_HALF):
     """第1層: 幾何だけで即答できる不適合。(所見リスト, 致命的か) を返す。"""
     findings = []
     fatal = False
@@ -197,7 +240,7 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
         r_max = r_now
         findings.append(('info', 'リンク長は固定されているため、この長さのまま判定します'))
     else:
-        r_max = max_reach_after_design(lengths)
+        r_max = max_reach_after_design(lengths, offset_half)
         findings.append(('warn', f'リンク長が最適化対象のため、設計図の長さだけでは判定できません。\n'
                                  f'      理論上の上限は約 {r_max:.3f} m ですが、これは**過大評価**です'
                                  f'（rrbot では同じ計算が 1.845 m を返す一方、実測の最大リーチは 1.44 m でした）。\n'
@@ -213,11 +256,15 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
     # ⚠️ geom の fromto は**そのボディのローカル系**なので、世界座標の軸と比べても意味がない。
     # 各リンクを「自分自身の関節軸」と比べる: 軸に平行なリンクはその関節では振れない。
     if not planar and geo.get('dirs') and len(axes) == len(lengths):
-        par, perp = [], []
-        for l, dv, ax in zip(lengths, geo['dirs'], axes):
+        par, perp, perp_rng = [], [], []
+        rngs = (geo.get('ranges') or []) + [None] * len(lengths)
+        for l, dv, ax, rg in zip(lengths, geo['dirs'], axes, rngs):
             a = np.array(ax, dtype=float)
             a = a / (np.linalg.norm(a) + 1e-12)
-            (par if abs(float(np.dot(dv, a))) > 0.99 else perp).append(l)
+            if abs(float(np.dot(dv, a))) > 0.99:
+                par.append(l)
+            else:
+                perp.append(l); perp_rng.append(rg)
         if par and perp:
             # ⚠️ **設計モードでは「寄与するリンクだけ」を伸ばす**（2026-09-11 修正、9-73）。
             #   旧実装は r_max に全リンクを伸ばした値を入れた直後、ここで**伸ばしていない**
@@ -231,7 +278,7 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
                 shoulder_z = float(base[2]) + sum(par)
                 grow_note = ''
             else:
-                l_h = sum(float(np.hypot(l + OFFSET_HALF, OFFSET_HALF)) for l in perp)
+                l_h = sum(float(np.hypot(l + offset_half, offset_half)) for l in perp)
                 shoulder_z = float(base[2]) + sum(par)
                 grow_note = (f'（水平に効くリンクだけを最大まで伸ばした場合。'
                              f'伸ばす前は {sum(perp):.3f} m）')
@@ -250,6 +297,34 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0):
                         f'以降の判定はこの値で行います。')
                 # 総和で判定すると「届く」と誤答する（v3・目標 0.8 m がまさにこれ）。
                 r_max = min(r_max, lim)
+
+                # ⭐ B（9-72）: 可動域を入れた到達判定。**棄却の側だけが確実**になるよう、
+                #   格子の分解能から保証できるときだけ「届かない」と言う。
+                #   A（全長）は「伸ばせば届くか」を見るが、**関節が曲がらなければ届かない**
+                #   ことは見ていない。両者は独立で、どちらかに掛かれば棄却する。
+                d_b = float(np.linalg.norm(target[:2] - base[:2]))
+                if task == 'pusher' and geo.get('cube') is not None:
+                    d_b -= float(geo['cube']['half'])      # 対象は手前の面まで
+                #   ⚠️ **設計モードでは B を適用しない。** A は「長いほど遠くへ届く」ので
+                #   最大まで伸ばした値が最良ケースになるが、**B では長さは単調に有利ではない**。
+                #   関節が ±90° しか曲がらないと、伸ばしすぎた腕は**畳みきれず近くに届かない**
+                #   （実測: e2e_a1v_fix4 を最大まで伸ばすと肩から最短 2.14 m。目標 0.805 m に
+                #   残り 1.35 m）。最適化器はもっと短い長さも選べるので、
+                #   **最大値ひとつを根拠に棄却すると健全でない**。長さも探索するなら
+                #   offset の空間も一緒に探す必要があり、本層の計算量を超える。
+                ok_b, reach_b, dmin_b, slack_b = (
+                    planar_chain_reach(list(perp), perp_rng, d_b, float(target[2]) - shoulder_z)
+                    if length_frozen else (False, True, 0.0, 0.0))
+                if ok_b and not reach_b:
+                    fatal = True
+                    findings.append(('fatal',
+                        f'**関節の可動域では目標に届きません**（残り {dmin_b:.3f} m、'
+                        f'格子の余地 {slack_b:.3f} m）。\n'
+                        f'      腕の長さは足りていても、**関節が必要な角度まで曲がりません**。\n'
+                        f'      → 可動域（XML の `joint range`）を広げるか、目標を動かしてください。'))
+                elif ok_b:
+                    findings.append(('info',
+                        f'可動域を入れても目標に届く姿勢があります（残り {dmin_b:.3f} m）'))
             findings.append(('warn', msg))
 
     if task == 'reach':
@@ -521,6 +596,9 @@ def main():
     ap.add_argument('--target', nargs=3, type=float, default=None,
                     help='目標位置。既定は reach が [0.8,0,0.15]、'
                          'pusher は XML の対象位置（9-46）')
+    ap.add_argument('--offset-half', type=float, default=None,
+                    help='bone_offset の探索幅（片側）。run 指定時は cfg から自動取得。'
+                         f'既定 {OFFSET_HALF}（9-72）')
     ap.add_argument('--spread-y', type=float, default=0.0,
                     help='対象の y 方向のばらつき（Shot の cube_y_noise）。'
                          '指定すると分布の最遠点で判定する（9-46）')
@@ -549,9 +627,21 @@ def main():
             es = cfgd.get('env_specs') or {}
             if not args.spread_y:
                 args.spread_y = float(es.get('cube_y_noise', 0.0) or 0.0)
-        # cfg の robot.body_params が空なら bone_offset は凍結されている
-        bp = ((cfgd.get('robot') or {}).get('body_params')) or {}
+        # ⚠️ **保存された hydra config に `robot` は入っていない**（`cfg` という名前だけ）。
+        #   旧実装は `cfgd.get('robot')` を見ており**常に空＝常に凍結モード**になっていた。
+        #   長さを最適化する縦型の run でも凍結として判定していた（Bug 40）。
+        #   正は `design_opt/cfg/<cfg>.yml`（探索範囲の写しは c2499fa で削除済み）。
+        bp = {}
+        cfg_file = os.path.join(os.getcwd(), 'design_opt', 'cfg', f'{cfgd.get("cfg")}.yml')
+        if os.path.exists(cfg_file):
+            bp = ((yaml.safe_load(open(cfg_file)) or {}).get('robot') or {}).get('body_params') or {}
         length_frozen = not bool(bp)
+        # ⭐ 9-72: 探索幅はスクリプトに直書きせず**その run の cfg から読む**。
+        #   直書きだと cfg を変えても判定器が追随せず、また食い違いが生まれる。
+        if args.offset_half is None:
+            ub = ((bp.get('offset') or {}).get('ub')) or []
+            if ub:
+                args.offset_half = max(abs(float(v)) for v in ub)
 
     geo = parse_arm_xml(os.path.join(ASSET_DIR, f'{args.xml}.xml'))
     if args.target is None:
@@ -563,7 +653,8 @@ def main():
         else:
             args.target = [0.8, 0.0, 0.15]
     f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float),
-                       length_frozen, spread_y=args.spread_y)
+                       length_frozen, spread_y=args.spread_y,
+                       offset_half=(OFFSET_HALF if args.offset_half is None else args.offset_half))
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
 
     if run:
