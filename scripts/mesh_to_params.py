@@ -288,12 +288,18 @@ def build_topology(parts: list, names: list, scale: float,
         # 縦型では台座リンク自体が高さを持つので、ルートは接地面近くへ置く
         # （tripo_arm_v3 と同じ 0.02 m）。水平型は従来どおり topology_to_xml の既定 0.15 m。
         **({"root": {"fixed_base": True, "pos": [0.0, 0.0, 0.02]}} if vertical else {}),
-        "stackelberg_param_bounds": {
-            "bone_offset_xy": {"lb": [-0.5, -0.5], "ub": [0.5, 0.5]},
-            "geom_size":      {"lb": 0.03, "ub": 0.10},
-            "geom_ext_start": {"lb": 0.0,  "ub": 0.2},
-            "actuator_gear":  {"lb": 20,   "ub": 400}
-        }
+        # ⚠️ かつて "stackelberg_param_bounds" に探索範囲を書き出していたが、
+        # **読むコードが存在せず、抽出値がその範囲を外れていた**（9-75）。
+        # 探索範囲の正は **design_opt/cfg/*.yml**（body_params / geom_params /
+        # actuator_params）であり、ここに写しを持つと必ず片方が腐る（CLAUDE.md §4-2）。
+        # 2026-09-11 に削除し、行き先だけを残す。
+        "_param_bounds_note": (
+            "探索範囲はこのファイルでは決まらない。正は design_opt/cfg/<cfg名>.yml の "
+            "body_params / geom_params / actuator_params。"
+            "⚠️ 2026-09-11 より前に作られた topology.json には "
+            "stackelberg_param_bounds という写しが入っているが、"
+            "読むコードは無く値も実態と食い違う（9-75）。参照しないこと。"
+        ),
     }
 
     out = Path(output_path)
