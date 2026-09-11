@@ -99,6 +99,50 @@ def obb_params(mesh: trimesh.Trimesh, scale: float) -> dict:
                 extents=extents_sorted.tolist())
 
 
+def bone_axis(names: list, i: int, frame_origins: dict,
+              mesh: trimesh.Trimesh) -> np.ndarray:
+    """リンク i のボーン方向（未スケール）。取れなければ None。
+
+    中間リンクは「次の関節まで」、先端リンクは「自分の関節から最遠点まで」。
+    どちらも M3（glb_to_links）が長さを出すときに使っているのと同じ定義で、
+    bone_offset の向きと一致する。
+
+    ⚠️ **座標系**: `frame_origins` は GLB の全体系だが、分割済みメッシュは
+    **リンク局所系（自分の関節が原点）**である。中間リンクは全体系どうしの
+    **差**なので向きとして正しいが、先端リンクは局所系の**原点**から測る。
+    混ぜると先端の軸が 20〜70° ずれる（実際に一度やった）。
+    """
+    if names[i] not in frame_origins:
+        return None
+    if i + 1 < len(names) and names[i + 1] in frame_origins:
+        d = (np.asarray(frame_origins[names[i + 1]], dtype=float)
+             - np.asarray(frame_origins[names[i]], dtype=float))
+    else:
+        V = np.asarray(mesh.vertices, dtype=float)
+        d = V[np.linalg.norm(V, axis=1).argmax()]
+    n = np.linalg.norm(d)
+    return d / n if n > 1e-9 else None
+
+
+def perp_radius(mesh: trimesh.Trimesh, axis: np.ndarray, scale: float) -> float:
+    """ボーン軸に**垂直**な断面からカプセル半径を出す [m]。
+
+    ⚠️ なぜ OBB の短辺 2 本を使わないか（9-69）:
+    短辺 2 本は「OBB の最長辺」に垂直な断面であって、**ボーン軸に垂直とは限らない**。
+    先端が太い形状では OBB が斜めに組み替わり、最長辺がボーン軸から外れる。
+    実測では先端リンク 5 例すべてで 24.7〜74.1° ずれており、太さが最大 2.86 倍変わった。
+    カプセルはボーン軸に沿って置かれるので、**垂直な断面が定義上の正しい量**である。
+    """
+    u = np.asarray(axis, dtype=float)
+    u = u / np.linalg.norm(u)
+    a = np.array([1.0, 0.0, 0.0]) if abs(u[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    v = np.cross(u, a); v /= np.linalg.norm(v)
+    w = np.cross(u, v)
+    V = np.asarray(mesh.vertices, dtype=float)
+    ev, ew = V @ v, V @ w
+    return float(((ev.max() - ev.min()) + (ew.max() - ew.min())) / 4.0 * scale)
+
+
 def bone_offset_from_obb(params: dict) -> list:
     """
     OBB の最長軸をタスク座標 X 軸にマッピングして bone_offset を返す。
@@ -109,12 +153,18 @@ def bone_offset_from_obb(params: dict) -> list:
     X/Y/Z いずれかの軸に沿わせておくことを推奨。
     """
     length = params['length']
-    # 短辺と長辺の比が 1.5 未満の場合（ほぼ立方体）は警告
+    # 最長辺 ÷ 次辺の比。⚠️ **これは破綻の検出器ではない**（9-69）。
+    # 合成メッシュで測ると、比は破綻の直前まで下がり続け、OBB が斜めへ
+    # 組み替わった瞬間に跳ね上がる。**同じ比 1.36 が正常と破綻の両方で出る**ので、
+    # 閾値をどこに置いても分離できない。実物 5 例でも台座 4 本に出るだけで、
+    # 4 本とも正しく通っている（＝偽陽性）。
+    # 検出は perp_radius 側で「そもそも OBB 軸を使わない」ことで解いた。
+    # ここは「昔こう判定していた」を残すための情報表示に降格する。
     extents = params['extents']
     if extents[0] < extents[1] * 1.5:
         import sys
-        print(f"  ⚠️  警告: 最長辺 ({extents[0]:.3f}m) と次辺 ({extents[1]:.3f}m) の差が小さい。"
-              f" リンクが正しく向いているか確認してください。", file=sys.stderr)
+        print(f"  （参考: 最長辺 {extents[0]:.3f} m と次辺 {extents[1]:.3f} m が近い。"
+              f"⚠️ 比は破綻の指標にならない = 9-69。判定には使っていない）", file=sys.stderr)
     return [round(length, 4), 0.0, 0.0]
 
 
@@ -123,7 +173,7 @@ def bone_offset_from_obb(params: dict) -> list:
 def build_topology(parts: list, names: list, scale: float,
                    ranges: list, gears: list,
                    output_path: str, link_lengths: dict = None,
-                   vertical: bool = False) -> dict:
+                   vertical: bool = False, frame_origins: dict = None) -> dict:
     """
     parts  : [(path, mesh), ...]  根元→先端順
     names  : [str, ...]
@@ -134,13 +184,21 @@ def build_topology(parts: list, names: list, scale: float,
         OBB 主軸長は分割境界にあるマーカー球の半分ずつを含むため 18〜20 % 過大になる。
         先端リンクは「最後の関節からの最遠点距離」を使う
         （リンクが短い B1 では OBB が +52.6 % 過大だった）。
+    frame_origins : {リンク名: 関節座標}。同じく joints.json 由来。
+        与えられるとカプセル半径を**ボーン軸に垂直な断面**から取る（9-69 の是正）。
+        省略すると OBB の短辺 2 本にフォールバックする（軸が入れ替わると誤る）。
     """
-    link_lengths = link_lengths or {}
+    link_lengths  = link_lengths or {}
+    frame_origins = frame_origins or {}
     bodies = []
     for i, (path, mesh) in enumerate(parts):
         params = obb_params(mesh, scale)
         boff   = bone_offset_from_obb(params)
-        radius = round(params['radius'], 4)
+        axis   = bone_axis(names, i, frame_origins, mesh)
+        if axis is None:
+            radius, r_src = round(params['radius'], 4), 'OBB 短辺（⚠️ 軸未検証）'
+        else:
+            radius, r_src = round(perp_radius(mesh, axis, scale), 4), '関節軸に垂直な断面'
         if names[i] in link_lengths:
             true_len = round(link_lengths[names[i]] * scale, 4)
             print(f"  [{names[i]}] bone_offset を関節間距離で置換: "
@@ -162,7 +220,12 @@ def build_topology(parts: list, names: list, scale: float,
         print(f"  [{names[i]}]")
         print(f"    OBB extents (scaled): {[f'{e:.4f}' for e in params['extents']]} m")
         print(f"    bone_offset: {boff}")
-        print(f"    capsule radius: {radius:.4f} m")
+        print(f"    capsule radius: {radius:.4f} m  ← {r_src}")
+        if axis is not None:
+            ang = np.degrees(np.arccos(min(1.0, abs(float(
+                axis @ np.asarray(params['obb_axes'][0]))))))
+            print(f"      （OBB 短辺なら {params['radius']:.4f} m。"
+                  f"OBB 最長辺とボーン軸のずれ {ang:.1f}°）")
         print(f"    joint range: [{lo}, {hi}] deg  gear: {gear}")
 
         bodies.append({
@@ -268,18 +331,23 @@ def main():
         parts.append((path, mesh))
 
     print(f"\n[mesh_to_params] OBB からパラメータを抽出中（scale={args.scale}）...")
-    link_lengths = {}
+    link_lengths, frame_origins = {}, {}
     if args.joints_json:
         import json
-        link_lengths = json.load(open(args.joints_json)).get('link_lengths', {})
+        _j = json.load(open(args.joints_json))
+        link_lengths  = _j.get('link_lengths', {})
+        frame_origins = _j.get('frame_origins', {})
         print(f"[mesh_to_params] 関節間距離を読み込み: {args.joints_json}")
+        print("[mesh_to_params] カプセル半径はボーン軸に垂直な断面から取る（9-69）")
     else:
         print("[mesh_to_params] ⚠️ --joints-json 未指定。bone_offset に OBB 主軸長を使う"
-              "（マーカー球のぶん 18〜20 % 過大になる。Bug 27）")
+              "（マーカー球のぶん 18〜20 % 過大になる。Bug 27）。"
+              "カプセル半径も OBB 短辺にフォールバックする（9-69）")
     if args.vertical:
         print("[mesh_to_params] 縦型モード: 根元ヨー + 以降ピッチ、ボーンは +Z")
     topo = build_topology(parts, names, args.scale, ranges, gears, args.output,
-                          link_lengths=link_lengths, vertical=args.vertical)
+                          link_lengths=link_lengths, vertical=args.vertical,
+                          frame_origins=frame_origins)
 
     if args.validate:
         print("\n[mesh_to_params] --validate: MuJoCo XML を生成して検証中...")
