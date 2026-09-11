@@ -143,6 +143,26 @@ def perp_radius(mesh: trimesh.Trimesh, axis: np.ndarray, scale: float) -> float:
     return float(((ev.max() - ev.min()) + (ew.max() - ew.min())) / 4.0 * scale)
 
 
+def capsule_overhang(mesh: trimesh.Trimesh, axis: np.ndarray,
+                     length: float, radius: float, scale: float) -> float:
+    """カプセル（原点からボーン軸へ length、半径 radius）から**はみ出した頂点の割合** [%]。
+
+    **抽出したパラメータが元の形をどれだけ表現できているか**の指標。
+    「正しい太さは何 m か」は真値が一意に決まらないが（柄とも先端とも言える）、
+    **覆えているか**なら一意に決まる（9-75）。
+
+    ⚠️ **閾値は置かない。** 較正していない閾値は検出器にならない（9-69 で実証）。
+    **値を必ず出力に入れて、人が見て判断する。**
+    ⚠️ 分割済みメッシュは**自分の関節が原点**の局所座標である（Bug 40）。
+    """
+    V = np.asarray(mesh.vertices, dtype=float) * scale
+    u = np.asarray(axis, dtype=float)
+    u = u / np.linalg.norm(u)
+    t = np.clip(V @ u, 0.0, length)
+    d = np.linalg.norm(V - np.outer(t, u), axis=1)
+    return float((d > radius).mean() * 100.0)
+
+
 def bone_offset_from_obb(params: dict) -> list:
     """
     OBB の最長軸をタスク座標 X 軸にマッピングして bone_offset を返す。
@@ -206,6 +226,11 @@ def build_topology(parts: list, names: list, scale: float,
                   f"（OBB は {(boff[0]/true_len-1)*100:+.1f} % 過大。Bug 27）")
             boff = [true_len, 0.0, 0.0]
 
+        # 抽出したカプセルが元の形をどれだけ覆えているか（9-75）。
+        # ⚠️ 判定はしない。値を出して人に見せる。
+        over = (capsule_overhang(mesh, axis, boff[0], radius, scale)
+                if axis is not None else None)
+
         # 縦型モード（2026-09-02）: ボーンを +Z に立て、根元をヨー・以降をピッチにする。
         # 従来は軸を (0,0,1) 決め打ち・ボーンを +X 固定にしていたため、
         # **入力メッシュが縦型でも必ず水平面内の平面アームになっていた**。
@@ -226,6 +251,9 @@ def build_topology(parts: list, names: list, scale: float,
                 axis @ np.asarray(params['obb_axes'][0]))))))
             print(f"      （OBB 短辺なら {params['radius']:.4f} m。"
                   f"OBB 最長辺とボーン軸のずれ {ang:.1f}°）")
+        if over is not None:
+            print(f"    カプセル被覆: **はみ出し {over:.1f} %**"
+                  f"  ← ⚠️ 判定はしない。値を見て人が判断する（9-75）")
         print(f"    joint range: [{lo}, {hi}] deg  gear: {gear}")
 
         bodies.append({
@@ -245,6 +273,9 @@ def build_topology(parts: list, names: list, scale: float,
                 "size": radius,
                 "ext_start": 0.0,
                 "source_mesh": str(path),
+                # カプセルが元メッシュを覆えていない頂点の割合 [%]（9-75）。
+                # ⚠️ 診断用の記録であって、下流は読まない。閾値も置いていない。
+                "overhang_pct": (round(over, 1) if over is not None else None),
             },
             "actuator": {"gear": float(gear)},
         })
