@@ -106,10 +106,9 @@ def verify(L, r, t):
     print("⚠️ 合成マレットでは再現しなかった（回転対称なので半径が跳ばない）。実物で測る。")
     print("合否は『正しい半径は幾つか』ではなく**カプセルがメッシュを覆えているか**で見る。\n")
 
-    def outside(mesh, u, l, rad):
-        V = np.asarray(mesh.vertices, dtype=float)
-        t = np.clip(V @ u, 0.0, l)
-        return float((np.linalg.norm(V - np.outer(t, u), axis=1) > rad).mean() * 100)
+    # ⚠️ はみ出し率の計算は **mesh_to_params.capsule_overhang が唯一の実装**である。
+    # ここで同じ式を書き直すと、片方だけ直して食い違う（CLAUDE.md §4-2）。
+    outside = lambda mesh, u, l, rad: m2p.capsule_overhang(mesh, u, l, rad, 1.0)
 
     print(f"{'例':8s}{'リンク':11s}{'軸ずれ':>7s}{'旧 OBB':>9s}{'新 ⊥':>8s}"
           f"{'倍':>6s}{'はみ出し 旧':>12s}{'新':>7s}")
