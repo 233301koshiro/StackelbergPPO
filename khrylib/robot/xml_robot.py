@@ -246,6 +246,28 @@ class Actuator:
         self.name = self.joint.name
         self.node.attrib['name'] = self.name
         self.node.attrib['joint'] = self.joint.name
+        self._sync_armature()
+
+    def _sync_armature(self):
+        """実機の減速機に合わせ、反射慣性を減速比の 2 乗でスケールする（実験系譜 9-81）。
+
+        ⚠️ **既定では何もしない。** `actuator_params.armature_ref_gear` を置いた cfg だけが有効。
+        既存 110 run と物理を変えないため（9-53・9-65 と同じ理由）。
+
+        **なぜ要るか**: `armature` は全 XML で 1 の固定値で、**gear とも形状とも無関係**である。
+        そのため慣性行列の対角の 99 % 以上をアーマチュアが占め、
+        **リンク形状の寄与は 0.01〜1.14 % しかない**（9-47）。
+        つまり Leader が gear を上限へ張り付かせても**動力学的な代償を払っていない**。
+        実機では反射慣性 = ロータ慣性 × 減速比² なので、高い gear には慣性の代償がある。
+        """
+        spec = self.param_specs.get('gear', {}) if hasattr(self, 'param_specs') else {}
+        ref = spec.get('armature_ref_gear')
+        if not ref:
+            return
+        base = spec.get('armature_base', 1.0)
+        floor = spec.get('armature_floor', 0.05)   # 低 gear 側の発散止め（timestep 0.01）
+        val = max(float(floor), float(base) * (self.gear / float(ref)) ** 2)
+        self.joint.node.attrib['armature'] = f'{val:.6f}'.rstrip('0').rstrip('.')
 
     def get_params(self, param_list, get_name=False):
         if 'gear' in self.param_specs:
