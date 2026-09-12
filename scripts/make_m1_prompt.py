@@ -105,35 +105,62 @@ TEMPLATE = """添付した手描きスケッチのロボットアームを、下
 - 複数のビュー。**1つの視点だけ**を描くこと
 
 【色分け — グラデーション禁止・各色を単色で塗ること】
-- ベース台座: 濃いグレー (#333333)
-- リンク1（上腕）: 鮮明な赤 (#FF2222)
-- リンク2（前腕）: 鮮明な青 (#2222FF)
-- リンク3（先端）: 鮮明な緑 (#22CC22)
-- 関節球: 純マゼンタ (#FF00FF)
-  ※ マゼンタはアーム本体色（赤・青・緑・グレー）には絶対に使わないこと（自動検出用のため）
+{color_list}
 
 【スタイル】
 - 白背景
 - CADソフトウェアのレンダリング風（プラスチック質感・影あり・幾何学的）
 - 斜め45度視点（3/4アングル）、ロボット全体が収まる構図"""
 
-JOINTS_3 = """1. 台座と上腕（赤）の間
-2. 上腕（赤）と前腕（青）の間
-3. 前腕（青）と先端（緑）の間 ← ここも省略しないこと"""
+# ⚠️ **リンクの色は後段の判定に使われない。** `glb_to_links.py` が検出するのは
+# **マゼンタの関節マーカーだけ**で、分割は関節の Z 座標で行う（`n_links = 関節数 + 1`）。
+# 色は人が絵を確認するためのものなので、**関節数が増えても色を増やす必要はない**。
+LINK_COLORS = [('赤', '#FF2222'), ('青', '#2222FF'), ('緑', '#22CC22'),
+               ('橙', '#FF8800'), ('水色', '#22CCDD'), ('黄', '#DDCC22')]
+LINK_NAMES_JA = ['上腕', '前腕', '第三リンク', '第四リンク', '第五リンク', '第六リンク']
 
-JOINTS_3_MALLET = """1. 台座と上腕（赤）の間
-2. 上腕（赤）と前腕（青）の間
-3. 前腕（青）とマレットの柄（緑）の間 ← ここも省略しないこと"""
+
+def _link_label(i: int, n: int) -> str:
+    """i 番目（0 起点）のリンクの呼び名。最後は必ず「先端」とする。"""
+    return '先端' if i == n - 1 else LINK_NAMES_JA[i]
+
+
+def joint_list(n: int, mallet: bool = False) -> str:
+    """関節 n 個ぶんの列挙を組む。⚠️ **場所を明示的に書くことが規約の要**（付録A）。"""
+    out = []
+    for i in range(n):
+        a = '台座' if i == 0 else f'{_link_label(i-1, n)}（{LINK_COLORS[i-1][0]}）'
+        tip = 'マレットの柄' if (mallet and i == n - 1) else _link_label(i, n)
+        b = f'{tip}（{LINK_COLORS[i][0]}）'
+        tail = ' ← ここも省略しないこと' if i == n - 1 else ''
+        out.append(f'{i+1}. {a}と{b}の間{tail}')
+    return '\n'.join(out)
+
+
+def color_list(n: int, mallet: bool = False) -> str:
+    out = ['- ベース台座: 濃いグレー (#333333)']
+    for i in range(n):
+        nm = _link_label(i, n)
+        if mallet and i == n - 1:
+            nm += '（柄と円盤ヘッド）'
+        out.append(f'- リンク{i+1}（{nm}）: 鮮明な{LINK_COLORS[i][0]} ({LINK_COLORS[i][1]})'
+                   + ('  ※柄と円盤は同じ色にする' if mallet and i == n - 1 else ''))
+    out.append('- 関節球: 純マゼンタ (#FF00FF)')
+    out.append('  ※ マゼンタはアーム本体色には絶対に使わないこと（自動検出用のため）')
+    return '\n'.join(out)
+
 
 
 def build(ratios, emphasis, tip='capsule'):
-    if len(ratios) != 3:
-        raise SystemExit('リンクは 3 本を前提にしている（--ratios を 3 つ指定）')
+    n = len(ratios)
+    if not 2 <= n <= len(LINK_COLORS):
+        raise SystemExit(f'リンクは 2〜{len(LINK_COLORS)} 本に対応している（--ratios の数）')
     out = TEMPLATE.format(
         ratios=' / '.join(f'{r:g}' for r in ratios),
         emphasis=EMPHASIS[emphasis],
         n=len(ratios),
-        joint_list=JOINTS_3_MALLET if tip == 'mallet' else JOINTS_3,
+        joint_list=joint_list(n, mallet=(tip == 'mallet')),
+        color_list=color_list(n, mallet=(tip == 'mallet')),
         tip=TIP[tip],
     )
     if tip == 'mallet':
@@ -149,8 +176,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--sketch', help='data/test/<名前>/sketch/measured.json から読む')
-    ap.add_argument('--ratios', nargs=3, type=float,
-                    help='台座高を 1 としたときのリンク長（実測値）')
+    ap.add_argument('--ratios', nargs='+', type=float,
+                    help='台座高を 1 としたときのリンク長（実測値）。**本数は 2〜6 で可変**')
     ap.add_argument('--emphasis', choices=sorted(EMPHASIS), default='normal',
                     help='1 枚ごとの強調。short/long は生成側の「親切な補正」を止める')
     ap.add_argument('--tip', choices=sorted(TIP), default='capsule',
