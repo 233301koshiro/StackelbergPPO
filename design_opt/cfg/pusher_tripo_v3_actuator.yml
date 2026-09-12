@@ -1,0 +1,76 @@
+# pusher_tripo_v3_actuator: pusher_tripo_v3 に **反射慣性の減速比依存だけ**を足したもの（9-81）。
+#
+# ⚠️ **pusher_tripo_v3 との差は actuator_params.gear の 3 行だけ。** 他は同一。
+#
+# **なぜ要るか**（9-47・修論 第6章 限界(5)）: `armature` は全 XML で 1 の固定値で、
+# **gear とも形状とも無関係**である。そのため慣性行列の対角の 99 % 以上をアーマチュアが占め、
+# **リンク形状の寄与は 0.01〜1.14 % しかない**。つまり Leader が gear を上限へ張り付かせても
+# **動力学的な代償を払っていない**。実機では反射慣性 = ロータ慣性 × 減速比² である。
+#
+# **問い**: 高い gear に実機相当の慣性の代償を負わせると、**Leader は上限から降りるか。**
+#
+# ⚠️ **既存 110 run とは物理が違うので比較できない。** 条件を足す形でのみ扱う
+# （中間発表の指摘10 への対応方針。9-53・9-65 と同じ規律）。
+
+env_specs:
+  check_floor_penetration: true   # 縦型: Leader の床めり込み形態にペナルティ（-init_contact_penalty）
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 6
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  
+  body_params:
+    offset:
+      type: 'xz'   # 縦型アーム（tripo_arm_v3）: リンクは XZ 縦平面内で最適化
+      rel: true
+      lb: [-0.5, -0.5]
+      ub: [0.5, 0.5]
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      lb: 20
+      ub: 400
+      # ⭐ 実機の減速機に合わせ、反射慣性を減速比の 2 乗でスケールする（9-81）。
+      #   armature = max(floor, base * (gear / ref)^2)
+      #   ref=100 は topology の既定 gear。**そこで armature=1 となり現状と一致する。**
+      armature_ref_gear: 100
+      armature_base: 1.0
+      armature_floor: 0.05   # 低 gear 側の発散止め（timestep 0.01。gear<=22 で効く）
+  
+
