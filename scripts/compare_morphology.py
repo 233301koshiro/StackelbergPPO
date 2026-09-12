@@ -23,6 +23,21 @@ from design_opt.agents.genesis_agent import BodyGenAgent
 PROJECT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _ckpt():
+    """COMPARE_EPOCH で checkpoint を選ぶ。既定は best。
+
+    ⚠️ **途中経過どうしを比べるときは必ず同じ epoch を指定すること。**
+    最終値と途中値を並べると、差が条件のせいか予算のせいか分からなくなる（系譜 9-51）。
+    """
+    e = os.environ.get('COMPARE_EPOCH', '').strip()
+    return int(e) if e.isdigit() else 'best'
+
+
+def _ckpt_file():
+    c = _ckpt()
+    return 'best.p' if c == 'best' else f'epoch_{c:04d}.p'
+
+
 def extract_morphology(run_dir: str, label: str) -> dict:
     """run_dir の best checkpoint から形態パラメータを抽出して dict で返す。"""
     raw = yaml.safe_load(open(f'{run_dir}/.hydra/config.yaml'))
@@ -40,12 +55,12 @@ def extract_morphology(run_dir: str, label: str) -> dict:
 
     cfg.num_threads = 1
     agent = BodyGenAgent(cfg=cfg, dtype=torch.float64, device=torch.device('cpu'),
-                         seed=cfg.seed, num_threads=1, training=False, checkpoint='best')
+                         seed=cfg.seed, num_threads=1, training=False, checkpoint=_ckpt())
     env = agent.env
 
     _, log_eval = agent.sample(500, mean_action=True)
 
-    ckpt = pickle.load(open(f'{run_dir}/models/best.p', 'rb'))
+    ckpt = pickle.load(open(f'{run_dir}/models/{_ckpt_file()}', 'rb'))
 
     no_root_offset = cfg.robot_cfg.get('no_root_offset', False)
     bodies = []
