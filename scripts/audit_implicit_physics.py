@@ -41,6 +41,33 @@ CHECKS = [
 ]
 
 
+def collision_filter(m) -> list:
+    """**衝突しない geom の組**を挙げる（9-93）。
+
+    ⚠️ `contype`/`conaffinity` は XML に**書いてある**ので `CHECKS` の「既定か」判定には
+    掛からない。**掛からないのに事故を起こす。** 危ないのは値そのものではなく
+    **組み合わせの結果**であり、それは XML を読んでも暗算しないと見えない。
+
+    実例（9-93）: ホッケー台の壁は `conaffinity=2`、腕は `conaffinity=0` で、
+    `(1&2)|(1&0) = 0` ＝ **腕は壁をすり抜ける**。生成器にはその意図が書いてあったが
+    （「腕が壁に引っかかって学習が壊れるのを防ぐ割り切り」）、**その帰結**である
+    「腕が壁越しにパックを押し込める」は誰も辿らなかった。
+    結果、**パックは壁の中で静止し、200 epoch を無駄にした。**
+    """
+    named = [(i, mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i) or f'<geom{i}>')
+             for i in range(m.ngeom)]
+    out = []
+    for a, (i, ni) in enumerate(named):
+        for j, nj in named[a + 1:]:
+            if m.geom_bodyid[i] == m.geom_bodyid[j]:
+                continue                      # 同じボディ内は元から当たらない
+            can = (m.geom_contype[i] & m.geom_conaffinity[j]) or \
+                  (m.geom_contype[j] & m.geom_conaffinity[i])
+            if not can:
+                out.append((ni, nj))
+    return out
+
+
 def audit(path: str) -> int:
     txt = io.open(path, encoding='utf-8').read()
     m = mujoco.MjModel.from_xml_path(path)
@@ -55,7 +82,16 @@ def audit(path: str) -> int:
             n_implicit += 1
             print(f"  ⚠️  {name:26s} {val:42s} **既定（誰も選んでいない）**")
             print(f"      └ {why}")
-    print(f"  → 既定のまま使っているもの: {n_implicit} 件")
+    pairs = collision_filter(m)
+    if pairs:
+        print(f"  ⚠️  **すり抜ける geom の組: {len(pairs)} 組**（contype/conaffinity の積が 0）")
+        for ni, nj in pairs[:6]:
+            print(f"      └ {ni} ⇄ {nj}")
+        if len(pairs) > 6:
+            print(f"      └ ほか {len(pairs) - 6} 組")
+        print("      ⚠️ **意図的な割り切りでも、その帰結を辿ること**"
+              "（9-93: 腕が壁越しにパックを押し込んだ）")
+    print(f"  → 既定のまま使っているもの: {n_implicit} 件 / すり抜ける組: {len(pairs)} 組")
     return n_implicit
 
 
