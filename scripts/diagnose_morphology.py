@@ -29,6 +29,7 @@ import sys
 import xml.etree.ElementTree as ET
 
 import numpy as np
+from scipy.optimize import lsq_linear
 
 # Choreonoid 経由（--python）で起動されると cwd がプロジェクト直下でも
 # sys.path に入らないため、design_opt / khrylib を import できるようにする
@@ -125,6 +126,12 @@ def reach_annulus(lengths):
 # bone_offset の探索範囲（cfg の body_params.offset、rel: true・±OFFSET_HALF）
 OFFSET_HALF = 0.5
 
+# zonotope_chain_reach（9-91）の関節角格子の総点数の目安。多関節ほど1軸あたりの
+# 分解能を落として予算に収める（steps ≈ ZONO_GRID_BUDGET ** (1/n)）。
+# 実測: n=3, steps=15（3375点）で 1.4 秒（lsq_linear を素朴にループで呼んだ場合）。
+ZONO_GRID_BUDGET = 4000
+ZONO_GRID_STEPS_MAX = 61  # 単関節などで無意味に細かくしない上限（frozen 版の既定と揃える）
+
 
 def max_reach_after_design(lengths, offset_half=OFFSET_HALF):
     """リンク長が設計変数のとき、最適化で到達しうる最大リーチの「上限の目安」。
@@ -209,6 +216,83 @@ def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61):
                    for i in range(n))
     slack = R * step_rad * n / 2.0
     return True, dmin <= slack, dmin, slack
+
+
+def zonotope_chain_reach(lengths, ranges_deg, d, dz, offset_half, budget=ZONO_GRID_BUDGET):
+    """B の設計モード版（9-91）: `planar_chain_reach` と対になる関数。
+
+    設計モードでは各リンクの bone_offset の (dx, dz) 成分が箱
+    `[-offset_half, +offset_half] × [l-offset_half, l+offset_half]` の中で
+    **独立に**動ける（`khrylib/robot/xml_robot.py` の `offset` type='xz'・`rel: true`。
+    dz はリンクに沿った成分、dx は直交する成分。9-72/9-73 が dz だけを伸ばす近似を
+    使っていたが、実際は dx も独立な自由度である）。
+
+    関節角を固定すると、この2自由度×n本の生成子（各リンクにつき dx 方向・dz 方向の
+    線分）のミンコフスキー和は**ゾノトープ**になる。ゾノトープは全生成子を
+    上限・下限のどちらかに固定した 2^(2n) 個の角の凸包に一致するが、
+    target への最短点は角ではなく辺・面の内部に来ることがあるため、
+    角までの距離を使うと過大評価する（不健全）。
+
+    正しい最短距離は**箱制約つき最小二乗**
+    `min ||A t - target||^2  s.t. t ∈ box`（t は各リンクの (dx,dz) を並べた 2n 次元ベクトル、
+    A の各列は「関節を固定したときのその生成子の向き」）として厳密に求まる
+    （`scipy.optimize.lsq_linear`）。この最小化はリンク長方向には**連続最適化**なので、
+    その方向の誤差は無い。誤差が残るのは依然として関節角を格子でしか走査できない点だけ
+    であり、`planar_chain_reach` と同じ Lipschitz 定数の議論で slack を積む。
+
+    格子点数は steps^n で増えるため、n が大きいほど1軸あたりの分解能を落として
+    `budget` 点程度に収める（粗くした分は slack に反映されるので健全性は保たれる）。
+
+    返り値: (判定できたか, 届くか, 最小残距離, 余地) — `planar_chain_reach` と同じ形式。
+    """
+    n = len(lengths)
+    if n == 0 or n > 4:
+        return False, True, 0.0, 0.0
+    # Lipschitz 定数: 各生成子が取りうる最大の長さの総和（保守的な上限。
+    # max_reach_after_design と同じ量 = 「これ以上速くは動けない」という緩めの上界でよい）
+    R = max_reach_after_design(lengths, offset_half)
+    if R <= 1e-9:
+        return False, True, 0.0, 0.0
+
+    steps = min(ZONO_GRID_STEPS_MAX, max(3, int(round(budget ** (1.0 / n)))))
+    grids_deg = [(ranges_deg[i] if i < len(ranges_deg) and ranges_deg[i] else (-180.0, 180.0))
+                 for i in range(n)]
+    grids = [np.deg2rad(np.linspace(r[0], r[1], steps)) for r in grids_deg]
+
+    # 各格子点における「各関節までの累積角」acc[i] = θ0+...+θi を一括で作る（n, M）
+    mesh = np.meshgrid(*grids, indexing='ij')
+    theta = np.stack([m.reshape(-1) for m in mesh], axis=0)
+    acc = np.cumsum(theta, axis=0)
+    cosA, sinA = np.cos(acc), np.sin(acc)
+
+    # 生成子の箱: dx は [-h, h]、dz は [l-h, h+l]（9-73 と同じ「dz だけを伸ばす」箱の
+    # 2次元版。dx0=0・dz0=l は零姿勢で直線に並ぶチェーンという前提で、既存の
+    # max_reach_after_design と同じ前提を踏襲する）
+    lo = np.empty(2 * n)
+    hi = np.empty(2 * n)
+    for i, l in enumerate(lengths):
+        lo[2 * i], hi[2 * i] = -offset_half, offset_half
+        lo[2 * i + 1], hi[2 * i + 1] = l - offset_half, l + offset_half
+    target = np.array([d, dz])
+
+    dmin = math.inf
+    M = acc.shape[1]
+    A = np.zeros((2, 2 * n))
+    for m in range(M):
+        for i in range(n):
+            c, s = cosA[i, m], sinA[i, m]
+            A[:, 2 * i] = (c, -s)      # dx 方向の生成子
+            A[:, 2 * i + 1] = (s, c)   # dz 方向の生成子
+        res = lsq_linear(A, target, bounds=(lo, hi))
+        dist = float(np.linalg.norm(A @ res.x - target))
+        if dist < dmin:
+            dmin = dist
+            if dmin <= 1e-9:
+                break  # 厳密に届く格子点が見つかった。棄却しないと確定してよい
+
+    step_rad = max(float(np.deg2rad(r[1] - r[0]) / (steps - 1)) for r in grids_deg)
+    slack = R * step_rad * n / 2.0
+    return True, dmin <= slack, float(dmin), float(slack)
 
 
 def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFSET_HALF):
@@ -305,16 +389,23 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                 d_b = float(np.linalg.norm(target[:2] - base[:2]))
                 if task == 'pusher' and geo.get('cube') is not None:
                     d_b -= float(geo['cube']['half'])      # 対象は手前の面まで
-                #   ⚠️ **設計モードでは B を適用しない。** A は「長いほど遠くへ届く」ので
-                #   最大まで伸ばした値が最良ケースになるが、**B では長さは単調に有利ではない**。
-                #   関節が ±90° しか曲がらないと、伸ばしすぎた腕は**畳みきれず近くに届かない**
-                #   （実測: e2e_a1v_fix4 を最大まで伸ばすと肩から最短 2.14 m。目標 0.805 m に
-                #   残り 1.35 m）。最適化器はもっと短い長さも選べるので、
-                #   **最大値ひとつを根拠に棄却すると健全でない**。長さも探索するなら
-                #   offset の空間も一緒に探す必要があり、本層の計算量を超える。
+                #   ⚠️ 9-91: **設計モードでは、B が要求する高さも dz_s と同じく 0 とみなす。**
+                #   par（肩の高さを決めるリンク）も設計変数なので、frozen 前提の
+                #   `target[2] - shoulder_z`（実際の高さの差）をそのまま渡すと、
+                #   「par を伸縮すれば埋まる差」を perp チェーンに埋めさせる余分な制約に
+                #   なり、**健全性が壊れる**（本来届く形態を誤って棄却しうる）。
+                #   dz_s=0（上の A の計算と同じ仮定 = 肩の高さは目標に一致させられる）
+                #   に揃えれば、perp チェーンは水平量 d_b だけを満たせばよい。
+                dz_b = (float(target[2]) - shoulder_z) if length_frozen else 0.0
+                #   B（9-72・9-91）: 可動域込みの到達判定。凍結モードは平面チェーンを
+                #   角度の格子で走査する `planar_chain_reach`。設計モードはリンクの
+                #   (dx,dz) オフセットも独立に動けるため、固定した関節角ごとに
+                #   到達可能点の集合が**ゾノトープ**になる（`zonotope_chain_reach`、9-91）。
+                #   どちらも「棄却の側だけが確実」になるよう作ってある。
                 ok_b, reach_b, dmin_b, slack_b = (
-                    planar_chain_reach(list(perp), perp_rng, d_b, float(target[2]) - shoulder_z)
-                    if length_frozen else (False, True, 0.0, 0.0))
+                    planar_chain_reach(list(perp), perp_rng, d_b, dz_b)
+                    if length_frozen else
+                    zonotope_chain_reach(list(perp), perp_rng, d_b, dz_b, offset_half))
                 if ok_b and not reach_b:
                     fatal = True
                     findings.append(('fatal',
