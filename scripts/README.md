@@ -46,6 +46,13 @@
 | `check_citations.py` | **本文の引用と参考文献リストを双方向で照合**。リスト起点で本文を探す方向（確実）と、本文から抽出してリストに無いものを探す方向（取りこぼし検出）の2つ。不一致で終了コード 1 |
 | `compare_morphology.py` | 複数 run の収束形態を並べて比較 |
 | `boundary_compare.py` | 境界張り付きの条件間比較（matched epoch） |
+| ⭐ **`audit_implicit_physics.py`** | **XML に書かれていない物理パラメータを挙げる。** ⭐ **新しいタスクを入れる前に必ず**（9-86。`solref` が既定のままでホッケーが 6 回沼った） |
+| **`verify_run_replay.py`** | 学習済み run を 5 話再生し env の reward を積んで log と比べる。頭 2 話を捨てる（9-66） |
+| **`probe_m1_compliance.py`** | M1 の仕様遵守率（マーカー数・比の保存）。マゼンタ検出は `probe_m1_tilt` を import |
+| **`probe_m1_tilt.py`** | M1 画像の傾き。⚠️ **この量は合否を分けない**（9-79）。姿勢の判定は `check_glb_pose.py` |
+| `check_glb_pose.py` | **M2 の後**に関節の Z 広がりで姿勢を判定。閾値 0.25 は実測較正済み |
+| `check_stale_claims.py` | 主張の側から全 MD を横断検出 |
+| `check_docs_inventory.py` | 孤立ファイル・壊れリンク・archive の注記漏れ |
 | `eval_cnoid_numerical.py` | 数値で成功率・報酬を確認 |
 | `eval_cnoid_visual.py` | 動画（mp4）で記録 |
 | `eval_cnoid_viewer.py` | GUI でリアルタイム再生 |
@@ -173,5 +180,7 @@ pdftotext -f 1 -l 5 docs/pdf/修論ドラフト_YYYYMMDD.pdf - | grep -E "^\s*3\
 
 1. **先頭に日付と目的を書く。** 「何を確かめたくて作ったか」が分かれば、後から再利用可否を判断できる
 2. **一度きりなら §5 に、再利用するなら §3 に追記する**
+   ⚠️ **`docs/リポジトリ説明/評価スクリプト.md` にも書く。2 箇所ある**
+   （2026-09-13 に 3 本が両方から漏れていた。CLAUDE.md §4-2 の「2 箇所に同じことを書く構造」）
 3. 学習を起動するなら**二重起動ガード**を入れる（`experiment_queue.sh` の各段が参考）
 4. ログ解析なら **`log/log_train.txt` を読む**。`stdout.log` は再開で先頭が消える（Bug 18）
