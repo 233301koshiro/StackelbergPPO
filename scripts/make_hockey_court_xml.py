@@ -28,6 +28,8 @@ SRC = pathlib.Path('assets/mujoco_envs/e2e_hockeyv.xml')
 DST = pathlib.Path('assets/mujoco_envs/e2e_hockey_court.xml')
 DST_WALL = pathlib.Path('assets/mujoco_envs/e2e_hockey_wall.xml')  # --wall（9-55）
 DST_WALL2 = pathlib.Path('assets/mujoco_envs/e2e_hockey_wall2.xml')  # --wall --arm-collides（9-94）
+DST_WALL3 = pathlib.Path('assets/mujoco_envs/e2e_hockey_wall3.xml')  # + --wall-as-body（9-99）
+#   ⭐ 壁を 1 枚ずつ <body> に入れる。⚠️ **これを入れないと壁は Choreonoid に存在しない**（9-98）
 # 表示用の .body も**同じパラメータから生成する**（9-58）。手で書くとズレる:
 # 実際に 9-37 で手書きした版は 側壁 ±0.50（実際は ±0.45）・ゴール口 0.4 m（実際は 0.3 m）で、
 # しかも **goal_board が描かれていなかった**。⚠️ **これは XML の派生物であり、正は XML。**
@@ -73,7 +75,7 @@ PUCK_Y_BACKSTOP = 0.55      # cube_slide2 の可動域。**壁より外側に置
                             #   「反射」が起きない。かつ側方への脱出をプローブが検出できなくなる
 
 
-def _box(parent, name, pos, size, rgba, conaff='2'):
+def _box(parent, name, pos, size, rgba, conaff='2', as_body=False):
     """静的な板（worldbody 直下の geom）。
 
     `conaff='2'`（既定・**旧**）: 腕の geom は contype=1 / conaffinity=0 なので
@@ -88,16 +90,27 @@ def _box(parent, name, pos, size, rgba, conaff='2'):
     ⚠️ 導入時の懸念「腕が引っかかって学習が壊れる」は**9-94 で測って外れた**:
     腕が壁に当たる姿勢は 4.6 %、台の上の到達範囲は **99.3 % 残る**。
     """
-    ET.SubElement(parent, 'geom', {
+    attrs = {
         'name': name, 'type': 'box',
         'pos': ' '.join(f'{v:.4f}' for v in pos),
         'size': ' '.join(f'{v:.4f}' for v in size),
         'rgba': rgba, 'contype': '1', 'conaffinity': conaff,
         'friction': '0.5 0.1 0.1',
-        'solref': WALL_SOLREF})     # ⭐ 反発。既定のままだと跳ね返らない（9-80 の訂正）
+        'solref': WALL_SOLREF}     # ⭐ 反発。既定のままだと跳ね返らない（9-80 の訂正）
+    if not as_body:
+        ET.SubElement(parent, 'geom', attrs)
+        return
+    # ⭐ as_body（9-99）: worldbody 直下の geom は **Choreonoid の変換器に読まれない**
+    #   （`tree.findall('worldbody/body')` しか回さない。9-98）。body で包むと拾われる。
+    #   ⚠️ **1 つの body に複数の geom を入れてはいけない。** 変換器は body 内の
+    #   **最初の geom しか読まない**ので、壁は 1 枚につき 1 body にする。
+    b = ET.SubElement(parent, 'body', {
+        'name': name, 'pos': attrs['pos']})
+    attrs['pos'] = '0 0 0'          # body 原点へ。位置は body 側が持つ
+    ET.SubElement(b, 'geom', attrs)
 
 
-def _add_walls(root, js, conaff='2'):
+def _add_walls(root, js, conaff='2', as_body=False):
     """側壁・ゴール端（口を開ける）・ゴール前の板を足し、x 可動域を口の先まで延ばす。
 
     9-38 は「壁 geom ではなく関節可動域で囲う」を選んだが、その docstring 自身が
@@ -114,14 +127,14 @@ def _add_walls(root, js, conaff='2'):
     xc, xh = (COURT_X[0] + x_goal) / 2, (x_goal - COURT_X[0]) / 2
     for sgn in (+1, -1):
         _box(wb, f'wall_side_{"p" if sgn > 0 else "m"}',
-             (xc, sgn * (y_face + t), zc), (xh, t, zh), '0.35 0.35 0.40 1', conaff)
+             (xc, sgn * (y_face + t), zc), (xh, t, zh), '0.35 0.35 0.40 1', conaff, as_body)
         # ゴール端: 中央 GOAL_HALF*2 を開けて左右だけ塞ぐ
         y0, y1 = GOAL_HALF, y_face + 2 * t
         _box(wb, f'wall_goal_{"p" if sgn > 0 else "m"}',
-             (x_goal + t, sgn * (y0 + y1) / 2, zc), (t, (y1 - y0) / 2, zh), '0.35 0.35 0.40 1', conaff)
+             (x_goal + t, sgn * (y0 + y1) / 2, zc), (t, (y1 - y0) / 2, zh), '0.35 0.35 0.40 1', conaff, as_body)
     # ゴール前方 60 cm の板（ユーザー指定、長さはゴール口の 70 %）
     _box(wb, 'goal_board', (x_goal - 0.60, 0.0, zc),
-         (BOARD_T, GOAL_HALF * 2 * 0.70 / 2, zh), '0.20 0.40 0.90 1', conaff)
+         (BOARD_T, GOAL_HALF * 2 * 0.70 / 2, zh), '0.20 0.40 0.90 1', conaff, as_body)
     # ゴール口を抜けたパックが前へ進めるよう x の可動域を延ばす。
     # 外したパックはゴール端の壁で中心 x=1.49 で止まるので、**通した方が報酬が大きくなる**。
     # 報酬（v_x の積算＝総移動距離）を変えずに「入れる」を得にする — 5.2.1 の罠を避ける形。
@@ -218,7 +231,7 @@ def _write_body(js):
     print(f'{DST_PUCK}  （表示専用・自動生成）')
 
 
-def main(wall_mode=False, arm_collides=False):  # noqa: C901 — wall_mode は可動域の決め方も変える（Bug 39）
+def main(wall_mode=False, arm_collides=False, wall_as_body=False):  # noqa: C901 — wall_mode は可動域の決め方も変える（Bug 39）
     root = ET.parse(SRC).getroot()
     cube = root.find(".//body[@name='cube']")
     if cube is None:
@@ -253,13 +266,13 @@ def main(wall_mode=False, arm_collides=False):  # noqa: C901 — wall_mode は�
     g.set('rgba', '0.85 0.15 0.15 1.0')
 
     if wall_mode:
-        _add_walls(root, js, conaff='3' if arm_collides else '2')
+        _add_walls(root, js, conaff='3' if arm_collides else '2', as_body=wall_as_body)
 
-    ((DST_WALL2 if arm_collides else DST_WALL) if wall_mode else DST).write_bytes(ET.tostring(root))
+    ((DST_WALL3 if wall_as_body else (DST_WALL2 if arm_collides else DST_WALL)) if wall_mode else DST).write_bytes(ET.tostring(root))
     if wall_mode:
         _write_body(js)          # 9-58: 表示用 .body も同じ定数から生成する
     m = (2 * PUCK_HALF) ** 3 * PUCK_DENSITY
-    print(f'{(DST_WALL2 if arm_collides else DST_WALL) if wall_mode else DST}')
+    print(f'{(DST_WALL3 if wall_as_body else (DST_WALL2 if arm_collides else DST_WALL)) if wall_mode else DST}')
     print(f'  パック  一辺 {2*PUCK_HALF:.2f} m / {m:.3f} kg  位置 {PUCK_POS}')
     print(f'  コート  x [{COURT_X[0]}, {COURT_X[1]}]  y [{COURT_Y[0]}, {COURT_Y[1]}]')
     print(f'  可動域  x [{js[0].get("range")}]  y [{js[1].get("range")}]（関節値）')
@@ -272,4 +285,5 @@ def main(wall_mode=False, arm_collides=False):  # noqa: C901 — wall_mode は�
 
 if __name__ == '__main__':
     import sys
-    main(wall_mode='--wall' in sys.argv, arm_collides='--arm-collides' in sys.argv)
+    main(wall_mode='--wall' in sys.argv, arm_collides='--arm-collides' in sys.argv,
+         wall_as_body='--wall-as-body' in sys.argv)
