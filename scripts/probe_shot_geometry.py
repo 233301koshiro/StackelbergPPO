@@ -10,6 +10,14 @@
 
     python3 scripts/probe_shot_geometry.py                # 既定 x=0.70（記録の再現）
     python3 scripts/probe_shot_geometry.py --x 0.55
+
+⚠️⚠️ **このプローブは MuJoCo で回る。学習は Choreonoid で回る（9-98）。**
+**Choreonoid の変換器は `worldbody/body` しか読まないので、`worldbody` 直下の
+`<geom>`（＝壁・板などの静的な障害物）は実走に存在しない。**
+したがって**本スクリプトが壁について出す答えは、実走とは無関係である。**
+⚠️ **壁を測るなら `scripts/probe_wall_choreonoid.py`**（Choreonoid 経由）を使うこと。
+⭐ 壁を実在させるには `make_hockey_court_xml.py --wall-as-body`（9-99）で生成した
+`e2e_hockey_wall3.xml` を使う。腕・パックの運動学や幾何だけを見る用途なら本スクリプトでよい。
 """
 import argparse
 import pathlib
