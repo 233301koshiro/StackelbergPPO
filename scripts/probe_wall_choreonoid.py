@@ -42,8 +42,10 @@ def main() -> int:
     cfg.control_prior = cfg.morph_prior = False
     torch.set_default_dtype(torch.float64)
     print('[probe] agent 構築開始', flush=True)
+    # ⚠️ 学習済みの重みは要らない（腕を動かさないので）。restore_dir を渡さないまま
+    #   checkpoint='best' にすると load_checkpoint が None を join して落ちる。
     ag = BodyGenAgent(cfg=cfg, dtype=torch.float64, device=torch.device('cpu'),
-                      seed=0, num_threads=1, training=False, checkpoint='best')
+                      seed=0, num_threads=1, training=False, checkpoint=0)
     env = ag.env
     print('[probe] env 取得', flush=True)
     env.reset()
