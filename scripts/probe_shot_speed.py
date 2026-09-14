@@ -29,7 +29,7 @@ XML = os.environ.get('PROBE_XML', 'e2e_hockey_court')
 GRID = int(os.environ.get('PROBE_GRID', '41'))
 TOL = float(os.environ.get('PROBE_TOL', '0.02'))
 
-path = os.path.join(ASSET_DIR, f'{XML}.xml')
+path = XML if XML.endswith('.xml') else os.path.join(ASSET_DIR, f'{XML}.xml')   # パス直指定も可（9-97）
 geo = parse_arm_xml(path)
 model = mujoco.MjModel.from_xml_path(path)
 data = mujoco.MjData(model)

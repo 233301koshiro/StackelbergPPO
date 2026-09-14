@@ -48,6 +48,7 @@
 | `boundary_compare.py` | 境界張り付きの条件間比較（matched epoch） |
 | ⭐ **`joint_fix_watch.py`** | **指摘13の自動化。**関節使用率を監視し、安定したら固定版を並行起動、完走後に判定する（9-95） |
 | **`band_overlap.py`** | 2 群の best 値の帯が重なるかを機械判定（9-27/9-61/9-62 の目算を関数化） |
+| ⭐ **`probe_joint_mass.py`** | **段1b（駆動系の質量 = gear / トルク密度）の投入前確認**（9-97）。`--check-cfgs` で全 cfg が既定無効なことを機械で確認、既定でトルク密度 × gear の自重余裕と押し残りの表、`--write-xml` で `probe_shot_speed.py` に渡す XML を出す |
 | **`probe_hockey_arm_wall.py`** | 腕を壁に衝突させても届くかを測る（9-94）。⭐ **割り切りの「根拠」を測る型のプローブ** |
 | ⭐ **`audit_implicit_physics.py`** | **XML に書かれていない物理パラメータを挙げる。** ⭐ **新しいタスクを入れる前に必ず**（9-86。`solref` が既定のままでホッケーが 6 回沼った） |
 | **`verify_run_replay.py`** | 学習済み run を 5 話再生し env の reward を積んで log と比べる。頭 2 話を捨てる（9-66） |
@@ -107,6 +108,7 @@
 `queue_hockey.sh`（09-08、**9-50 で畳んだ C の残骸**。何も投入せず 09-11 12:00 に自動終了）
 `queue_hockey_wall.sh`（09-09、**壁つき**ホッケー 1 本。9-52 の完走待ち。実験系譜 9-60）
 `queue_fix3_s2.sh`（09-09、9-27 の seed=1。実験系譜 9-52）
+`queue_actuator_mass.sh`（09-14、**段1a＋段1b** の Pusher 1 本。3 epoch スモーク → NaN 無しなら 200 epoch。実験系譜 9-97）
 
 ## 6. スケジューラ（現行は1つだけ）
 
