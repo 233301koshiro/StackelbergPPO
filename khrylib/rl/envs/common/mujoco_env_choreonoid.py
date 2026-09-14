@@ -25,6 +25,26 @@ DEFAULT_SIZE = 500
 # MuJoCo XML → URDF (minimal converter for StackelbergPPO morphologies)
 # ---------------------------------------------------------------------------
 
+def _read_inertial(body_el):
+    """<inertial> があれば (mass, com, inertia9) を返す。無ければ None。
+
+    段1b（実験系譜 9-83）: xml_robot が「カプセル＋駆動系」の合計を <inertial> に書く。
+    MuJoCo と同じ意味論（<inertial> があれば geom 由来の慣性を捨てる）で読む。
+    pos は body ローカル、慣性は重心まわり（Choreonoid の inertia と同じ規約）。
+    """
+    el = body_el.find('inertial')
+    if el is None:
+        return None
+    mass = float(el.get('mass'))
+    com = [float(x) for x in el.get('pos', '0 0 0').split()]
+    if 'fullinertia' in el.attrib:
+        xx, yy, zz, xy, xz, yz = [float(x) for x in el.get('fullinertia').split()]
+    else:
+        xx, yy, zz = [float(x) for x in el.get('diaginertia', '1e-6 1e-6 1e-6').split()]
+        xy = xz = yz = 0.0
+    return mass, com, [xx, xy, xz, xy, yy, yz, xz, yz, zz]
+
+
 def mujoco_xml_to_urdf(xml_str: str):
     """
     Convert MuJoCo XML string to URDF string.
@@ -83,11 +103,19 @@ def mujoco_xml_to_urdf(xml_str: str):
         I = 0.4 * m * radius**2
         return m, I
 
-    def add_link(name, geom_el, density, body_global_pos=None):
+    def add_link(name, geom_el, density, body_global_pos=None, explicit=None):
         if body_global_pos is None:
             body_global_pos = np.zeros(3)
         link_el = etree.SubElement(urdf_root, 'link', name=name)
         inertial_el = etree.SubElement(link_el, 'inertial')
+        if explicit is not None:                    # 段1b（9-83）: <inertial> の合計慣性で置き換える
+            mass, com, I9 = explicit
+            etree.SubElement(inertial_el, 'origin', xyz=f'{com[0]} {com[1]} {com[2]}', rpy='0 0 0')
+            etree.SubElement(inertial_el, 'mass', value=str(mass))
+            etree.SubElement(inertial_el, 'inertia',
+                             ixx=str(I9[0]), ixy=str(I9[1]), ixz=str(I9[2]),
+                             iyy=str(I9[4]), iyz=str(I9[5]), izz=str(I9[8]))
+            inertial_el = etree.Element('inertial')  # 以下の geom 由来の書き込みは捨てる
 
         if geom_el is not None:
             gtype = geom_el.get('type', 'sphere')
@@ -233,7 +261,8 @@ def mujoco_xml_to_urdf(xml_str: str):
         bpos = (global_pos - parent_global_pos).tolist() if is_global_coord else global_pos.tolist()
         geom_el = body_el.find('geom')
         add_link(bname, geom_el, default_density,
-                 body_global_pos=global_pos if is_global_coord else np.zeros(3))
+                 body_global_pos=global_pos if is_global_coord else np.zeros(3),
+                 explicit=_read_inertial(body_el))
 
         joint_els = body_el.findall('joint')
         if not joint_els:
@@ -472,6 +501,9 @@ def mujoco_xml_to_body(xml_str: str):
         mass  = shape['mass'] if shape else 0.001
         com   = shape['center'] if shape else [0.0, 0.0, 0.0]
         inr   = inertia9(shape)
+        explicit = _read_inertial(body_el)          # 段1b（9-83）: 明示された合計慣性が優先
+        if explicit is not None:
+            mass, com, inr = explicit
 
         joint_els = body_el.findall('joint')
 

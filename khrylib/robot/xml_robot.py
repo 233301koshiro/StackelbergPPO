@@ -269,6 +269,18 @@ class Actuator:
         val = max(float(floor), float(base) * (self.gear / float(ref)) ** 2)
         self.joint.node.attrib['armature'] = f'{val:.6f}'.rstrip('0').rstrip('.')
 
+    def joint_mass(self):
+        """段1b（実験系譜 9-83）: 駆動系の質量 = gear / トルク密度 [kg]。
+
+        ⚠️ **既定では 0。** `actuator_params.gear.torque_density` を置いた cfg だけが有効
+        （段1a の `armature_ref_gear` と同じ方式）。実機の関節モジュールはトルク密度が
+        概ね 17〜34 N·m/kg なので、必要トルクがそのまま駆動系の質量になる。
+        質量そのものは MuJoCo/Choreonoid の関節には無いので、Body._sync_inertial が
+        body の <inertial> として書く。
+        """
+        density = self.param_specs.get('gear', {}).get('torque_density')
+        return self.gear / float(density) if density else 0.0
+
     def get_params(self, param_list, get_name=False):
         if 'gear' in self.param_specs:
             if get_name:
@@ -394,6 +406,63 @@ class Body:
         for geom in self.geoms:
             geom.sync_node()
         self._sync_visual_geoms()
+        self._sync_inertial()
+
+    def _sync_inertial(self):
+        """段1b（実験系譜 9-83）: 関節の駆動系質量を body の <inertial> に書く。
+
+        ⚠️ **既定では何もしない**（cfg に `torque_density` が無ければ m_add=0 で要素ごと消す）。
+
+        **<inertial> を選んだ理由**（密な球 geom 案は却下）:
+        - Body.geoms は `geom[@type="sphere"]` を設計変数として拾うので、球 geom を足すと
+          パラメータ数が変わる。Choreonoid 側の変換器も最初の geom しか読まない
+        - <inertial> は xml_robot・変換器・診断スクリプトのどのパーサも見ない
+          （find('geom') / findall('geom[@type=..]') / findall('body') のみ）ので衝突しない
+        - MuJoCo は <inertial> があれば geom 由来の慣性を捨てるので、**カプセル＋駆動系の合計**を書く。
+          変換器（mujoco_xml_to_body / _urdf）も同じ意味論で読む
+        質量は body 原点（＝関節位置）に置く。pos は body ローカル。
+        """
+        m_add = sum(j.actuator.joint_mass() for j in self.joints if j.actuator is not None)
+        node = self.node.find('inertial')
+        if m_add <= 0:
+            if node is not None:
+                self.node.remove(node)
+            return
+        parts = [(m_add, np.zeros(3), np.zeros((3, 3)))]        # (mass, center, inertia about own center)
+        for g in self.geoms:
+            rho = float(g.node.attrib.get('density', self.robot.geom_density))
+            r = float(g.size[0])
+            if g.type == 'capsule':
+                vec = g.end - g.start
+                L = float(np.linalg.norm(vec))
+                m_cyl = rho * math.pi * r ** 2 * L
+                m_cap = rho * (4.0 / 3.0) * math.pi * r ** 3
+                m = m_cyl + m_cap
+                d_hemi = L / 2.0 - 3.0 * r / 8.0
+                I_perp = m_cyl * (r ** 2 / 4.0 + L ** 2 / 12.0) + m_cap * (2.0 * r ** 2 / 5.0 + d_hemi ** 2)
+                I_axial = m * r ** 2 / 2.0
+                u = vec / L if L > 1e-12 else np.array([0.0, 0.0, 1.0])
+                I = I_perp * np.eye(3) + (I_axial - I_perp) * np.outer(u, u)
+                c = (g.start + g.end) / 2.0 - self.pos
+            else:                                                 # sphere
+                m = rho * (4.0 / 3.0) * math.pi * r ** 3
+                I = 0.4 * m * r ** 2 * np.eye(3)
+                c = np.zeros(3)
+            parts.append((m, c, I))
+        M = sum(m for m, _, _ in parts)
+        com = sum(m * c for m, c, _ in parts) / M
+        I_tot = np.zeros((3, 3))
+        for m, c, I in parts:
+            d = c - com
+            I_tot += I + m * (np.dot(d, d) * np.eye(3) - np.outer(d, d))
+        if node is None:
+            node = Element('inertial')
+            self.node.insert(0, node)
+        fmt = lambda v: ' '.join(f'{x:.6g}' for x in v)
+        node.attrib['pos'] = fmt(com)
+        node.attrib['mass'] = f'{M:.6g}'
+        node.attrib['fullinertia'] = fmt([I_tot[0, 0], I_tot[1, 1], I_tot[2, 2],
+                                          I_tot[0, 1], I_tot[0, 2], I_tot[1, 2]])
 
     def _sync_visual_geoms(self):
         """Update box/cylinder visual geom positions to follow the capsule's current fromto."""
@@ -582,6 +651,8 @@ class Robot:
         compiler = self.tree.getroot().find('.//compiler')
         coord = compiler.attrib.get('coordinate', 'local') if compiler is not None else 'local'
         self.local_coord = coord != 'global'
+        dg = self.tree.getroot().find('default/geom')
+        self.geom_density = float(dg.get('density', 5.0)) if dg is not None else 5.0   # 変換器と同じ既定
         root = self.tree.getroot().find('worldbody').find('body')
         self.add_body(root, None)
 
