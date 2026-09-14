@@ -794,8 +794,12 @@ def _run_layers23(run, task, geo=None):
     torch.set_default_dtype(torch.float64)
     set_global_seed(cfg.seed)
 
+    # EVAL_CHECKPOINT: 既定 'best'。指摘13（学習中に使用率を追う）の検証で、
+    # 完走済み run の中間チェックポイントを机上で辿るために追加（9-95）。
     ag = BodyGenAgent(cfg=cfg, dtype=torch.float64, device=torch.device('cpu'),
-                      seed=cfg.seed, num_threads=1, training=False, checkpoint='best')
+                      seed=cfg.seed, num_threads=1, training=False,
+                      checkpoint=(lambda v: int(v) if v.isdigit() else v)(
+                          os.environ.get('EVAL_CHECKPOINT', 'best')))
     env = ag.env
     st = env.reset()
     for _ in range(cfg.skel_transform_nsteps + 2):
