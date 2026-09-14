@@ -57,9 +57,14 @@ agent = BodyGenAgent(cfg=cfg, dtype=torch.float64, device=torch.device('cpu'),
                      seed=cfg.seed, num_threads=1, training=False, checkpoint=ckpt_arg)
 env = agent.env
 
-target = np.array([cfg.env_specs.get('target_x', 0.8),
-                   cfg.env_specs.get('target_y', 0.0),
-                   cfg.env_specs.get('target_z', 0.15)])
+# ⚠️ 9-96: Target-Pusher は目標を reward_specs に持つ（env_specs ではない）。
+#   旧実装は env_specs しか見ず、TP の trace に既定の [0.8,0,0.15] を書いていた。
+#   土日の再分析で「対象が目標から離れていく」ように見えた原因。
+_rs = cfg.reward_specs if hasattr(cfg, 'reward_specs') else {}
+_src = _rs if _rs.get('use_target_reward', False) else cfg.env_specs
+target = np.array([_src.get('target_x', 0.8),
+                   _src.get('target_y', 0.0),
+                   _src.get('target_z', 0.15)])
 
 state = env.reset()
 xpos, xmat, cube = [], [], []
