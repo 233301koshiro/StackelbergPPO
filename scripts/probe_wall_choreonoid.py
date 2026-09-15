@@ -51,16 +51,34 @@ def main() -> int:
     env.reset()
     print('[probe] reset 完了', flush=True)
 
+    # ⚠️ この環境は execution の前に **形態を決める 2 段階**（skeleton_transform →
+    #   attribute_transform）を通る。そこでの行動は **(リンク数, 次元) の 2 次元**であり、
+    #   1 次元のゼロを渡すと `pusher.py:151` で IndexError になる（9-99 の検証で踏んだ）。
+    #   ⭐ `info['stage']` が 'execution' になるまで、形態は既定のまま（ゼロ行動）で進める。
+    print('[probe] 形態決定の段階を通す', flush=True)
+    # ⚠️ 行動は **(体の数, control_action_dim + attr_design_dim) の 2 次元**
+    #   （`pusher.py` 151・188-189 行）。1 次元を渡すと IndexError になる（9-99 で 3 回踏んだ）。
+    def zero_action():
+        n = len(env.robot.bodies)
+        return np.zeros((n, env.control_action_dim + env.attr_design_dim))
+
+    for _ in range(64):
+        _, _, _, _, info = env.step(zero_action())
+        if info.get('stage') == 'execution':
+            break
+    print(f"[probe] stage={info.get('stage')}", flush=True)
+
     # cube の slide 関節は qvel の末尾 2 つ（x, y の順）
     i = -2 if AXIS == 'x' else -1
     env.data.qvel[i] = V
     peak = 0.0
-    zero = np.zeros(env.action_space.shape)
+    zero = zero_action()
     print('[probe] step 開始', flush=True)
     for _k in range(STEPS):
         env.step(zero)
         if _k % 30 == 0: print(f'[probe] step {_k} peak={peak:.3f}', flush=True)
-        peak = max(peak, abs(env.get_body_com('cube')[0 if AXIS == 'x' else 1]))
+        com = np.asarray(env.get_body_com('cube')).reshape(-1)
+        peak = max(peak, abs(float(com[0 if AXIS == 'x' else 1])))
     ok = peak <= LIMIT + 0.02
     print(f"RESULT xml={XML} axis={AXIS} v={V} peak={peak:.3f} limit={LIMIT} "
           f"{'✅ 壁が効いた' if ok else '❌ 壁を越えた（= 壁が存在しない）'}")
