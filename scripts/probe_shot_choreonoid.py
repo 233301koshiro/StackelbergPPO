@@ -128,4 +128,8 @@ def main() -> int:
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    # ⚠️ Choreonoid の python 環境は `sys.exit(0)` を受け付けない
+    #   （`TypeError: incompatible function arguments ... Invoked with: 0`）。
+    #   ⭐ 測定自体は完走しているのに終了コード 137 で「失敗」に見えるので、
+    #   **exit を呼ばずに返す**（9-103 で 2 回この誤解を生んだ）。
+    main()
