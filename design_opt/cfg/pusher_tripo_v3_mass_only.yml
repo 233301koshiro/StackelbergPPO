@@ -1,0 +1,78 @@
+# pusher_tripo_v3_actuator_mass: pusher_tripo_v3_actuator（段1a）に **段1b「トルクに質量を払わせる」** を足したもの（9-83）。
+#
+# ⚠️ **pusher_tripo_v3 との差は actuator_params.gear.torque_density の 1 行だけ**（段1b のみ）。
+# ⭐ 9-101 で「1a＋1b は予測に反して境界へ戻った」ため、**1b 単独の寄与を切り分ける**ために作った。
+#   9-83 は「1b 単独では減速比を動かさない」と計算していたので、**その検算でもある。**
+#
+# **なぜ要るか**（9-82）: 腕全体 45 g に対し最大トルク 400 N·m ＝ 自重保持の 1800 倍。
+# 「小さいのに強い」駆動系が設計空間に入っている。実機の関節モジュールはトルク密度
+# 17〜34 N·m/kg なので、**必要トルクがそのまま駆動系の質量になる**。これを関節へ加算する。
+#
+# ⚠️ **段1b 単独では減速比を動かさない**（トルクも質量も gear 比例で余裕 = 密度/18.7 が gear で消える）。
+# 段1a（慣性 ∝ gear²）は gear を下へ、段1b（固定 2.7 kg の対象を押す）は上へ押す。
+# **両方入れて初めて内点解になる。** だから 1a 込みの cfg から派生させる。
+#
+# ⚠️ **トルク密度 25 は成立点（18.7）のすぐ上**。余裕 1.34。下限 17 を採ると自重で潰れる（9-83）。
+# ⚠️ **既存 run とは物理が違うので比較できない。** 見るのは収束した gear の位置だけ。
+env_specs:
+  check_floor_penetration: true   # 縦型: Leader の床めり込み形態にペナルティ（-init_contact_penalty）
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 6
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  
+  body_params:
+    offset:
+      type: 'xz'   # 縦型アーム（tripo_arm_v3）: リンクは XZ 縦平面内で最適化
+      rel: true
+      lb: [-0.5, -0.5]
+      ub: [0.5, 0.5]
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      lb: 20
+      ub: 400
+      # ⭐ 実機の減速機に合わせ、反射慣性を減速比の 2 乗でスケールする（9-81）。
+      #   armature = max(floor, base * (gear / ref)^2)
+      #   ref=100 は topology の既定 gear。**そこで armature=1 となり現状と一致する。**
+      # ⭐ 段1b（9-83）: 駆動系の質量 = gear / トルク密度 [N·m/kg] を関節位置に加える
+      #   （body の <inertial> として書く。Body._sync_inertial）。既定 25 は実在モジュールの中央。
+      torque_density: 25
+  
+
