@@ -86,4 +86,5 @@ def main() -> int:
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    # ⚠️ Choreonoid の python 環境は `sys.exit(0)` を受け付けない（9-103）
+    main()
