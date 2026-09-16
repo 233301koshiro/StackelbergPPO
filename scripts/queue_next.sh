@@ -60,4 +60,26 @@ launch e2e_a1v_obs_reach_s2 \
   +env_specs.check_init_contact=false +reward_specs.init_contact_penalty=1900 \
   +env_specs.arm_safe_init=true
 
+# ④ ⭐ **fix で「良くなる」パターンを自動化で拾う**（9-106）
+#    9-102 は縦型 A1v で「固定すると悪化」を自動で捕まえた（助言の棄却）。
+#    一方 9-27/9-61 の**平面 A1 Reach では固定が良化する**（現行 XML の版で −5.83 → −3.85）。
+#    ⚠️ **ただし良化の方は人手で回したもので、自動化が拾った実績ではない。**
+#    ⭐ **同じ自動化に平面 A1 を通し、今度は「採用」が出るかを見る。**
+#    これが出れば「fix は必ずしも良くならないが、**並列実行のおかげで良くなる場合を
+#    捨てずに拾える**」と言える。⚠️ 出なければその主張はしない。
+#
+#    ⚠️ **`e2e_a1` は 9-105 で版の混入が判明している。**現行版（総リーチ 1.010 m）で統一する。
+launch e2e_a1_reach_auto13 \
+  cfg=pusher_gearonly xml_name=e2e_a1 num_threads=4 max_epoch_num=200 \
+  enable_wandb=false fix_skeleton=true seed=0 +robot_param_scale=1 \
+  +reward_specs.use_reach=true +reward_specs.target_x=0.8 +reward_specs.target_y=0.0 \
+  +reward_specs.target_z=0.15 +reward_specs.ctrl_cost_coeff=0.2 \
+  +env_specs.check_init_contact=false
+
+# ⭐ 監視デーモンを付ける（これが本体。検出 → 固定版の自動起動 → 自動判定）
+sleep 30
+nohup python3 scripts/joint_fix_watch.py --run e2e_a1_reach_auto13 \
+  > single_run/e2e_a1_reach_auto13/joint_fix_watch_stdout.log 2>&1 &
+log "e2e_a1_reach_auto13 に監視デーモンを付けた (PID $!)"
+
 log "=== キュー終了（3 本とも投入済み）"
