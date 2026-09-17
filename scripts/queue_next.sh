@@ -17,7 +17,9 @@ set -u
 cd /userdir/StackelbergPPO
 LOG=single_run/queue_next.log
 log(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
-njobs(){ ps -eo args 2>/dev/null | grep -cE "[c]horeonoid_train\.py" || true; }
+# ⚠️ **自分のシェルのコマンドラインが同じ文字列を含むと誤って数える**（Bug 19 と同型）。
+#   ⭐ **実体のパスとの AND** にすると、シェルのコマンドラインには一致しない。
+njobs(){ ps -eo args 2>/dev/null | awk '/choreonoid_train\.py/ && /install\/bin\/choreonoid/' | wc -l; }
 wait_slot(){ while [ "$(njobs)" -ge 2 ]; do sleep 180; done; }
 
 launch(){  # $1=run名  $2...=overrides

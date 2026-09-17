@@ -27,7 +27,9 @@ cd /userdir/StackelbergPPO
 LOG=single_run/queue_hockey_goal2.log
 RUN=hockey_goal2
 log(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
-njobs(){ ps -eo args 2>/dev/null | grep -cE "[c]horeonoid_train\.py" || true; }
+# ⚠️ **自分のシェルのコマンドラインが同じ文字列を含むと誤って数える**（Bug 19 と同型）。
+#   ⭐ **実体のパスとの AND** にすると、シェルのコマンドラインには一致しない。
+njobs(){ ps -eo args 2>/dev/null | awk '/choreonoid_train\.py/ && /install\/bin\/choreonoid/' | wc -l; }
 
 log "=== キュー開始。GPU が 2 本空くまで待つ"
 while [ "$(njobs)" -ge 2 ]; do sleep 180; done
