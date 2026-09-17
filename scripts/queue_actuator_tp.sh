@@ -32,7 +32,9 @@ LOG=single_run/queue_actuator_tp.log
 MAXJOBS=2
 
 log(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
-njobs(){ ps -eo args 2>/dev/null | grep -cE "[c]horeonoid_train\.py" || true; }
+# ⚠️ **自分のシェルのコマンドラインが同じ文字列を含むと誤って数える**（Bug 19 と同型）。
+#   ⭐ **実体のパスとの AND** にすると、シェルのコマンドラインには一致しない。
+njobs(){ ps -eo args 2>/dev/null | awk '/choreonoid_train\.py/ && /install\/bin\/choreonoid/' | wc -l; }
 done_(){ grep -q "training done!" "single_run/$1/log/log_train.txt" 2>/dev/null; }
 alive_(){ ps -eo args 2>/dev/null | grep -qE "[c]horeonoid_train\.py.*hydra\.run\.dir=single_run/$1( |\$)"; }
 
