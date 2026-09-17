@@ -50,6 +50,8 @@
 | **`band_overlap.py`** | 2 群の best 値の帯が重なるかを機械判定（9-27/9-61/9-62 の目算を関数化） |
 | ⭐ **`probe_joint_mass.py`** | **段1b（駆動系の質量 = gear / トルク密度）の投入前確認**（9-97）。`--check-cfgs` で全 cfg が既定無効なことを機械で確認、既定でトルク密度 × gear の自重余裕と押し残りの表、`--write-xml` で `probe_shot_speed.py` に渡す XML を出す |
 | **`probe_hockey_arm_wall.py`** | 腕を壁に衝突させても届くかを測る（9-94）。⭐ **割り切りの「根拠」を測る型のプローブ** |
+| **`make_obstacle_reach_xml.py`** | 障害物のある Reach の XML を作る（9-104）。⚠️ **障害物は `<body>` に入れる**（9-98） |
+| ⭐ **`audit_run_validity.py`** | **完走 run が正当な実験として扱えるか。**起動時刻から XML/cfg の版を逆引きし、**同じ名前で中身が違う組**を検出（9-105） |
 | ⭐⭐ **`probe_shot_choreonoid.py`** | **Choreonoid の実走で**、初期 y ごとにゴールへ入る撃ち方があるかを数える（9-103）。⚠️ **9-65 の MuJoCo 版を置き換えるもの** |
 | ⭐⭐ **`probe_wall_choreonoid.py`** | **壁が Choreonoid の実走で効くかを測る**（9-99）。⚠️ **壁を測るときは必ずこれ。** MuJoCo のプローブは壁について実走と無関係な答えを出す（9-98） |
 | ⭐ **`audit_implicit_physics.py`** | **XML に書かれていない物理パラメータを挙げる。** ⭐ **新しいタスクを入れる前に必ず**（9-86。`solref` が既定のままでホッケーが 6 回沼った） |
