@@ -68,6 +68,28 @@ def collision_filter(m) -> list:
     return out
 
 
+SUPPORTED_GEOM = {'capsule', 'sphere', 'box', 'plane'}
+
+
+def unsupported_geoms(txt) -> list:
+    """⚠️ **Choreonoid の変換器が扱えない形状型**を挙げる（9-118）。
+
+    `mujoco_env_choreonoid.py` が変換するのは **capsule / sphere / box** だけである。
+    ⚠️ **それ以外（cylinder・ellipsoid・mesh 等）は body は作られるが `elements` が空になり、
+    物理として存在しない。** ⛔ **9-118 で実際に `cylinder` の障害物が素通りした。**
+    ⚠️ **衝突フィルタの検査（9-93）は通ってしまう**ので、別に見る必要がある。
+    """
+    import re as _re
+    out = []
+    for m in _re.finditer(r'<geom\b[^>]*>', txt):
+        g = m.group(0)
+        t = (_re.search(r'type="([^"]+)"', g) or [None, 'sphere'])[1]
+        if t not in SUPPORTED_GEOM:
+            n = (_re.search(r'name="([^"]+)"', g) or [None, '(無名)'])[1]
+            out.append((n, t))
+    return out
+
+
 def audit(path: str) -> int:
     txt = io.open(path, encoding='utf-8').read()
     m = mujoco.MjModel.from_xml_path(path)
@@ -82,6 +104,12 @@ def audit(path: str) -> int:
             n_implicit += 1
             print(f"  ⚠️  {name:26s} {val:42s} **既定（誰も選んでいない）**")
             print(f"      └ {why}")
+    bad = unsupported_geoms(txt)
+    if bad:
+        print(f"  ⛔ **Choreonoid が扱えない形状: {len(bad)} 個**（body は作られるが中身が空になる）")
+        for n, t in bad[:6]:
+            print(f"      └ {n}: type=\"{t}\" → ⚠️ **物理に存在しない**（9-118）")
+        print("      ⭐ **capsule / sphere / box のいずれかに書き換えること**")
     pairs = collision_filter(m)
     if pairs:
         print(f"  ⚠️  **すり抜ける geom の組: {len(pairs)} 組**（contype/conaffinity の積が 0）")
