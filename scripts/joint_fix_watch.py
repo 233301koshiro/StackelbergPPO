@@ -34,7 +34,10 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-UNUSED_FRAC = 0.10        # diagnose_morphology.py の UNUSED_FRAC と揃える
+UNUSED_FRAC = 0.10        # diagnose_morphology.py の UNUSED_FRAC と揃える（既定）
+# ⚠️ **`--unused-frac` で上書きできる。** 9-119 で「使用率 12 % の関節を固定したら良化した」
+#   ＝ **閾値 10 % が良い助言を取り逃している**と分かったため、較正の実験に使う。
+#   ⭐ **診断本体（diagnose_morphology.py）の既定は変えない。**既存の結論が動くため。
 STABLE_N = 3              # 直近何回連続で閾値未満なら安定とみなすか
 WARMUP_FRAC = 0.20        # 学習の最初の何割は判定に使わないか
 POLL_SEC = 60
@@ -126,6 +129,8 @@ def main() -> int:
     ap.add_argument('--run', required=True, help='監視対象の run 名（走行中でも完走後でもよい）')
     ap.add_argument('--warmup-frac', type=float, default=WARMUP_FRAC)
     ap.add_argument('--stable-n', type=int, default=STABLE_N)
+    ap.add_argument('--unused-frac', type=float, default=UNUSED_FRAC,
+                    help='使われていないとみなす閾値。⭐ 9-119 の較正で 0.20 を試す')
     ap.add_argument('--once', action='store_true', help='1回だけ判定して終了（テスト用）')
     a = ap.parse_args()
 
@@ -149,11 +154,11 @@ def main() -> int:
                 if len(recent) == a.stable_n:
                     n_j = len(recent[0]['use'])
                     stable = [j for j in range(n_j)
-                              if all(r['use'][j] < UNUSED_FRAC for r in recent)]
+                              if all(r['use'][j] < a.unused_frac for r in recent)]
                     key = tuple(j + 1 for j in stable)
                     if stable and list(key) not in state['launched']:
                         log(state_path, f'⭐ 関節{list(key)} が {a.stable_n} 回連続で '
-                                         f'{UNUSED_FRAC*100:.0f}% 未満 → 固定版を起動する')
+                                         f'{a.unused_frac*100:.0f}% 未満 → 固定版を起動する')
                         launch_fixed(a.run, list(key), overrides, state_path)
                         state['launched'].append(list(key))
             json.dump(state, open(state_path, 'w'), ensure_ascii=False, indent=2)
