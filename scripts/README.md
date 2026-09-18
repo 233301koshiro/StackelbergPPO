@@ -56,7 +56,7 @@
 | ⭐ **`audit_run_validity.py`** | **完走 run が正当な実験として扱えるか。**起動時刻から XML/cfg の版を逆引きし、**同じ名前で中身が違う組**を検出（9-105） |
 | ⭐⭐ **`probe_shot_choreonoid.py`** | **Choreonoid の実走で**、初期 y ごとにゴールへ入る撃ち方があるかを数える（9-103）。⚠️ **9-65 の MuJoCo 版を置き換えるもの** |
 | ⭐⭐ **`probe_wall_choreonoid.py`** | **壁が Choreonoid の実走で効くかを測る**（9-99）。⚠️ **壁を測るときは必ずこれ。** MuJoCo のプローブは壁について実走と無関係な答えを出す（9-98） |
-| ⭐ **`audit_implicit_physics.py`** | **XML に書かれていない物理パラメータを挙げる。** ⭐ **新しいタスクを入れる前に必ず**（9-86。`solref` が既定のままでホッケーが 6 回沼った） |
+| ⭐ **`audit_implicit_physics.py`** | **XML に書かれていない物理パラメータを挙げる。**⭐ **Choreonoid が扱えない形状型（cylinder 等）も検出する**（9-118）。 ⭐ **新しいタスクを入れる前に必ず**（9-86。`solref` が既定のままでホッケーが 6 回沼った） |
 | **`verify_run_replay.py`** | 学習済み run を 5 話再生し env の reward を積んで log と比べる。頭 2 話を捨てる（9-66） |
 | **`probe_m1_compliance.py`** | M1 の仕様遵守率（マーカー数・比の保存）。マゼンタ検出は `probe_m1_tilt` を import |
 | **`probe_m1_tilt.py`** | M1 画像の傾き。⚠️ **この量は合否を分けない**（9-79）。姿勢の判定は `check_glb_pose.py` |

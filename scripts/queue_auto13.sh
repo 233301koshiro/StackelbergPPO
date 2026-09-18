@@ -22,9 +22,9 @@ cd /userdir/StackelbergPPO
 LOG=single_run/queue_auto13.log
 RUN=e2e_a1_reach_auto13
 log(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
-# ⚠️ **自分のシェルのコマンドラインが同じ文字列を含むと誤って数える**（Bug 19 と同型）。
-#   ⭐ **実体のパスとの AND** にすると、シェルのコマンドラインには一致しない。
-njobs(){ ps -eo args 2>/dev/null | awk '/choreonoid_train\.py/ && /install\/bin\/choreonoid/' | wc -l; }
+# ⚠️ **args だけで絞ると自分のシェルを数える**（Bug 19 と同型。9-111 で 1 度直したが不十分だった）。
+#   ⭐ `comm`（実行ファイル名）が choreonoid のものだけを数える。シェルは bash なので混入しない。
+njobs(){ ps -eo comm,args 2>/dev/null | awk '$1=="choreonoid" && /choreonoid_train\.py/' | wc -l; }
 
 log "=== キュー開始（fix が良くなる側を自動化で拾う）"
 while [ "$(njobs)" -ge 2 ]; do sleep 180; done

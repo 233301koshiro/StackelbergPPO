@@ -32,9 +32,9 @@ LOG=single_run/queue_actuator_tp.log
 MAXJOBS=2
 
 log(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
-# ⚠️ **自分のシェルのコマンドラインが同じ文字列を含むと誤って数える**（Bug 19 と同型）。
-#   ⭐ **実体のパスとの AND** にすると、シェルのコマンドラインには一致しない。
-njobs(){ ps -eo args 2>/dev/null | awk '/choreonoid_train\.py/ && /install\/bin\/choreonoid/' | wc -l; }
+# ⚠️ **args だけで絞ると自分のシェルを数える**（Bug 19 と同型。9-111 で 1 度直したが不十分だった）。
+#   ⭐ `comm`（実行ファイル名）が choreonoid のものだけを数える。シェルは bash なので混入しない。
+njobs(){ ps -eo comm,args 2>/dev/null | awk '$1=="choreonoid" && /choreonoid_train\.py/' | wc -l; }
 done_(){ grep -q "training done!" "single_run/$1/log/log_train.txt" 2>/dev/null; }
 alive_(){ ps -eo args 2>/dev/null | grep -qE "[c]horeonoid_train\.py.*hydra\.run\.dir=single_run/$1( |\$)"; }
 
