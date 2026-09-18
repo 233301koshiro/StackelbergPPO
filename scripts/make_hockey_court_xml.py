@@ -29,6 +29,10 @@ DST = pathlib.Path('assets/mujoco_envs/e2e_hockey_court.xml')
 DST_WALL = pathlib.Path('assets/mujoco_envs/e2e_hockey_wall.xml')  # --wall（9-55）
 DST_WALL2 = pathlib.Path('assets/mujoco_envs/e2e_hockey_wall2.xml')  # --wall --arm-collides（9-94）
 DST_WALL3 = pathlib.Path('assets/mujoco_envs/e2e_hockey_wall3.xml')  # + --wall-as-body（9-99）
+DST_EASY = pathlib.Path('assets/mujoco_envs/e2e_hockey_easy.xml')    # + --easy（9-121）
+#   ⭐ **一度「できる」を作るための甘い版**（ユーザー判断 2026-09-19）。
+#   ⚠️ **変数を 2 つ同時に動かす**（ゴール口と初期位置）。通常は禁じているが、
+#   **まず解が存在する設定を作ることを優先する**という明示の判断。
 #   ⭐ 壁を 1 枚ずつ <body> に入れる。⚠️ **これを入れないと壁は Choreonoid に存在しない**（9-98）
 # 表示用の .body も**同じパラメータから生成する**（9-58）。手で書くとズレる:
 # 実際に 9-37 で手書きした版は 側壁 ±0.50（実際は ±0.45）・ゴール口 0.4 m（実際は 0.3 m）で、
@@ -47,6 +51,8 @@ PUCK_POS = (0.55, 0.0, 0.2125)   # z は肩の高さ（9-42）。**XML を直接
 # `scripts/probe_shot_geometry.py` で確認済み。反射で入る角度はむしろ増える。
 PUCK_DAMPING = 0.02              # τ=m/b を旧条件(1.35s)に保つ値（9-45）。質量 90 分の1 に対応
 GOAL_HALF = 0.15                 # ゴール口の半幅（表示用 hockey_table_view.body のマーカーと一致）
+GOAL_HALF_EASY = 0.35            # ⭐ --easy のゴール半幅。**幾何で計算して決めた**（9-121）:
+#   この値なら初期 y=0.00〜0.40 の全域で直線解が 2〜9 本存在する（0.15 では y≤0.10 が 0 本）
 
 # ⚠️ ここから下は **Bug 39 で直した壁の寸法**。値は
 # `scripts/probe_hockey_containment.py` が実測で決めたもので、**憶測で変えないこと**。
@@ -110,7 +116,7 @@ def _box(parent, name, pos, size, rgba, conaff='2', as_body=False):
     ET.SubElement(b, 'geom', attrs)
 
 
-def _add_walls(root, js, conaff='2', as_body=False):
+def _add_walls(root, js, conaff='2', as_body=False, easy=False):
     """側壁・ゴール端（口を開ける）・ゴール前の板を足し、x 可動域を口の先まで延ばす。
 
     9-38 は「壁 geom ではなく関節可動域で囲う」を選んだが、その docstring 自身が
@@ -121,6 +127,7 @@ def _add_walls(root, js, conaff='2', as_body=False):
     # 実測で内面から約 3 cm めり込む。timestep=0.01 では solref の時定数を 0.02 未満に
     # できない（MuJoCo の推奨下限が 2×dt）ので、**厚みですり抜けを防ぐ**。
     # timestep を下げると既存 110 run と物理が変わるので触らない。
+    gh = GOAL_HALF_EASY if easy else GOAL_HALF     # ⭐ --easy でゴール口を広げる
     t, zc, zh = WALL_T, PUCK_POS[2], 0.06
     y_face = WALL_FACE_Y                          # 側壁の内面（Bug 39 ① で 0.45 → 0.50）
     x_goal = COURT_X[1]                           # ゴールライン
@@ -129,7 +136,7 @@ def _add_walls(root, js, conaff='2', as_body=False):
         _box(wb, f'wall_side_{"p" if sgn > 0 else "m"}',
              (xc, sgn * (y_face + t), zc), (xh, t, zh), '0.35 0.35 0.40 1', conaff, as_body)
         # ゴール端: 中央 GOAL_HALF*2 を開けて左右だけ塞ぐ
-        y0, y1 = GOAL_HALF, y_face + 2 * t
+        y0, y1 = gh, y_face + 2 * t
         _box(wb, f'wall_goal_{"p" if sgn > 0 else "m"}',
              (x_goal + t, sgn * (y0 + y1) / 2, zc), (t, (y1 - y0) / 2, zh), '0.35 0.35 0.40 1', conaff, as_body)
     # ゴール前方 60 cm の板（ユーザー指定、長さはゴール口の 70 %）
@@ -231,7 +238,7 @@ def _write_body(js):
     print(f'{DST_PUCK}  （表示専用・自動生成）')
 
 
-def main(wall_mode=False, arm_collides=False, wall_as_body=False):  # noqa: C901 — wall_mode は可動域の決め方も変える（Bug 39）
+def main(wall_mode=False, arm_collides=False, wall_as_body=False, easy=False):  # noqa: C901 — wall_mode は可動域の決め方も変える（Bug 39）
     root = ET.parse(SRC).getroot()
     cube = root.find(".//body[@name='cube']")
     if cube is None:
@@ -266,13 +273,13 @@ def main(wall_mode=False, arm_collides=False, wall_as_body=False):  # noqa: C901
     g.set('rgba', '0.85 0.15 0.15 1.0')
 
     if wall_mode:
-        _add_walls(root, js, conaff='3' if arm_collides else '2', as_body=wall_as_body)
+        _add_walls(root, js, conaff='3' if arm_collides else '2', as_body=wall_as_body, easy=easy)
 
-    ((DST_WALL3 if wall_as_body else (DST_WALL2 if arm_collides else DST_WALL)) if wall_mode else DST).write_bytes(ET.tostring(root))
+    ((DST_EASY if easy else (DST_WALL3 if wall_as_body else (DST_WALL2 if arm_collides else DST_WALL))) if wall_mode else DST).write_bytes(ET.tostring(root))
     if wall_mode:
         _write_body(js)          # 9-58: 表示用 .body も同じ定数から生成する
     m = (2 * PUCK_HALF) ** 3 * PUCK_DENSITY
-    print(f'{(DST_WALL3 if wall_as_body else (DST_WALL2 if arm_collides else DST_WALL)) if wall_mode else DST}')
+    print(f'{(DST_EASY if easy else (DST_WALL3 if wall_as_body else (DST_WALL2 if arm_collides else DST_WALL))) if wall_mode else DST}')
     print(f'  パック  一辺 {2*PUCK_HALF:.2f} m / {m:.3f} kg  位置 {PUCK_POS}')
     print(f'  コート  x [{COURT_X[0]}, {COURT_X[1]}]  y [{COURT_Y[0]}, {COURT_Y[1]}]')
     print(f'  可動域  x [{js[0].get("range")}]  y [{js[1].get("range")}]（関節値）')
@@ -286,4 +293,4 @@ def main(wall_mode=False, arm_collides=False, wall_as_body=False):  # noqa: C901
 if __name__ == '__main__':
     import sys
     main(wall_mode='--wall' in sys.argv, arm_collides='--arm-collides' in sys.argv,
-         wall_as_body='--wall-as-body' in sys.argv)
+         wall_as_body='--wall-as-body' in sys.argv, easy='--easy' in sys.argv)
