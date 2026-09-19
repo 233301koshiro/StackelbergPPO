@@ -50,6 +50,7 @@
 | **`band_overlap.py`** | 2 群の best 値の帯が重なるかを機械判定（9-27/9-61/9-62 の目算を関数化） |
 | ⭐ **`probe_joint_mass.py`** | **段1b（駆動系の質量 = gear / トルク密度）の投入前確認**（9-97）。`--check-cfgs` で全 cfg が既定無効なことを機械で確認、既定でトルク密度 × gear の自重余裕と押し残りの表、`--write-xml` で `probe_shot_speed.py` に渡す XML を出す |
 | **`probe_hockey_arm_wall.py`** | 腕を壁に衝突させても届くかを測る（9-94）。⭐ **割り切りの「根拠」を測る型のプローブ** |
+| ⭐ **`make_realistic_density_xml.py`** | リンク密度に根拠を与えた XML を作る（9-126）。薄肉パイプの実効密度 |
 | **`make_obstacle_reach_xml.py`** | 障害物のある Reach の XML を作る（9-104）。⚠️ **障害物は `<body>` に入れる**（9-98） |
 | **`gemini_api.py`** | M1 を Gemini API で回す骨組み（9-123）。⚠️ **未着手・キー待ち** |
 | ⭐ **`tripo_api.py`** | Tripo3D API で画像→3D を生成（9-115）。`--balance` / `--verify-seed`。⚠️ キーは `.env` |
