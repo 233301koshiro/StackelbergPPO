@@ -808,7 +808,8 @@ GLB
      └ <name>.urdf              可視化用
  └ mesh_to_params.py
      ├ --joints-json  ★新規: bone_offset に OBB 主軸長ではなく**関節間距離**を使う（Bug 27）
-     └ --vertical     ★新規: 根元ヨー + 以降ピッチ、ボーンは +Z（Bug 29）
+     ├ --vertical     ★新規: 根元ヨー + 以降ピッチ、ボーンは +Z（Bug 29）
+     └ --axes        ⭐ 新規（9-131）: 関節軸を明示する e.g. `z-x-y-x`。⭐ **表記は `search_joint_axes.py` と同一**
  └ topology_to_xml.py → assets/mujoco_envs/<name>.xml
 ```
 
@@ -825,6 +826,42 @@ GLB
 | ルート位置 | 0.15 m | **0.02 m**（台座リンク自体が高さを持つ） |
 | 台座の扱い | `FIXED_BASE=1` で除外 | **`FIXED_BASE=0`。台座が可動ヨーリンクになる** |
 | 生成される構造 | rrbot と同型の平面アーム | **`tripo_arm_v3` と同型の非平面4関節** |
+
+### ⭐⭐ `--axes` — 軸を明示する（9-131、2026-09-19）
+
+⛔ **上の表の「関節軸」の行は、かつて選べない 2 択だった。**
+`mesh_to_params.py` の **1 行**が決めており、**平面（全 Z）か お辞儀（根元 Z・以降 Y）しか作れなかった**
+（9-124 の弱点①）。⚠️ **スケッチから形態を起こすと謳いながら、軸だけは人が決めていた。**
+
+```bash
+python3 scripts/mesh_to_params.py --parts ... --vertical --axes z-x-y-x --output topo.json
+# z-x-y-x / z,x,y,x / zxyx のいずれでも可
+```
+
+⭐⭐ **表記は [`scripts/search_joint_axes.py`](../../../scripts/search_joint_axes.py)（9-127 の枝刈り）と同一。**
+**枝刈りが「通過」と印字した配置をそのままコピーして渡せる。**
+
+| 確かめたこと | 結果 |
+|---|---|
+| 後方互換 | ⭐ **`--axes z-y-y-y` は `--vertical` 単体と完全に同じ出力**（軸・可動域・bone_offset・半径すべて一致） |
+| MuJoCo | ✅ `z-x-y-x` / `x-y-y-z` とも `--validate` で 10 ステップ完走 |
+| ⭐⭐ **Choreonoid の実走** | ✅ **届く。**`probe_joint_axis_choreonoid.py` で実測 |
+
+⚠️⚠️ **Choreonoid で測ったのは 9-98 があるからである。**
+**ホッケーの壁は MuJoCo に存在して Choreonoid に存在せず、8 回の修正が空振りした。**
+**MuJoCo で通ることは Choreonoid で通ることを意味しない。**
+
+各関節を 1 つずつ 0.6 rad 曲げたときの先端の変位:
+
+| 関節 | 対照 `e2e_a1v`（z-y-y-y） | 新 `e2e_a1v_axtest`（z-x-y-x） |
+|---|---|---|
+| ⭐ **idx 1** | **x +414 mm** ＝ Y 軸 | ⭐ **y −414 mm** ＝ X 軸 |
+| idx 2 | x +187 mm ＝ Y 軸 | x +187 mm ＝ Y 軸 |
+
+⭐ **大きさは同一、向きだけが x ↔ y で入れ替わった。**
+
+⛔ **ただし「メッシュから軸を推定する」処理は依然として無い。**
+⭐ **人が指定するか、枝刈りの候補から選ぶ。**弱点①は半分しか解けていない。
 
 **縦型モードの意義**: これまで非平面形態（`tripo_arm_v3`）は
 **人手で書き起こしたモデル**しか無く、第6章 6.4.2(1) が
