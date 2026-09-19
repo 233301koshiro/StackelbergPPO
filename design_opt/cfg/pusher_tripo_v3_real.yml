@@ -1,0 +1,71 @@
+# pusher_tripo_v3_real: 現実的な物理（密度・接触・ギア比）を入れた版（9-126・9-128・9-129）。
+#   ⚠️ **pusher_tripo_v3 との差は gear の lb/ub のみ。**密度と接触は XML 側（e2e_a1v_real）。
+#   ⚠️ **既存 110 run とは物理が違うので直接比較しない。条件を足す形でのみ扱う。**
+#
+# 元の説明:
+# pusher_tripo_v3: tripo_arm_v3（colorful2 忠実・縦型 4 関節）用。pusher.yml との差分は
+# offset type 'xz'・max_body_depth・床貫通チェック（2026-07-17 作成、経緯は 実験系譜.md）
+env_specs:
+  check_floor_penetration: true   # 縦型: Leader の床めり込み形態にペナルティ（-init_contact_penalty）
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 6
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  
+  body_params:
+    offset:
+      type: 'xz'   # 縦型アーム（tripo_arm_v3）: リンクは XZ 縦平面内で最適化
+      rel: true
+      lb: [-0.5, -0.5]
+      ub: [0.5, 0.5]
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      # ⭐ 9-129: 実在アクチュエータの範囲に根拠を与えた。
+      #   ⚠️ 旧 20〜400 は出所不明で、上限は自重保持トルクの 43 倍だった（9-126 後）。
+      #   ⚠️ この実験系では **1 ギア = 1 N·m 相当**（修論 3.x）なので、範囲＝トルク [N·m]。
+      #
+      #   下限 25: 自重保持 9.3（9-126 実測）＋ cube を押す 10.6（μmgL）＝ **19.9 N·m** の
+      #            1.25 倍。**これ未満ではタスクが物理的に不可能**
+      #   上限 150: **UR5e の関節**（可搬 5 kg の協働ロボット）。
+      #            この腕は全長 1 m・4.1 kg・対象 2.7 kg なので UR3e〜UR5e の帯にある
+      lb: 25
+      ub: 150
+  
+
