@@ -72,6 +72,9 @@ def main() -> int:
     ap.add_argument('--name', help='出力 XML 名。既定は <base>_rho')
     ap.add_argument('--material', default='aluminum', choices=sorted(MATERIALS))
     ap.add_argument('--wall', type=float, default=0.002, help='肉厚 [m]。既定 2 mm')
+    ap.add_argument('--solref', default=None,
+                    help='接触の solref（例 "0.02 0.4"）。⭐ 既定のままだと反発係数 0.135 で'
+                         '実物（0.2〜0.5）を下回る（9-128）')
     a = ap.parse_args()
 
     src = ENVS / f'{a.base}.xml'
@@ -90,6 +93,15 @@ def main() -> int:
         raise SystemExit('⛔ default の density が見つからない')
     out_txt = txt.replace(f'density="{old.group(1)}"', f'density="{eff:.1f}"', 1)
 
+    # ⭐ 9-128: 接触の反発。⚠️ 既定（dampratio=1）は臨界減衰で e≈0.135。
+    #   実物の金属アーム ↔ 箱 は e≈0.2〜0.5。dampratio=0.4 で e=0.318〜0.397（速度依存が最小）
+    if a.solref:
+        if 'solref=' in out_txt:
+            out_txt = re.sub(r'solref="[^"]*"', f'solref="{a.solref}"', out_txt)
+        else:
+            out_txt = out_txt.replace(f'density="{eff:.1f}"',
+                                      f'density="{eff:.1f}" solref="{a.solref}"', 1)
+
     name = a.name or f'{a.base}_rho'
     dst = ENVS / f'{name}.xml'
     dst.write_text(out_txt, encoding='utf-8')
@@ -99,6 +111,8 @@ def main() -> int:
     print(f'  素材密度  {rho:.0f} kg/m³   肉厚 {a.wall*1000:.1f} mm')
     print(f'  カプセル半径 {[round(r,4) for r in radii]}')
     print(f'  ⭐ 実効密度 {old.group(1)} → **{eff:.1f} kg/m³**')
+    if a.solref:
+        print(f'  ⭐ solref  既定 → **{a.solref}**（9-128）')
     print(f'  ⚠️ 元の {a.base}.xml は変更していない（条件を足す形。9-105 の版の混入を避ける）')
     return 0
 
