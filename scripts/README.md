@@ -61,6 +61,7 @@
 | ⭐⭐ **`probe_wall_choreonoid.py`** | **壁が Choreonoid の実走で効くかを測る**（9-99）。⚠️ **壁を測るときは必ずこれ。** MuJoCo のプローブは壁について実走と無関係な答えを出す（9-98） |
 | ⭐⭐ **`probe_joint_axis_choreonoid.py`** | **関節軸が Choreonoid の実走まで届くかを測る**（9-131）。各関節を 1 つずつ曲げ先端の動く向きを見る。⚠️ **軸を変えたら MuJoCo だけで済ませない**（9-98） |
 | ⛔⭐ **`check_obstacle_clearance.py`** | **障害物 Reach で腕が柱を避けたかを機械判定**（9-132）。⚠️ **先端だけ見ない。**9-118 では先端が迂回していたのに途中のリンクが貫通していた |
+| ⛔⭐ **`probe_obstacle_collision_choreonoid.py`** | **柱が腕に効いているかを実走で測る**（9-133）。⭐ **同じ姿勢・同じゼロ制御で柱の有無だけ変えて比較する** |
 | ⭐ **`audit_implicit_physics.py`** | **XML に書かれていない物理パラメータを挙げる。**⭐ **Choreonoid が扱えない形状型（cylinder 等）も検出する**（9-118）。 ⭐ **新しいタスクを入れる前に必ず**（9-86。`solref` が既定のままでホッケーが 6 回沼った） |
 | **`verify_run_replay.py`** | 学習済み run を 5 話再生し env の reward を積んで log と比べる。頭 2 話を捨てる（9-66） |
 | **`probe_m1_compliance.py`** | M1 の仕様遵守率（マーカー数・比の保存）。マゼンタ検出は `probe_m1_tilt` を import |
