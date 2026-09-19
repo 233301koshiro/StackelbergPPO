@@ -85,6 +85,19 @@ def main() -> int:
 
     print(f'対照: {a}  ({da})')
     print(f'提案: {b}  ({db})')
+
+    # ⚠️⚠️ 1 seed は「帯」ではない（9-136 で実際に 1 点を帯として判定しかけた）。
+    #   ⭐ 9-34 で「順位は seed の産物だった」を踏んでいるので、機械で止める。
+    thin = [(n, v) for n, v in (('対照', a), ('提案', b)) if len(v) < 2]
+    if thin:
+        for n, v in thin:
+            print(f'\n⛔ **{n}側が {len(v)} seed しかない。帯を作れない。**')
+        print('⚠️ **この比較で順位を主張してはいけない**（9-34: 順位が seed の産物だった実例）。')
+        print('⭐ 2 seed 目の完走を待つこと。参考値として範囲だけ出す:')
+        overlap, b_better, verdict = judge(a, b, higher_is_better=not a_.lower_is_better)
+        print(f'   （参考）{verdict}')
+        return 2
+
     overlap, b_better, verdict = judge(a, b, higher_is_better=not a_.lower_is_better)
     print(f'\n{verdict}')
     return 0
