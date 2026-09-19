@@ -51,6 +51,7 @@
 | ⭐ **`probe_joint_mass.py`** | **段1b（駆動系の質量 = gear / トルク密度）の投入前確認**（9-97）。`--check-cfgs` で全 cfg が既定無効なことを機械で確認、既定でトルク密度 × gear の自重余裕と押し残りの表、`--write-xml` で `probe_shot_speed.py` に渡す XML を出す |
 | **`probe_hockey_arm_wall.py`** | 腕を壁に衝突させても届くかを測る（9-94）。⭐ **割り切りの「根拠」を測る型のプローブ** |
 | **`make_obstacle_reach_xml.py`** | 障害物のある Reach の XML を作る（9-104）。⚠️ **障害物は `<body>` に入れる**（9-98） |
+| **`gemini_api.py`** | M1 を Gemini API で回す骨組み（9-123）。⚠️ **未着手・キー待ち** |
 | ⭐ **`tripo_api.py`** | Tripo3D API で画像→3D を生成（9-115）。`--balance` / `--verify-seed`。⚠️ キーは `.env` |
 | ⭐⭐ **`check_before_conclusion.py`** | **結論を書く前に通す検査**（完走・再生・タスク達成・版・事前登録）。9-114 |
 | ⭐ **`audit_run_validity.py`** | **完走 run が正当な実験として扱えるか。**起動時刻から XML/cfg の版を逆引きし、**同じ名前で中身が違う組**を検出（9-105） |
