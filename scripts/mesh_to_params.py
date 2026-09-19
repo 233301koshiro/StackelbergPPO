@@ -188,12 +188,37 @@ def bone_offset_from_obb(params: dict) -> list:
     return [round(length, 4), 0.0, 0.0]
 
 
+# ---------- 関節軸（9-131） ----------
+# ⛔ **かつてここは 1 行の決め打ちだった**（9-124 の弱点①）:
+#     axis = [0,0,1] if (not vertical or i == 0) else [0,1,0]
+# **平面アーム（全ヨー）か お辞儀アーム（根元ヨー・以降ピッチ）の 2 択しか作れず**、
+# ⚠️ **スケッチから形態を起こすと謳いながら、関節軸だけは人が決めていた。**
+# ⭐ `--axes` で明示できるようにした。表記は `scripts/search_joint_axes.py` と同一なので、
+#   ⭐⭐ **枝刈りが出した配置をそのまま貼れる**（search → mesh_to_params が繋がる）。
+
+AXIS_VEC = {'x': [1.0, 0.0, 0.0], 'y': [0.0, 1.0, 0.0], 'z': [0.0, 0.0, 1.0]}
+
+
+def parse_axes(spec: str, n: int) -> list:
+    """'z-y-y' / 'z,y,y' / 'zyy' → ['z','y','y']。n 個でなければ ValueError。"""
+    t = spec.replace(',', '-').replace(' ', '-')
+    items = [c for c in t.split('-') if c] if '-' in t else list(t)
+    items = [c.strip().lower() for c in items]
+    bad = [c for c in items if c not in AXIS_VEC]
+    if bad:
+        raise ValueError(f"軸は x/y/z のみ。不正: {bad}")
+    if len(items) != n:
+        raise ValueError(f"--axes の数 ({len(items)}) が関節数 ({n}) と一致しません: {items}")
+    return items
+
+
 # ---------- topology.json 組み立て ----------
 
 def build_topology(parts: list, names: list, scale: float,
                    ranges: list, gears: list,
                    output_path: str, link_lengths: dict = None,
-                   vertical: bool = False, frame_origins: dict = None) -> dict:
+                   vertical: bool = False, frame_origins: dict = None,
+                   axes: list = None) -> dict:
     """
     parts  : [(path, mesh), ...]  根元→先端順
     names  : [str, ...]
@@ -204,6 +229,9 @@ def build_topology(parts: list, names: list, scale: float,
         OBB 主軸長は分割境界にあるマーカー球の半分ずつを含むため 18〜20 % 過大になる。
         先端リンクは「最後の関節からの最遠点距離」を使う
         （リンクが短い B1 では OBB が +52.6 % 過大だった）。
+    axes : ['z', 'y', ...] 各関節の回転軸（9-131）。省略すると従来の決め打ち
+        （水平型＝全 Z／縦型＝根元 Z・以降 Y）。⭐ **可動域は従来どおり扱う**ので、
+        `--axes z-y-y --vertical` は `--vertical` 単体と完全に同じ出力になる。
     frame_origins : {リンク名: 関節座標}。同じく joints.json 由来。
         与えられるとカプセル半径を**ボーン軸に垂直な断面**から取る（9-69 の是正）。
         省略すると OBB の短辺 2 本にフォールバックする（軸が入れ替わると誤る）。
@@ -242,6 +270,15 @@ def build_topology(parts: list, names: list, scale: float,
         lo, hi = ranges[i]
         gear   = gears[i]
 
+        # ⭐ 9-131: 軸は指定があればそれ、無ければ従来の決め打ち
+        if axes:
+            ax_vec  = list(AXIS_VEC[axes[i]])
+            ax_note = f"{axes[i].upper()}軸回転（--axes で指定）"
+        else:
+            ax_vec  = ([0.0, 0.0, 1.0] if (not vertical or i == 0) else [0.0, 1.0, 0.0])
+            ax_note = (("根元ヨー（鉛直軸）" if i == 0 else "ピッチ（水平軸）") if vertical
+                       else "Z軸回転（水平 XY 面プッシャータスク用）")
+
         print(f"  [{names[i]}]")
         print(f"    OBB extents (scaled): {[f'{e:.4f}' for e in params['extents']]} m")
         print(f"    bone_offset: {boff}")
@@ -254,6 +291,7 @@ def build_topology(parts: list, names: list, scale: float,
         if over is not None:
             print(f"    カプセル被覆: **はみ出し {over:.1f} %**"
                   f"  ← ⚠️ 判定はしない。値を見て人が判断する（9-75）")
+        print(f"    joint axis: {ax_vec}  ← {ax_note}")
         print(f"    joint range: [{lo}, {hi}] deg  gear: {gear}")
 
         bodies.append({
@@ -261,11 +299,9 @@ def build_topology(parts: list, names: list, scale: float,
             "parent": parent,
             "joint": {
                 "type": "hinge",
-                "axis": ([0.0, 0.0, 1.0] if (not vertical or i == 0) else [0.0, 1.0, 0.0]),
+                "axis": ax_vec,
                 "range": ([-180.0, 180.0] if (vertical and i == 0) else [float(lo), float(hi)]),
-                "note": (("根元ヨー（鉛直軸）" if i == 0 else "ピッチ（水平軸）") if vertical
-                         else "Z軸回転（水平 XY 面プッシャータスク用）")
-                        + f"。元メッシュ: {Path(path).name}"
+                "note": ax_note + f"。元メッシュ: {Path(path).name}"
             },
             "bone_offset": boff,
             "geom": {
@@ -281,9 +317,11 @@ def build_topology(parts: list, names: list, scale: float,
         })
 
     topo = {
-        "description": (f"{len(parts)}-joint vertical serial arm (from mesh, "
-                        f"root yaw + pitch chain)" if vertical
-                        else f"{len(parts)}-joint serial arm (from mesh)"),
+        "description": ((f"{len(parts)}-joint serial arm (from mesh, "
+                         f"axes={'-'.join(axes)})") if axes else
+                        (f"{len(parts)}-joint vertical serial arm (from mesh, "
+                         f"root yaw + pitch chain)" if vertical
+                         else f"{len(parts)}-joint serial arm (from mesh)")),
         "bodies": bodies,
         # 縦型では台座リンク自体が高さを持つので、ルートは接地面近くへ置く
         # （tripo_arm_v3 と同じ 0.02 m）。水平型は従来どおり topology_to_xml の既定 0.15 m。
@@ -334,6 +372,11 @@ def main():
                         help='縦型で出力する（根元ヨー + 以降ピッチ、ボーンは +Z）。'
                              '省略すると従来どおり水平面内の平面アーム（全関節ヨー・ボーン +X）。'
                              '⚠️ 台座が可動リンクになるので FIXED_BASE は 0 にすること')
+    parser.add_argument('--axes', default=None,
+                        help='各関節の回転軸を明示する e.g. z-y-y（zyy / z,y,z も可）。'
+                             '⭐ 表記は scripts/search_joint_axes.py と同じなので、'
+                             '枝刈りが出した配置をそのまま渡せる（9-131）。'
+                             '省略すると従来の決め打ち（水平型＝全 Z／縦型＝根元 Z・以降 Y）')
     parser.add_argument('--joints-json', default=None,
                         help='glb_to_links が出す joints.json。関節間距離で bone_offset を'
                              '置き換える（Bug 27 の是正）。省略すると OBB 主軸長を使う')
@@ -358,6 +401,12 @@ def main():
         parser.error(f'--ranges の数 ({len(ranges)}) が --parts の数 ({n}) と一致しません')
     if len(gears) != n:
         parser.error(f'--gears の数 ({len(gears)}) が --parts の数 ({n}) と一致しません')
+    axes = None
+    if args.axes:
+        try:
+            axes = parse_axes(args.axes, n)
+        except ValueError as e:
+            parser.error(str(e))
 
     print(f"[mesh_to_params] {n} パーツを読み込み中...")
     parts = []
@@ -382,9 +431,11 @@ def main():
               "カプセル半径も OBB 短辺にフォールバックする（9-69）")
     if args.vertical:
         print("[mesh_to_params] 縦型モード: 根元ヨー + 以降ピッチ、ボーンは +Z")
+    if axes:
+        print(f"[mesh_to_params] ⭐ 関節軸を明示: {'-'.join(axes)}（9-131）")
     topo = build_topology(parts, names, args.scale, ranges, gears, args.output,
                           link_lengths=link_lengths, vertical=args.vertical,
-                          frame_origins=frame_origins)
+                          frame_origins=frame_origins, axes=axes)
 
     if args.validate:
         print("\n[mesh_to_params] --validate: MuJoCo XML を生成して検証中...")
