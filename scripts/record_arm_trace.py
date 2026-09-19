@@ -38,7 +38,12 @@ from design_opt.utils.tools import set_global_seed
 project_path = os.getcwd()
 restore_dir = os.environ['EVAL_RESTORE_DIR']
 checkpoint = os.environ.get('EVAL_CHECKPOINT', 'best')
-max_steps = int(os.environ.get('TRACE_STEPS', '400'))
+# ⚠️⚠️ 既定を 400 → 1200 にした（2026-09-20、9-137）。
+#   ⛔ **旧既定 400 は 1 エピソード（実測 985〜991 step）の 40 % しか記録しない。**
+#   ⭐ **打ち切られたことは出力のどこにも出ず、「全部見た」つもりで比較してしまう。**
+#   ⚠️ 9-136 で実際に踏んだ: 最初の 400 step だけで「対象の移動量は +2 %」と書いた。
+#   ⭐ `done` で自然に終わるので、大きくしても余計な時間はかからない。
+max_steps = int(os.environ.get('TRACE_STEPS', '1200'))
 
 FLAGS = OmegaConf.create(yaml.safe_load(open(f'{restore_dir}/.hydra/config.yaml')))
 d = OmegaConf.to_container(FLAGS, resolve=True)
@@ -112,6 +117,11 @@ print(f'[trace] 最適化後のボーン長: ' +
       ' / '.join(f'{np.linalg.norm(b):.4f}' for b in bone) +
       f'  合計 {sum(np.linalg.norm(b) for b in bone):.4f} m')
 print(f'[trace] 実行ステップ {len(xpos)}  → {out}')
+# ⭐ 打ち切りを黙って通さない（9-137）
+if len(xpos) >= max_steps:
+    print(f'⛔ **{max_steps} step で打ち切られた。エピソードは終わっていない。**')
+    print(f'⚠️ **この軌跡で「最終位置」「総移動量」を語ってはいけない。**'
+          f' TRACE_STEPS を増やして取り直すこと（9-136 で実際に誤った）')
 
 # ⚠️ **os._exit で落とす。** Choreonoid（Qt）のイベントループが残り、
 #   出力を書き終えた後もプロセスが生き続ける。2026-09-10 の確認で
