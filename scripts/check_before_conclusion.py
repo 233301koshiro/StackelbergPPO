@@ -47,29 +47,68 @@ def ck_trace(r):
     return True, f'軌跡あり'
 
 
+def has_static_body(r):
+    """⭐ XML に固定 body（柱・壁）があるか。あると再生ごとに結果が揺れる（9-138）。"""
+    import xml.etree.ElementTree as ET
+    import yaml
+    try:
+        cfg = yaml.safe_load(open(run_dir(r) / '.hydra' / 'config.yaml'))
+        t = ET.parse(ROOT / 'assets' / 'mujoco_envs' / f"{cfg.get('xml_name')}.xml")
+    except Exception:
+        return []
+    out = []
+    for b in t.findall('worldbody/body'):
+        n = b.get('name', '')
+        if n in ('0',) or b.find('joint') is not None:
+            continue          # 腕の根元と、関節を持つ可動体（cube 等）は除く
+        if b.find('geom') is not None:
+            out.append(n)
+    return out
+
+
 def ck_achieved(r):
     """⭐ タスクを達成しているか。未到達どうしの比較を防ぐ（9-113）。"""
     p = run_dir(r) / 'trace' / 'arm_trace.npz'
     if not p.exists():
         return None, '（再生していないので判定不能）'
     d = np.load(p)
+    # ⛔⛔ 9-138: 固定 body と接触するタスクは、同じ checkpoint でも再生ごとに揺れる
+    #   （ホッケー 64〜308 mm・障害物 254 %）。1 エピソードで達成を判定してはいけない。
+    static = has_static_body(r)
+    warn = ('' if not static else
+            f"  ⛔ **固定 body {static} がある。再生ごとに結果が揺れる（9-138）。"
+            f"1 エピソードで判定しないこと** ")
+    # ⛔ 9-137: 打ち切られた軌跡で最終位置・到達を語らない。
+    #   ⭐ ただし「末尾でまだ動いている」ときだけ警告する。
+    #     対象が止まっていれば打ち切りは無害で、毎回出る警告は読まれなくなる（CLAUDE.md §5-2 ①）。
     ov = (run_dir(r) / '.hydra' / 'overrides.yaml')
     txt = ov.read_text(encoding='utf-8') if ov.exists() else ''
     is_reach = 'use_reach=true' in txt
     xp, xm, bo = d['xpos'], d['xmat'], d['bone_offset']
     tip = xp[:, -1, :] + np.einsum('tij,j->ti', xm[:, -1], bo[-1])
+    # ⛔ 9-137: 打ち切られた軌跡で最終位置・到達を語らない。
+    #   ⭐ ただし **判定に使う量そのもの**が末尾でまだ動いているときだけ警告する。
+    #     Pusher は対象が 400 step で止まるので、腕の動きで警告を出すと毎回出て読まれなくなる
+    #     （CLAUDE.md §5-2 ①「毎回同じ件数が出る検査は読まれなくなる」）。
+    watched = tip if is_reach else d.get('cube', tip)
+    n = len(watched)
+    tail = watched[int(n * 0.9):]
+    moving = float(np.abs(np.diff(tail, axis=0)).max()) if len(tail) > 1 else 0.0
+    if n >= 1200 and moving > 1e-3:
+        warn += (f'  ⚠️ **{n} step で打ち切られ、判定対象が末尾でもまだ動いている'
+                 f'（{moving*1000:.1f} mm/step）。TRACE_STEPS を増やすこと（9-137）** ')
     if is_reach:
         tgt = d['target']
         dist = np.linalg.norm(tip - tgt, axis=1)
         if dist.min() < 0.01:
-            return True, f'到達（最小 {dist.min()*1000:.0f} mm）'
+            return True, f'到達（最小 {dist.min()*1000:.0f} mm）' + warn
         return False, (f'⛔ **未到達**（最小 {dist.min()*1000:.0f} mm・最終 {dist[-1]*1000:.0f} mm）。'
-                        f'⚠️ **未到達どうしの差を「良化」と呼ばないこと**（9-113）')
+                        f'⚠️ **未到達どうしの差を「良化」と呼ばないこと**（9-113）' + warn)
     c = d['cube']
     moved = abs(c[-1, 0] - c[0, 0])
     if moved < 1e-3:
-        return False, f'⛔ **対象が動いていない**（{moved*1000:.1f} mm）'
-    return True, f'対象が {moved:.3f} m 動いた'
+        return False, f'⛔ **対象が動いていない**（{moved*1000:.1f} mm）' + warn
+    return True, f'対象が {moved:.3f} m 動いた' + warn
 
 
 def ck_version(r):
