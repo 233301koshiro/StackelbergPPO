@@ -71,52 +71,84 @@ target = np.array([_src.get('target_x', 0.8),
                    _src.get('target_y', 0.0),
                    _src.get('target_z', 0.15)])
 
-state = env.reset()
-xpos, xmat, cube = [], [], []
+# ⭐⭐ Bug 47 / 9-142: 「読み込み直後の 1 話目」は当てにならない（9-66）。
+#   ⛔ 旧実装は 1 話しか回さず、その 1 話がまさに 1 話目だった。
+#     対照 Pusher で 1 話目 15.11 m に対し 3〜6 話は 6.54〜15.97 m（幅 144 %）。
+#   ⚠️ **軌跡を取り直しても直らない**（毎回 1 話目をやり直すだけ）。
+#   ⭐ **1 回の読み込みのまま N 話回し、頭の SKIP 話を捨てる。**
+N_EP = int(os.environ.get('TRACE_EPISODES', '5'))
+SKIP = int(os.environ.get('TRACE_SKIP', '2'))
+
 names = None
 bone = None
+eps = []          # 採用した話ごとの (xpos, xmat, cube)
 
-for _ in range(cfg.skel_transform_nsteps + 2 + max_steps):
-    in_exec = env.stage == 'execution'
-    sv = tensorfy([state])
-    if agent.obs_norm is not None:
-        sv = agent.normalize_observation(sv)
-    with torch.no_grad():
-        action = agent.policy_net.select_action(sv, mean_action=True).numpy().astype(np.float64)
-    state, reward, done, _, info = env.step(action)
+for k in range(N_EP):
+    state = env.reset()
+    xpos, xmat, cube = [], [], []
+    for _ in range(cfg.skel_transform_nsteps + 2 + max_steps):
+        in_exec = env.stage == 'execution'
+        sv = tensorfy([state])
+        if agent.obs_norm is not None:
+            sv = agent.normalize_observation(sv)
+        with torch.no_grad():
+            action = agent.policy_net.select_action(sv, mean_action=True).numpy().astype(np.float64)
+        state, reward, done, _, info = env.step(action)
 
-    if in_exec:
-        if names is None:
-            # 設計フェーズが終わった時点の形態を確定させる（ここから先は変わらない）
-            names = [b.name for b in env.robot.bodies]
-            bone = np.array([np.asarray(getattr(b, 'bone_offset', [0, 0, 0]), dtype=float)
-                             for b in env.robot.bodies])
-        xpos.append([np.asarray(env._body_xpos[n], dtype=float) for n in names])
-        xmat.append([np.asarray(env._body_xmat[n], dtype=float).reshape(3, 3) for n in names])
-        # Pusher の対象物。⚠️ **`_body_xpos` には cube が入っていない**（腕の body だけ）。
-        # 静止した初期値を読み続けて「動かない cube」を記録する事故を起こしたので、
-        # `probe_cube_trace.py` と同じ `get_body_com()` を使う。
-        try:
-            cube.append(np.asarray(env.get_body_com('cube'), dtype=float))
-        except Exception:
-            cube.append(np.zeros(3))
-    if done:
-        break
+        if in_exec:
+            if names is None:
+                # 設計フェーズが終わった時点の形態を確定させる（ここから先は変わらない）
+                names = [b.name for b in env.robot.bodies]
+                bone = np.array([np.asarray(getattr(b, 'bone_offset', [0, 0, 0]), dtype=float)
+                                 for b in env.robot.bodies])
+            xpos.append([np.asarray(env._body_xpos[n], dtype=float) for n in names])
+            xmat.append([np.asarray(env._body_xmat[n], dtype=float).reshape(3, 3) for n in names])
+            # Pusher の対象物。⚠️ **`_body_xpos` には cube が入っていない**（腕の body だけ）。
+            # 静止した初期値を読み続けて「動かない cube」を記録する事故を起こしたので、
+            # `probe_cube_trace.py` と同じ `get_body_com()` を使う。
+            try:
+                cube.append(np.asarray(env.get_body_com('cube'), dtype=float))
+            except Exception:
+                cube.append(np.zeros(3))
+        if done:
+            break
+    if k >= SKIP:
+        eps.append((np.array(xpos), np.array(xmat), np.array(cube)))
+    print(f'[trace] 話 {k+1}/{N_EP}  step={len(xpos)}  '
+          f'{"⭐ 採用" if k >= SKIP else "⚠️ 捨てる（頭の話は当てにならない。Bug 47）"}', flush=True)
+
+assert eps, 'TRACE_EPISODES が TRACE_SKIP 以下です'
+
+# ⭐ 下流（check_before_conclusion・check_obstacle_clearance）は単一話の配列を読むので、
+#   **採用した話のうち中央値のもの**を従来のキーに入れる。1 話目は入れない。
+def _score(e):
+    c = e[2]
+    return float(c[-1, 0] - c[0, 0]) if len(c) else 0.0
+order = sorted(range(len(eps)), key=lambda i: _score(eps[i]))
+rep = eps[order[len(order) // 2]]
+xpos, xmat, cube = rep
 
 out_dir = os.path.join(restore_dir, 'trace')
 os.makedirs(out_dir, exist_ok=True)
 out = os.path.join(out_dir, 'arm_trace.npz')
 np.savez_compressed(out,
                     body_names=np.array(names),
-                    xpos=np.array(xpos), xmat=np.array(xmat),
-                    bone_offset=bone, cube=np.array(cube), target=target)
+                    xpos=xpos, xmat=xmat,
+                    bone_offset=bone, cube=cube, target=target,
+                    # ⭐ 採用した全話の要約。量を比べるときはこちらを使う（Bug 47）
+                    ep_cube_dx=np.array([_score(e) for e in eps]),
+                    ep_count=len(eps), ep_skipped=SKIP)
 
 print(f'[trace] {restore_dir} ckpt={checkpoint}')
 print(f'[trace] リンク: {names}')
 print(f'[trace] 最適化後のボーン長: ' +
       ' / '.join(f'{np.linalg.norm(b):.4f}' for b in bone) +
       f'  合計 {sum(np.linalg.norm(b) for b in bone):.4f} m')
-print(f'[trace] 実行ステップ {len(xpos)}  → {out}')
+_dx = np.array([_score(e) for e in eps])
+print(f'[trace] 採用 {len(eps)} 話（頭 {SKIP} 話を捨てた）  保存したのは中央値の話  実行ステップ {len(xpos)}')
+print(f'[trace] 話ごとの cube 移動: {np.round(_dx, 3).tolist()}  '
+      f'→ 幅 {(_dx.max()-_dx.min()):.3f} m')
+print(f'[trace] → {out}')
 # ⭐ 打ち切りを黙って通さない（9-137）
 if len(xpos) >= max_steps:
     print(f'⛔ **{max_steps} step で打ち切られた。エピソードは終わっていない。**')

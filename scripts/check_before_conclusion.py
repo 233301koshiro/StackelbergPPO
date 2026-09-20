@@ -79,8 +79,17 @@ def ck_achieved(r):
     #   （対照 Pusher で 1 話目 15.11 m 対 3〜6 話 6.54〜15.97 m）。
     #   ⚠️ 反復しても検出できない（毎回 1 話目をやり直すだけ）。
     #   ⭐ 二値の到達判定は 1 話目でも変わらないことが多いが、**量の比較には使えない**。
-    warn = ('  ⚠️ **この値は「読み込み直後の 1 話目」である（Bug 47）。'
-            '量を比べるなら `probe_episode_bias.py` で 3 話目以降を使うこと** ')
+    # ⭐ Bug 47 / 9-142 の対応後に作られた軌跡は、頭の話を捨てた複数話の要約を持つ。
+    if 'ep_cube_dx' in d:
+        dx = np.asarray(d['ep_cube_dx'], dtype=float)
+        warn = (f'  ⭐ **{len(dx)} 話（頭 {int(d["ep_skipped"])} 話を捨てた）**'
+                f'  話ごとの対象移動 [{dx.min():.2f}, {dx.max():.2f}] m ')
+        if len(dx) > 1 and dx.max() - dx.min() > 0.2 * max(abs(dx.mean()), 1e-9):
+            warn += (f'⚠️ **話ごとの幅が {(dx.max()-dx.min())/max(abs(dx.mean()),1e-9)*100:.0f} % ある。'
+                     f'単一の値で順位を付けないこと** ')
+    else:
+        warn = ('  ⛔ **この軌跡は Bug 47 の対応前に作られており「読み込み直後の 1 話目」である。'
+                '取り直すこと**（`record_arm_trace.py` は既定で 5 話走らせ頭 2 話を捨てる） ')
     warn += ('' if not static else
             f"  ⛔ **固定 body {static} がある。再生ごとに結果が揺れる（9-138）。"
             f"1 エピソードで判定しないこと** ")
