@@ -222,7 +222,14 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 reach_dist = np.linalg.norm(self._arm_tip_pos - target_3d)
                 reward_fwd_cube = -reach_dist
                 reward_fwd_contact = 0.0
-                reward_fwd = reward_fwd_cube
+                # ⭐⭐ 9-145: 障害物への食い込みを罰する。
+                #   ⚠️ **既定 0.0 なので、指定しない限り既存の run は一切変わらない。**
+                #   ⭐ 深さ [m] をそのまま引く（係数 1）。報酬が -距離 [m] なので単位が揃う。
+                obs_scale = self.cfg.reward_specs.get('obstacle_penalty_scale', 0.0)
+                obstacle_pen = 0.0
+                if obs_scale > 0.0:
+                    obstacle_pen = obs_scale * self._obstacle_penetration()
+                reward_fwd = reward_fwd_cube - obstacle_pen
                 reward_ctrl = - ctrl_cost_coeff * np.square(ctrl).mean()
                 alive_bonus = self.cfg.reward_specs.get('alive_bonus', 0.0)
                 reward = (reward_fwd + reward_ctrl + alive_bonus) * self.cfg.reward_specs.get('exec_reward_scale', 1.0)
@@ -230,7 +237,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 termination = not np.isfinite(s).all()
                 truncation = not (self.control_nsteps < self.cfg.done_condition.get('max_nsteps', 1000))
                 ob = self._get_obs()
-                reward_breakdown = np.array([reward_fwd_cube, reward_fwd_contact])
+                reward_breakdown = np.array([reward_fwd_cube, -obstacle_pen])
                 return ob, reward, termination, truncation, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': reward_ctrl, 'reward_breakdown': reward_breakdown}
             elif use_target:
                 # 純粋な target PBRS（目標座標のみ）
@@ -501,6 +508,78 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         self.prev_cube_potential = 1.0 / (1.0 + dist_cube0)
         return True
         
+
+    @property
+    def _obstacle_boxes(self):
+        """⭐ 9-145: 静的な障害物（関節を持たない worldbody 直下の body）の直方体。
+
+        ⚠️ **9-144 で判定器に柱を教えたとき、報酬側は柱を一度も見ていなかった。**
+        **避けろと言っていないのに避けることを期待していた**（9-144）。
+        XML から 1 回だけ読み、以降は使い回す。
+        """
+        if getattr(self, '_obs_boxes_cache', None) is not None:
+            return self._obs_boxes_cache
+        import xml.etree.ElementTree as ET
+        boxes = []
+        try:
+            root = ET.fromstring(self.cur_xml_str)
+            wb = root.find('worldbody')
+            bodies = wb.findall('body')
+            for i, b in enumerate(bodies):
+                if i == 0 or b.get('name') == 'cube' or b.find('joint') is not None:
+                    continue          # 腕の根元と可動体は障害物ではない
+                g = b.find('geom')
+                if g is None:
+                    continue
+                bp = np.array([float(x) for x in b.get('pos', '0 0 0').split()])
+                sz = [float(x) for x in g.get('size', '0').split()]
+                typ = g.get('type', 'box')
+                if typ == 'box' and len(sz) >= 3:
+                    half = np.array(sz[:3])
+                elif typ in ('cylinder', 'capsule') and len(sz) >= 2:
+                    half = np.array([sz[0], sz[0], sz[1]])
+                elif typ == 'sphere' and sz:
+                    half = np.array([sz[0]] * 3)
+                else:
+                    continue
+                boxes.append((bp - half, bp + half))
+        except Exception:
+            boxes = []
+        self._obs_boxes_cache = boxes
+        return boxes
+
+    def _obstacle_penetration(self, n_sample=9):
+        """⭐ 腕のリンクが障害物に食い込んでいる最大の深さ [m]。触れていなければ 0。
+
+        ⭐⭐ **単位を「距離 [m]」に揃えてあるのが要点**（9-145）。
+        Reach の報酬は `-reach_dist` [m] なので、**深さをそのまま引けば係数は 1（無次元）で済み、
+        根拠のない重みを 1 個も増やさない**。
+        ⭐ 上限は柱の半幅で自動的に決まる（幾何が決めるので調整値ではない）。
+        """
+        boxes = self._obstacle_boxes
+        if not boxes:
+            return 0.0
+        worst = 0.0
+        for body in self.robot.bodies:
+            a = self._body_xpos.get(body.name)
+            if a is None or np.any(np.isnan(a)):
+                continue
+            a = np.asarray(a, dtype=float)
+            bo = getattr(body, 'bone_offset', None)
+            if bo is None:
+                b = a
+            else:
+                mat = np.asarray(self._body_xmat.get(body.name, np.eye(3))).reshape(3, 3)
+                b = a + mat @ np.asarray(bo, dtype=float)
+            ts = np.linspace(0.0, 1.0, n_sample)[:, None]
+            pts = a[None, :] + (b - a)[None, :] * ts       # (n_sample, 3)
+            for lo, hi in boxes:
+                inside = np.all((pts >= lo) & (pts <= hi), axis=1)
+                if not inside.any():
+                    continue
+                d = np.minimum(pts - lo, hi - pts).min(axis=1)
+                worst = max(worst, float(d[inside].max()))
+        return worst
 
     @property
     def is_fixed_base(self):
