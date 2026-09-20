@@ -31,6 +31,7 @@ JUSTIFIED = {
     'robot.actuator_params.gear.lb': '9-129（必要トルクの 1.25 倍）',
     'robot.actuator_params.gear.ub': '9-129（UR5e の関節トルク）',
     'joint_range': '9-134（実機の曲げ軸より保守側・第1層の判定に無影響）',
+    'robot.body_params.offset.rel_frac': '9-150（下限＝反転しない幾何／上限＝UR5e 150 N·m）',
 }
 # ⛔ 変換器が読まない＝書いても実走に届かない（9-143 で実測）
 UNREACHABLE = ['solref', 'solimp', 'friction', 'margin', 'condim', 'integrator', 'gravity']
