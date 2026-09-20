@@ -466,12 +466,22 @@ USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
     --no-window --python scripts/record_arm_trace.py
 # → single_run/<run>/trace/arm_trace.npz（cube・各リンクの位置と姿勢）
 
-# ② 図にして**実際に見る**（AI は画像を読める）
-#    上から見た軌跡・時系列。matplotlib で十分
+# ② ⭐ 図にして**実際に見る**（AI は画像を読める）
+python3 scripts/plot_run.py <run>       # → single_run/<run>/trace/view.png
+#    ⭐ 全リンクの z 最小を図の題に焼き込むので、床下なら ⛔ が出る
 
 # ③ 動画が要るなら
 python3 scripts/render_arm_video.py    # 実物メッシュで動く
 ```
+
+⭐⭐ **見たら [目視記録.md](docs/研究応用/台帳/目視記録.md) へ 1 行書く。**
+**空欄＝見ていない**が分かるようにしてある。`check_before_conclusion.py` の **6 項目目「目視」**が
+**記録に無い run で結論を書かせない**（9-155）。
+
+⚠️⚠️ **2026-09-21 に実測**: 軌跡 36 本のうち**目視の記録は 0 本**で、図にしたら
+**10 本でリンクが床より下に出ていた**（3 本は動くリンク。密度条件 seed0 は**肘が床に 264 mm 埋まったまま 98 %**）。
+⛔ **数値の検査 5 項目は 10 本すべてで通っていた。**
+⭐⭐ **検査は「見るべきと分かっている量」しか見ない。「床より下に出ていないか」は誰も検査項目にしていなかった。**
 
 **②を飛ばさない。** 数値を眺めるのと図を見るのは別物で、Bug 39 は図にした瞬間に分かった。
 
