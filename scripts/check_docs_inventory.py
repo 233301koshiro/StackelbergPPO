@@ -30,6 +30,24 @@ DOCS = ROOT / 'docs'
 TOC = DOCS / '目次.md'
 
 
+def is_frozen(path):
+    """🧊 **凍結されたファイルか**（2026-09-20）。
+
+    ⭐ **判定軸は「変わるか」ではなく「今後これを根拠に誰かが判断するか」。**
+    終わったイベントの発表資料・完了した移行の記録は、**内容が古いのが正しい状態**であり、
+    検査しても直しようがない。⚠️ **毎回同じ指摘が出る検査は読まれなくなる**（CLAUDE.md §5-2 ①）。
+
+    ⛔ **凍結してはいけないもの**: これから使う発表資料（中間発表原稿は 2026 年 10 月用）、
+    配布に使いうる要旨、台帳（値の訂正が波及する）。
+    宣言はファイル冒頭の `<!-- doc-policy: frozen ... -->` に**自分で書いてある**ので、
+    中央のリストとずれることがない。
+    """
+    try:
+        head = path.read_text(encoding='utf-8')[:600]
+    except Exception:
+        return False
+    return 'doc-policy: frozen' in head
+
 def last_commit_date(p: pathlib.Path):
     out = subprocess.run(['git', 'log', '-1', '--format=%ad', '--date=short', '--', str(p)],
                          cwd=ROOT, capture_output=True, text=True).stdout.strip()
@@ -62,7 +80,7 @@ def main() -> int:
     # archive 専用の判定（3・4）で別途見る。
     orphans = []
     for p in mds:
-        if p == TOC or p in built or 'archive' in p.parts:
+        if p == TOC or p in built or 'archive' in p.parts or is_frozen(p):
             continue
         referenced = any(p.name in t for q, t in text.items() if q != p)
         if not referenced and p.name not in toc:
