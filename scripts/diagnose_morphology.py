@@ -88,6 +88,29 @@ def parse_arm_xml(xml_path):
             ranges.append(tuple(float(x) for x in rg.split()) if rg else None)
         node = child
 
+    # ⭐ 9-144: 静的な障害物（関節を持たない worldbody 直下の body）。
+    #   ⚠️ **判定器はこれまで柱の存在を一度も知らなかった**（`grep obstacle` で 0 件）。
+    #   9-46 と同じ型（判定器が「無理」と言えないまま環境をいじる）を避けるために足した。
+    obstacles = []
+    for b in wb.findall('body'):
+        if b is arm_root or b.get('name') == 'cube' or b.find('joint') is not None:
+            continue
+        g = b.find('geom')
+        if g is None:
+            continue
+        bp = np.array([float(x) for x in b.get('pos', '0 0 0').split()])
+        sz = [float(x) for x in g.get('size', '0').split()]
+        typ = g.get('type', 'box')
+        if typ == 'box' and len(sz) >= 3:
+            half = np.array(sz[:3])
+        elif typ in ('cylinder', 'capsule') and len(sz) >= 2:
+            half = np.array([sz[0], sz[0], sz[1]])
+        elif typ == 'sphere' and sz:
+            half = np.array([sz[0]] * 3)
+        else:
+            continue
+        obstacles.append(dict(name=b.get('name', '?'), pos=bp, half=half, type=typ))
+
     cube_info = None
     if cube is not None:
         cpos = np.array([float(x) for x in cube.get('pos', '0 0 0').split()])
@@ -96,7 +119,8 @@ def parse_arm_xml(xml_path):
         cube_info = dict(pos=cpos, half=half)
 
     return dict(base_pos=base_pos, lengths=lengths, radii=radii, axes=axes,
-                offsets=offsets, dirs=dirs, cube=cube_info, ranges=ranges)
+                offsets=offsets, dirs=dirs, cube=cube_info, ranges=ranges,
+                obstacles=obstacles)
 
 
 def kinematic_reach(lengths, offsets):
@@ -216,6 +240,78 @@ def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61):
                    for i in range(n))
     slack = R * step_rad * n / 2.0
     return True, dmin <= slack, dmin, slack
+
+
+def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=25):
+    """⭐ **柱を避けて目標に届く姿勢が存在するか**を、姿勢を 1 つ**目撃**して示す（9-144）。
+
+    `planar_chain_reach` と同じ平面チェーンの規約（零姿勢は +Z、関節 i は累積角）。
+    `box` は目標方向の平面へ射影した柱 `(d_lo, d_hi, z_lo, z_hi)`。
+
+    ⚠️⚠️ **この関数は「棄却」を出さない。**
+    格子は連続な姿勢空間の標本でしかないので、**見つからないことは存在しないことを意味しない**。
+    ⭐ **第1層の「棄却側だけが確実」という保証（9-78）を壊さないため、
+    見つかったときだけ確実なことを言う。**
+
+    返り値: (判定したか, 到達姿勢の数, そのうち柱に触れない数, 最小の余裕[m])
+    """
+    n = len(lengths)
+    if n == 0 or n > 4:
+        return False, 0, 0, 0.0
+    R = float(sum(lengths))
+    if R <= 1e-9:
+        return False, 0, 0, 0.0
+    grids = []
+    for i in range(n):
+        r = ranges_deg[i] if i < len(ranges_deg) and ranges_deg[i] else (-180.0, 180.0)
+        grids.append(np.deg2rad(np.linspace(r[0], r[1], steps)))
+
+    # 各関節の位置を順に積み上げる（先端だけでなく全部持つ）
+    acc = grids[0]
+    xs = [np.zeros_like(acc)]
+    ys = [np.zeros_like(acc)]
+    px = lengths[0] * np.sin(grids[0])
+    py = lengths[0] * np.cos(grids[0])
+    xs.append(px); ys.append(py)
+    for i in range(1, n):
+        acc = (acc[:, None] + grids[i][None, :]).reshape(-1)
+        xs = [np.repeat(a, len(grids[i])) for a in xs]
+        ys = [np.repeat(a, len(grids[i])) for a in ys]
+        px = xs[-1] + lengths[i] * np.sin(acc)
+        py = ys[-1] + lengths[i] * np.cos(acc)
+        xs.append(px); ys.append(py)
+
+    dist = np.hypot(xs[-1] - d, ys[-1] - dz)
+    step_rad = max(float(np.deg2rad(((ranges_deg[i][1] - ranges_deg[i][0]) if i < len(ranges_deg)
+                                     and ranges_deg[i] else 360.0)) / (steps - 1))
+                   for i in range(n))
+    slack = R * step_rad * n / 2.0
+    ok = dist <= max(slack, 0.01)
+    n_reach = int(ok.sum())
+    if n_reach == 0:
+        return True, 0, 0, 0.0
+
+    d_lo, d_hi, z_lo, z_hi = box
+    P = 9
+    free = np.ones(n_reach, dtype=bool)
+    margin = np.full(n_reach, np.inf)
+    for i in range(n):
+        ax, ay = xs[i][ok], ys[i][ok]
+        bx, by = xs[i + 1][ok], ys[i + 1][ok]
+        rad = radii[i] if i < len(radii) else 0.0
+        for t in np.linspace(0.0, 1.0, P):
+            qx = ax + (bx - ax) * t
+            qy = ay + (by - ay) * t
+            # 柱を半径ぶん膨らませて点と比べる
+            inside = ((qx >= d_lo - rad) & (qx <= d_hi + rad) &
+                      (qy >= z_lo - rad) & (qy <= z_hi + rad))
+            free &= ~inside
+            out = np.maximum.reduce([d_lo - rad - qx, qx - (d_hi + rad),
+                                     z_lo - rad - qy, qy - (z_hi + rad)])
+            margin = np.minimum(margin, out)
+    n_free = int(free.sum())
+    best = float(margin[free].max()) if n_free else 0.0
+    return True, n_reach, n_free, best
 
 
 def zonotope_chain_reach(lengths, ranges_deg, d, dz, offset_half, budget=ZONO_GRID_BUDGET):
@@ -510,6 +606,57 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                 else:
                     findings.append(('ok',
                         f'対象が端に来ても余裕があります（伸展率 {far/r_max*100:.0f}%）'))
+
+    # ⭐⭐ 9-144: 静的な障害物（柱・壁）を避けて届く姿勢があるか。
+    #   ⛔ **これまで判定器は柱の存在を一度も知らなかった**（`grep obstacle` で 0 件）。
+    #   ⚠️ 9-46 と同じ型（判定器が「無理」と言えないまま環境をいじる）を避けるために足した。
+    #   ⚠️⚠️ **ここでは `fatal` を立てない。**格子は標本なので「見つからない」は
+    #     「存在しない」ではなく、**棄却側だけが確実という保証（9-78）を壊さないため**。
+    obstacles = geo.get('obstacles') or []
+    if obstacles and not fatal:
+        tgt = np.asarray(target, dtype=float)
+        d_t = float(np.linalg.norm(tgt[:2] - base[:2]))
+        dz_t = float(tgt[2] - base[2])
+        rng_deg = [r if r else (-180.0, 180.0) for r in (geo.get('ranges') or [])]
+        for ob in obstacles:
+            op, oh = np.asarray(ob['pos'], float), np.asarray(ob['half'], float)
+            # 目標方向の鉛直平面へ射影する。⚠️ 柱が目標方向から横に外れていれば無関係
+            u = (tgt[:2] - base[:2])
+            nu = float(np.linalg.norm(u))
+            if nu < 1e-9:
+                continue
+            u = u / nu
+            rel = op[:2] - base[:2]
+            d_o = float(rel @ u)                 # 目標方向の距離
+            lat = float(abs(rel[1] * u[0] - rel[0] * u[1]))   # 横ずれ
+            lat_half = float(np.linalg.norm(oh[:2]))
+            if lat - lat_half > max(geo['radii'] + [0.0]) + 0.05:
+                findings.append(('ok',
+                    f'障害物 `{ob["name"]}` は目標方向から {lat:.2f} m 横にあり、'
+                    f'腕の通り道から外れています'))
+                continue
+            box = (d_o - lat_half, d_o + lat_half,
+                   float(op[2] - oh[2] - base[2]), float(op[2] + oh[2] - base[2]))
+            okf, n_reach, n_free, best = obstacle_free_reach(
+                lengths, geo['radii'], rng_deg, d_t, dz_t, box)
+            if not okf:
+                continue
+            if n_reach == 0:
+                findings.append(('warn',
+                    f'障害物 `{ob["name"]}` の判定: **到達姿勢が格子上に見つからない**ため'
+                    f'回避可否を判定できません'))
+            elif n_free > 0:
+                findings.append(('ok',
+                    f'⭐ **障害物 `{ob["name"]}` を避けて目標に届く姿勢があります**'
+                    f'（到達姿勢 {n_reach} 個のうち {n_free} 個が柱に触れない。'
+                    f'最大の余裕 {best*1000:.0f} mm）'))
+            else:
+                findings.append(('warn',
+                    f'⛔ **障害物 `{ob["name"]}` を避けて届く姿勢が見つかりません**'
+                    f'（到達姿勢 {n_reach} 個すべてが柱と干渉）。\n'
+                    f'      ⚠️ **これは棄却ではありません。**格子は姿勢空間の標本なので、\n'
+                    f'      **「見つからない」は「存在しない」を意味しません**（第1層は棄却側だけが確実。9-78）。\n'
+                    f'      → 柱の高さ・太さを見直すか、目標を動かすか、刻みを細かくして再確認してください。'))
     return findings, fatal
 
 
