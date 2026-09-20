@@ -66,6 +66,27 @@ def has_static_body(r):
     return out
 
 
+def ck_seen(r):
+    """⭐⭐ **図にして目で見たか**（9-155）。
+
+    ⛔⛔ **2026-09-21 まで、36 本の軌跡があって目視の記録は 0 本だった。**
+    数値の検査 5 項目を全部通していたのに、**図にしたら 36 本中 10 本でリンクが床より下に出ていた**。
+    ⭐ **検査は「見るべきと分かっている量」しか見ない。**
+    `docs/研究応用/台帳/目視記録.md` に run 名が書かれているかで判定する。
+    """
+    log = ROOT / 'docs' / '研究応用' / '台帳' / '目視記録.md'
+    png = run_dir(r) / 'trace' / 'view.png'
+    if not log.exists():
+        return None, '（目視記録.md が無い）'
+    txt = log.read_text(encoding='utf-8')
+    if f'`{r}`' not in txt:
+        return False, (f'⛔ **目視記録に無い。**`python3 scripts/plot_run.py {r}` で図を作り、'
+                       f'**実際に見てから** `docs/研究応用/台帳/目視記録.md` へ 1 行書くこと（9-155）')
+    if not png.exists():
+        return None, '⚠️ 記録はあるが図が無い（`plot_run.py` で作り直せる）'
+    return True, '目視記録あり'
+
+
 def ck_achieved(r):
     """⭐ タスクを達成しているか。未到達どうしの比較を防ぐ（9-113）。"""
     p = run_dir(r) / 'trace' / 'arm_trace.npz'
@@ -152,7 +173,8 @@ def ck_prereg(r):
     return False, '⚠️ 事前登録が見つからない（結果を見てから読み方を決めていないか）'
 
 
-CHECKS = [('完走', ck_done), ('再生', ck_trace), ('⭐ 達成', ck_achieved),
+CHECKS = [
+    ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg)]
 
 
