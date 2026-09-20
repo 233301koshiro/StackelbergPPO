@@ -95,9 +95,31 @@ FROZEN = {'要旨_詳細版.md'}
 LEDGER = {'実験系譜.md'}
 
 
+def is_frozen(path):
+    """🧊 **凍結されたファイルか**（2026-09-20）。
+
+    ⭐ **判定軸は「変わるか」ではなく「今後これを根拠に誰かが判断するか」。**
+    終わったイベントの発表資料・完了した移行の記録は、**内容が古いのが正しい状態**であり、
+    検査しても直しようがない。⚠️ **毎回同じ指摘が出る検査は読まれなくなる**（CLAUDE.md §5-2 ①）。
+
+    ⛔ **凍結してはいけないもの**: これから使う発表資料（中間発表原稿は 2026 年 10 月用）、
+    配布に使いうる要旨、台帳（値の訂正が波及する）。
+    宣言はファイル冒頭の `<!-- doc-policy: frozen ... -->` に**自分で書いてある**ので、
+    中央のリストとずれることがない。
+    """
+    try:
+        head = path.read_text(encoding='utf-8')[:600]
+    except Exception:
+        return False
+    return 'doc-policy: frozen' in head
+
 def main() -> int:
     total = 0
+    skipped_frozen = []
     for p in sorted(DOCS.rglob('*.md')):
+        if is_frozen(p):
+            skipped_frozen.append(p)
+            continue
         if 'archive' in p.parts:
             continue
         s = p.read_text(encoding='utf-8')
@@ -132,6 +154,8 @@ def main() -> int:
     print()
     if total == 0:
         print("✅ 古い主張は検出されなかった。")
+        if skipped_frozen:
+            print(f'🧊 凍結 {len(skipped_frozen)} ファイルは検査から除外した（`doc-policy: frozen`）')
         return 0
     print(f"❌ 合計 {total} 件。**同じ主張が他のファイルにも無いか grep で洗うこと**"
           "（CLAUDE.md §8「訂正した主張を記憶を頼りに一部のMDだけ直して終わりにしない」）。")
