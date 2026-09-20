@@ -535,8 +535,35 @@ class Body:
                 else:
                     offset = self.bone_offset
                 if not self.param_inited and self.param_specs['offset'].get('rel', False):
-                    self.param_specs['offset']['lb'] += offset
-                    self.param_specs['offset']['ub'] += offset
+                    # ⭐⭐ 9-150: `rel_frac` があれば、探索幅を **リンク自身の長さに比例** させる。
+                    #   ⛔ 従来（`rel` だけ）は中心が設計値でも **幅が絶対値 ±0.5 m** で、
+                    #     0.2195 m のリンクは自分の 228 %、0.4031 m のリンクは 124 % 動けた（9-148）。
+                    #     ⛔ スケッチ由来の比が保存されない原因。
+                    #   ⭐ `rel_frac: [下, 上]` は「設計長の何倍まで縮む／伸びる」を表す。
+                    frac = self.param_specs['offset'].get('rel_frac', None)
+                    if frac is not None:
+                        # frac = [縮む下限, 伸びる上限, 横方向] を **リンク自身の長さの倍率**で与える。
+                        #   ⭐ ボーン方向は [frac0 × 設計長, frac1 × 設計長] ＝ **反転しない**
+                        #   ⭐ 横方向は ±frac2 × 設計長 ＝ **リンクの大きさに比例**
+                        L = float(np.linalg.norm(offset))
+                        f_lo, f_up = float(frac[0]), float(frac[1])
+                    if frac is not None and L < 1e-9:
+                        # ⚠️ 根元リンクは bone_offset が 0（`no_root_offset`）。
+                        #   比例幅は 0 になり正規化で 0 除算するので、従来どおり絶対幅を使う。
+                        self.param_specs['offset']['lb'] = self.param_specs['offset']['lb'] + offset
+                        self.param_specs['offset']['ub'] = self.param_specs['offset']['ub'] + offset
+                    elif frac is not None:
+                        f_lat = float(frac[2]) if len(frac) > 2 else f_lo
+                        i = int(np.argmax(np.abs(offset)))       # ボーン方向の成分
+                        lb = np.full_like(offset, -f_lat * L, dtype=float)
+                        ub = np.full_like(offset, +f_lat * L, dtype=float)
+                        v = float(offset[i])
+                        lb[i], ub[i] = sorted((v * f_lo, v * f_up))
+                        self.param_specs['offset']['lb'] = lb
+                        self.param_specs['offset']['ub'] = ub
+                    else:
+                        self.param_specs['offset']['lb'] += offset
+                        self.param_specs['offset']['ub'] += offset
                     self.param_specs['offset']['lb'] = np.maximum(self.param_specs['offset']['lb'], self.param_specs['offset'].get('min', np.full_like(offset, -np.inf)))
                     self.param_specs['offset']['ub'] = np.minimum(self.param_specs['offset']['ub'], self.param_specs['offset'].get('max', np.full_like(offset, np.inf)))
                 offset = normalize_range(offset, self.param_specs['offset']['lb'], self.param_specs['offset']['ub'])

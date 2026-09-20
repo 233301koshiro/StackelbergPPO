@@ -1,0 +1,84 @@
+# pusher_tripo_v3_reallen: 実寸の物理 ＋ 根拠つきのリンク長探索範囲（9-150）。
+#   ⚠️ **pusher_tripo_v3 との差は gear の lb/ub のみ。**密度と接触は XML 側（e2e_a1v_real）。
+#   ⚠️ **既存 110 run とは物理が違うので直接比較しない。条件を足す形でのみ扱う。**
+#
+# 元の説明:
+# pusher_tripo_v3: tripo_arm_v3（colorful2 忠実・縦型 4 関節）用。pusher.yml との差分は
+# offset type 'xz'・max_body_depth・床貫通チェック（2026-07-17 作成、経緯は 実験系譜.md）
+env_specs:
+  check_floor_penetration: true   # 縦型: Leader の床めり込み形態にペナルティ（-init_contact_penalty）
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 6
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  
+  body_params:
+    offset:
+      type: 'xz'   # 縦型アーム（tripo_arm_v3）: リンクは XZ 縦平面内で最適化
+      rel: true
+      # ⭐⭐ 9-150: 探索幅を **リンク自身の設計長に比例**させ、根拠を与えた。
+      #   ⛔ 旧 `lb: [-0.5,-0.5] ub: [0.5,0.5]` は cfg 28 本に同じ値で入っており
+      #     （cheetah・walker と同値）＝ 元論文の移動ロボットからの引き継ぎだった（9-148・9-149）。
+      #   ⛔⛔ 幅が絶対値なので、0.2195 m のリンクは [-0.280, +0.720] ＝ **負になれた**。
+      #     実際に **18 run 中 16 run でリンクが反転**しており、`-0.097`（upper_arm の下限）に
+      #     9 本が張り付いていた。9-132 の「台座が床より 237 mm 下」もこれが原因。
+      #
+      # ⭐ `rel_frac: [縮む下限, 伸びる上限, 横方向]` は設計長に対する倍率。
+      #   ⭐ **0.5**: リンクは設計の半分より短くならない ＝ **反転も消失もしない**（幾何の要請）
+      #   ⭐ **2.93**: 自重 ＋ 押しトルクが **150 N·m（UR5e の関節。9-129 と同じ出どころ）**を
+      #      超えない最大の成長率。実測半径と実効密度 189.9（9-126）から算出（全長 3.60 m）
+      #   ⭐ **0.5**: 横方向のずれもリンク長に比例させる（絶対値だと短いリンクだけ自由になる）
+      rel_frac: [0.5, 2.93, 0.5]
+      lb: [-0.5, -0.5]
+      ub: [0.5, 0.5]
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      # ⭐ 9-129: 実在アクチュエータの範囲に根拠を与えた。
+      #   ⚠️ 旧 20〜400 は出所不明で、上限は自重保持トルクの 43 倍だった（9-126 後）。
+      #   ⚠️ この実験系では **1 ギア = 1 N·m 相当**（修論 3.x）なので、範囲＝トルク [N·m]。
+      #
+      #   下限 25: 自重保持 9.3（9-126 実測）＋ cube を押す 10.6（μmgL）＝ **19.9 N·m** の
+      #            1.25 倍。**これ未満ではタスクが物理的に不可能**
+      #   上限 150: **UR5e の関節**（可搬 5 kg の協働ロボット）。
+      #            この腕は全長 1 m・4.1 kg・対象 2.7 kg なので UR3e〜UR5e の帯にある
+      lb: 25
+      ub: 150
+  
+
