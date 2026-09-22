@@ -80,8 +80,13 @@ def ck_seen(r):
         return None, '（目視記録.md が無い）'
     txt = log.read_text(encoding='utf-8')
     if f'`{r}`' not in txt:
+        hint = ''
+        if r.rsplit('_', 1)[0] in txt or r.split('_')[0] in txt:
+            hint = ('  ⚠️ **似た名前はある。略記（`_s2` 等）で書いていないか確認すること** — '
+                    '⛔ **略記は検査が拾えず「見たのに見ていない」と出る**（2026-09-22 に 11 本で発生）')
         return False, (f'⛔ **目視記録に無い。**`python3 scripts/plot_run.py {r}` で図を作り、'
-                       f'**実際に見てから** `docs/研究応用/台帳/目視記録.md` へ 1 行書くこと（9-155）')
+                       f'**実際に見てから** `docs/研究応用/台帳/目視記録.md` へ '
+                       f'**フルネームで** 1 行書くこと（9-155）' + hint)
     if not png.exists():
         return None, '⚠️ 記録はあるが図が無い（`plot_run.py` で作り直せる）'
     return True, '目視記録あり'
