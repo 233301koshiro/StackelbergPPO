@@ -137,6 +137,8 @@
 | `make_m1_prompt.py` | ✅ **現行（2026-09-02）。** M1 用の Gemini プロンプトを貼ってすぐ使える形で組み立てる。**共通部の正本はこのファイル**（md に貼ると 5 枚ぶん腐るため）。比は `data/test/<名前>/sketch/measured.json` の**実測値**を使う。`--sketch B1` / `--ratios 0.55 0.5 0.5 --emphasis short` |。**2026-09-03**: 【描いてはいけないもの】節を追加（寸法線・数値・文字／指やグリッパ／複数ビュー）と「1つの関節に球は1個だけ」を追加（Bug 33。比を数値で指示すると生成側が図に描き込む）
 | `queue_e2e_a1.sh` | ✅ **現行（2026-09-02）。** A1 の学習を **2 本ずつ直列**に投入する（平面 seed=0 → 縦型 seed=0 → 縦型 seed=1）。4 本同時では **GPU が 92 % で頭打ち**になり `T_update` が 2.4 倍に伸びたため。完走判定は `training done!` の有無（`pgrep -f` / `pkill -f` は自分のコマンドラインに当たって誤爆する。Bug 19） |
 | `queue_pjd_pusher.sh` | ✅ **現行（2026-08-24）。** 配分判別の Pusher 版4本を空きを見て順に投入（9-17）。投入前に `audit_xml_reach.py` で XML を検算する |
+| `queue_pjd_real.sh` | ✅ **完了（2026-09-22）。** ⭐ **実寸条件（ギア上限 150）の配分判別・Reach 版 4 本**（系譜 9-160 → 結果 9-163） |
+| `queue_pjdp_real.sh` | ✅ **現行（2026-09-23）。** ⭐ **同じ実寸条件の Pusher 版 4 本**（系譜 9-165）。⚠️ 旧 Pusher（`tripo_pjdp_*`）との差はギア上限 400→150 と XML の `_real` のみ |
 | `weekend_queue.sh` | ✅ **現行（2026-08-07 追加）。** 空きメモリを見て軸3 の補強実験を順に投入する無人運転用。メモリ・ディスクの下限と投入期限を持つ |
 | `ns1_scheduler.sh` | ❌ 廃止。`experiment_queue.sh` に統合済み |
 | `tp2_scheduler.sh` / `weekend_scheduler.sh` / `restart_ready_watcher.sh` / `m_s2_watcher.sh` | ❌ 役目を終えた |
