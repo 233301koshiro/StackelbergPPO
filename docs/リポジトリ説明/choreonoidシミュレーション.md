@@ -244,45 +244,40 @@ train.py: for epoch in range(max_epoch):
 
 ### メソッド定義場所
 
-**`design_opt/train.py`**
+⚠️ **行番号は貼らない。** 2026-09-25 に照合したところ **23 件中 18 件がずれていた**
+（`transit_execution` は L205 と書いてあったが実際は L472）。
+コードが動くたびに腐るうえ、誰も再検査しない。**探し方だけを書く。**
 
-| メソッド | 行 | 説明 |
-|---------|-----|------|
-| `main_loop()` | L19 | 学習ループ本体（epoch ループ） |
-| `main()` | L66 | Hydra エントリーポイント |
+```bash
+grep -n "def transit_execution\|class ChoreonoidEnv" \
+    design_opt/envs/pusher.py khrylib/rl/envs/common/mujoco_env_choreonoid.py
+```
 
-**`design_opt/agents/genesis_agent.py`**
+| ファイル | 何があるか |
+|---|---|
+| `design_opt/train.py` | `main_loop()`（epoch ループ）・`main()`（Hydra 入口） |
+| `design_opt/agents/genesis_agent.py` | `BodyGenAgent`・`sample()`（エピソード収集）・`optimize()`（1 epoch 分の学習） |
+| `design_opt/envs/pusher.py` | `PusherEnv`・`step()`（設計/実行の分岐と報酬）・`transit_execution()`（設計→実行。`reset_state` のみで reload 不要）・`reset_state()`（初期姿勢。`add_noise` で ±0.1）・`reset_robot()`・`reset_model()`・`is_fixed_base` |
+| `khrylib/rl/envs/common/mujoco_env_choreonoid.py` | `mujoco_xml_to_body()`（XML → .body YAML 変換）・`ChoreonoidSimWorld`（Choreonoid 操作ラッパー）・`_setup_world()`・`load_model()`・`reset()`・`step()`（トルク書き込み＋`tickRequest()` × frame_skip）・`set_state_cmd()`・`ChoreonoidEnv`（MuJoCo 互換 API）・`do_simulation()`・`reload_sim_model()`・`get_body_com()` |
 
-| メソッド | 行 | 説明 |
-|---------|-----|------|
-| `BodyGenAgent` | L32 | エージェントクラス定義 |
-| `sample()` | L132 | 環境からエピソードデータを収集 |
-| `optimize()` | L236 | 1 エポック分の学習（sample → PPO 更新） |
+---
 
-**`design_opt/envs/pusher.py`**
+## ⛔ 変換器が読まないもの（**ここが最大の落とし穴**）
 
-| メソッド | 行 | 説明 |
-|---------|-----|------|
-| `PusherEnv` | L21 | pusher タスク環境クラス定義 |
-| `step()` | L119 | 設計フェーズ分岐 + 実行フェーズの報酬計算 |
-| `transit_execution()` | L205 | 設計フェーズ終了→実行フェーズへ移行（reset_state のみ、reload 不要） |
-| `reset_state()` | L348 | ロボット初期姿勢設定（`add_noise` で ±0.1 ノイズ） |
-| `reset_robot()` | L359 | ロボット再構築・モデル再ロード |
-| `reset_model()` | L367 | エピソードリセット（reset_robot → reset_state） |
-| `is_fixed_base` | L216 | プロパティ: ルートに free joint がなければ True（rrbot_arm 用） |
+**MuJoCo XML に書いても Choreonoid の実走に届かない記述がある。**
+⚠️ **書いてあるので「効いている」と誤解しやすく、実際に 3 回誤った。**
 
-**`khrylib/rl/envs/common/mujoco_env_choreonoid.py`**
+| 書いても届かないもの | 何が起きたか |
+|---|---|
+| ⛔ **`worldbody` 直下の `<geom>`**（静的な壁・床・障害物） | 変換器は **`worldbody/body` しか読まない**。⛔ **ホッケーの壁がこれで、8 回の修正すべてが空振りだった**（9-98）。⚠️ **プローブは全部 MuJoCo で回していたので正しく動き、実走と無関係だった。**分水嶺は `USE_CHOREONOID=1` の有無 |
+| ⛔ **接触パラメータ**（`solref`・`solimp`・geom の `friction`・`condim`・`margin`） | **読む箇所が 1 つも無い。**⛔ 9-128 の接触の根拠づけは **MuJoCo の中だけの話だった**（9-143）。実測でも反発係数は `solref` 違いの 2 条件で **0.0545 対 0.0552** と変わらない。⭐ **学習側の実効反発係数は約 0.055** で、実在の金属・樹脂間の 0.2〜0.5 を大きく下回る |
+| ⛔ **`cylinder` の geom** | 扱えるのは **`capsule` / `sphere` / `box` の 3 つだけ**。⛔ **cylinder は黙って落ちるので、形だけ存在して物理に無い**（Bug 44）。⚠️ 障害物 Reach の 2 件がこれで、回避として読めない |
 
-| クラス / メソッド | 行 | 説明 |
-|-----------------|-----|------|
-| `mujoco_xml_to_body()` | L270 | MuJoCo XML → Choreonoid .body YAML 変換（ネイティブ形式） |
-| `ChoreonoidSimWorld` | L770 | Choreonoid 操作ラッパークラス |
-| `_setup_world()` | L790 | アイテムツリー初期化（WorldItem・床・AISTSimulatorItem） |
-| `load_model()` | L809 | XML → .body 変換・BodyItem ロード・シミュレーション開始 |
-| `reset()` | L869 | シミュレーション再起動・初期状態復元 |
-| `step()` | L888 | トルク書き込み・`tickRequest()` × frame_skip |
-| `set_state_cmd()` | L906 | 関節角度・角速度を直接指定 |
-| `ChoreonoidEnv` | L917 | MuJoCo 互換 API ラッパークラス |
-| `do_simulation()` | L1036 | `ChoreonoidSimWorld.step()` の呼び出し口 |
-| `reload_sim_model()` | L1040 | 形態変更時のモデル再ロード |
-| `get_body_com()` | L1049 | リンクのワールド座標取得 |
+```bash
+# 自分で確かめる（どちらも 1 行で出る）
+grep -n "gtype ==" khrylib/rl/envs/common/mujoco_env_choreonoid.py   # 扱える型
+grep -c "get('solref'\|get('friction'" khrylib/rl/envs/common/mujoco_env_choreonoid.py   # → 0
+```
+
+⭐ **是正の手段は特定済み**（Choreonoid の `ContactMaterial` で反発・摩擦を直接設定できる）**が、適用していない。**
+接触条件を変えると既存の全実験と物理が異なり、**比較可能性が失われる**ため（修論 6.4.2 (7)）。
