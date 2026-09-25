@@ -74,7 +74,7 @@
 | **`probe_m1_tilt.py`** | M1 画像の傾き。⚠️ **この量は合否を分けない**（9-79）。姿勢の判定は `check_glb_pose.py` |
 | `check_glb_pose.py` | **M2 の後**に関節の Z 広がりで姿勢を判定。閾値 0.25 は実測較正済み |
 | `check_stale_claims.py` | 主張の側から全 MD を横断検出 |
-| `check_docs_inventory.py` | 孤立ファイル・壊れリンク・archive の注記漏れ |
+| `check_docs_inventory.py` | 孤立ファイル・壊れリンク・archive の注記漏れ。⭐ **冒頭に前回の棚卸しからの経過日数を出す**（1 週間を超えると ⛔。周期を散文ではなく検査に持たせるため。2026-09-25） |
 | ⭐ **`doc_refs.py`** | **識別子の逆引き。「ここを変えたらどこも変わる」を出す。** `--hubs` で影響の広い識別子、`--undefined` で壊れ参照 |
 | `dump_thesis_outline.py` | 修論の見出しを書き出す。`--write` で 構成.md の一覧を再生成、`--check` で食い違い検査 |
 | `eval_cnoid_numerical.py` | 数値で成功率・報酬を確認 |
