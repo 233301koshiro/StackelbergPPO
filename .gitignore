@@ -98,3 +98,6 @@ pip-delete-this-directory.txt
 # Thesis build artifacts (regenerable via scripts/build_thesis_pdf.py)
 build_pdf/
 docs/pdf/修論ドラフト_*.pdf
+
+# 先輩の修論 PDF（他人の著作物）。公開リポジトリへ出さない
+docs/先輩の修論/
