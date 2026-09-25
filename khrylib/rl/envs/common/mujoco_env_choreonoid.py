@@ -913,6 +913,20 @@ class ChoreonoidSimWorld:
         self.world_item = WorldItem()
         RootItem.instance.addChildItem(self.world_item)
 
+        # ⭐ 接触材質テーブルの差し替え（2026-09-26、ホッケーの Phase 1）。
+        #   ⚠️ **既定では何もしない。**`CNOID_MATERIAL_TABLE` が指定されたときだけ読む。
+        #   ⛔ **既定テーブルの `[Default, Default]` は restitution 0.0** であり、
+        #     変換器はリンクに物理材質を書かないので **全リンクが Default**。
+        #     ＝ 実測の e ≈ 0.055 は設定値ではなく残留の数値反発である（9-143 の機序）。
+        #   ⭐ ホッケー用テーブルは `[Default, Default]` に触れず、**材質を足すだけ**にしてある。
+        #     既存 run の物理が変わらないことは `probe_material_table_inert.py` で実測する。
+        _mt = os.environ.get('CNOID_MATERIAL_TABLE')
+        if _mt:
+            if not os.path.exists(_mt):
+                raise FileNotFoundError(f'CNOID_MATERIAL_TABLE が無い: {_mt}')
+            self.world_item.setDefaultMaterialTableFile(_mt)
+            print(f'[choreonoid] 材質テーブルを差し替えた: {_mt}', flush=True)
+
         for candidate in (
             '/choreonoid_ws/install/share/choreonoid-2.3/model/misc/floor.body',
             '/choreonoid_ws/install/share/choreonoid-2.0/model/misc/floor.body',
