@@ -76,6 +76,8 @@
 | `check_glb_pose.py` | **M2 の後**に関節の Z 広がりで姿勢を判定。閾値 0.25 は実測較正済み |
 | `check_stale_claims.py` | 主張の側から全 MD を横断検出 |
 | `check_docs_inventory.py` | 孤立ファイル・壊れリンク・archive の注記漏れ。⭐ **冒頭に前回の棚卸しからの経過日数を出す**（1 週間を超えると ⛔。周期を散文ではなく検査に持たせるため。2026-09-25） |
+| ⭐⭐ `probe_material_table_inert.py` | **ホッケー Phase 1 の関門**（9-172）。材質を足しても既存 run の物理が変わらないことを実測する。⭐ **再現性が無いときは判定せずに止まる**（方策の再生は `cube_y_noise` で 851 mm 揺れる） |
+| `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
 | ⭐ **`doc_refs.py`** | **識別子の逆引き。「ここを変えたらどこも変わる」を出す。** `--hubs` で影響の広い識別子、`--undefined` で壊れ参照 |
 | `dump_thesis_outline.py` | 修論の見出しを書き出す。`--write` で 構成.md の一覧を再生成、`--check` で食い違い検査 |
 | `eval_cnoid_numerical.py` | 数値で成功率・報酬を確認 |

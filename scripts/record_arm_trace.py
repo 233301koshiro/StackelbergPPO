@@ -135,9 +135,15 @@ order = sorted(range(len(eps)), key=lambda i: _score(eps[i]))
 rep = eps[order[len(order) // 2]]
 xpos, xmat, cube = rep
 
-out_dir = os.path.join(restore_dir, 'trace')
-os.makedirs(out_dir, exist_ok=True)
-out = os.path.join(out_dir, 'arm_trace.npz')
+# ⭐ TRACE_OUT があればそちらへ書く（run の軌跡を上書きせずに比較したいとき。
+#   `probe_material_table_inert.py` が使う。2026-09-26）
+out = os.environ.get('TRACE_OUT')
+if out:
+    os.makedirs(os.path.dirname(out) or '.', exist_ok=True)
+else:
+    out_dir = os.path.join(restore_dir, 'trace')
+    os.makedirs(out_dir, exist_ok=True)
+    out = os.path.join(out_dir, 'arm_trace.npz')
 np.savez_compressed(out,
                     body_names=np.array(names),
                     xpos=xpos, xmat=xmat,
