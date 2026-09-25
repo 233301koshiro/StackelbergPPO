@@ -54,6 +54,19 @@ def last_commit_date(p: pathlib.Path):
     return out or None
 
 
+
+def _since_last_inventory(toc: str) -> str:
+    """目次.md の棚卸し記録から、前回実施日と経過日数を出す。"""
+    import datetime
+    dates = sorted(re.findall(r'^###\s*(\d{4}-\d{2}-\d{2})', toc, re.M))
+    if not dates:
+        return '⚠️ 目次.md に棚卸しの記録が見つからない（`### YYYY-MM-DD` の見出しで書く）'
+    last = datetime.date.fromisoformat(dates[-1])
+    days = (datetime.date.today() - last).days
+    mark = '⭐' if days <= 7 else ('⚠️' if days <= 14 else '⛔')
+    tail = '' if days <= 7 else '  ← **1 週間を超えている。今日やる**'
+    return f'{mark} 前回の棚卸し: {last}（**{days} 日前**）{tail}'
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--stale-days', type=int, default=60,
@@ -64,6 +77,12 @@ def main() -> int:
     text = {p: p.read_text(encoding='utf-8', errors='replace') for p in mds}
     toc = text.get(TOC, '')
     issues = 0
+
+    # ⭐ 前回の棚卸しからの経過日数を冒頭に出す（2026-09-25 追加）。
+    #   ⚠️ **CLAUDE.md には「週に1回」と散文で書いてあったが、17 日守られていなかった。**
+    #   ⭐ CLAUDE.md §5-1-2 の規律「検査を書けるならスクリプトにする」に従い、
+    #     周期は散文ではなくこの検査が持つ。記録は 目次.md の「docs の棚卸し」節。
+    print(_since_last_inventory(toc), end='\n\n')
 
     # 1. 孤立ファイル
     # ⚠️ **ビルドスクリプトが読むファイルは MD からリンクされていなくても孤立ではない。**
