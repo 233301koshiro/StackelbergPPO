@@ -135,6 +135,13 @@ def ck_achieved(r):
     n = len(watched)
     tail = watched[int(n * 0.9):]
     moving = float(np.abs(np.diff(tail, axis=0)).max()) if len(tail) > 1 else 0.0
+    # ⛔⛔ 2026-09-25: **エピソードが 1 step で終わっている軌跡があった**
+    #   （`tripo_v3_reach` / `_smoke` / `rrbot_arm_pusher_fixmorph_s1`）。
+    #   ⭐ **図にして step=1 と題に出ていたので気づいた。**数値の検査は全部通っていた。
+    #   ⚠️ **この軌跡からは何も言えない。**初期姿勢が写っているだけである。
+    if n < 50:
+        warn += (f'  ⛔⛔ **エピソードが {n} step で終わっている。初期姿勢が写っているだけで、'
+                 f'この軌跡からは何も言えない**（2026-09-25） ')
     if n >= 1200 and moving > 1e-3:
         warn += (f'  ⚠️ **{n} step で打ち切られ、判定対象が末尾でもまだ動いている'
                  f'（{moving*1000:.1f} mm/step）。TRACE_STEPS を増やすこと（9-137）** ')

@@ -81,6 +81,7 @@ SKIP = int(os.environ.get('TRACE_SKIP', '2'))
 
 names = None
 bone = None
+geom_size = None
 eps = []          # 採用した話ごとの (xpos, xmat, cube)
 
 for k in range(N_EP):
@@ -101,6 +102,12 @@ for k in range(N_EP):
                 names = [b.name for b in env.robot.bodies]
                 bone = np.array([np.asarray(getattr(b, 'bone_offset', [0, 0, 0]), dtype=float)
                                  for b in env.robot.bodies])
+                # ⭐ リンク半径（カプセルの size[0]）。**貫通判定にはこれが要る**
+                #   （`check_cube_penetration.py`。軸だけでは食い込みを過小評価する）。
+                geom_size = np.array([
+                    float(np.asarray(b.geoms[0].size, dtype=float).flatten()[0])
+                    if getattr(b, 'geoms', None) else np.nan
+                    for b in env.robot.bodies])
             xpos.append([np.asarray(env._body_xpos[n], dtype=float) for n in names])
             xmat.append([np.asarray(env._body_xmat[n], dtype=float).reshape(3, 3) for n in names])
             # Pusher の対象物。⚠️ **`_body_xpos` には cube が入っていない**（腕の body だけ）。
@@ -134,7 +141,7 @@ out = os.path.join(out_dir, 'arm_trace.npz')
 np.savez_compressed(out,
                     body_names=np.array(names),
                     xpos=xpos, xmat=xmat,
-                    bone_offset=bone, cube=cube, target=target,
+                    bone_offset=bone, geom_size=geom_size, cube=cube, target=target,
                     # ⭐ 採用した全話の要約。量を比べるときはこちらを使う（Bug 47）
                     ep_cube_dx=np.array([_score(e) for e in eps]),
                     ep_count=len(eps), ep_skipped=SKIP)
