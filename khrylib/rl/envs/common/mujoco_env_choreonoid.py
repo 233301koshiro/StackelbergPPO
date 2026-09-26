@@ -380,6 +380,13 @@ def mujoco_xml_to_body(xml_str: str):
         return axis.tolist(), angle_deg
 
     def make_shape(geom_el, body_global_pos):
+        # ⭐ 物理材質（2026-09-26、ホッケー Phase 2 / 9-173）。
+        #   ⚠️ **ここで拾うのは MuJoCo の `material` 属性**（本来は見た目用だが、
+        #     `<asset>` に宣言してあれば MuJoCo でも正当なので **両方のシミュレータで
+        #     同じ XML が通る**）。⭐ Choreonoid 側ではリンクの `material:` になり、
+        #     `materials.yaml` の `contact_materials` の対に効く。
+        #   ⛔ **既定（属性なし）では何も書かないので、既存 110 run の .body は 1 文字も変わらない。**
+        _mat = geom_el.get('material')
         if geom_el is None:
             return None
         bpos = np.asarray(body_global_pos, dtype=float)
@@ -399,7 +406,7 @@ def mujoco_xml_to_body(xml_str: str):
             radius = float(geom_el.get('size', '0.08'))
             m, Iperp, Iaxial = capsule_inertia(length, radius, geom_density)
             rot_axis, rot_angle = rot_y_to_vec(diff)
-            return dict(type='capsule', center=center.tolist(), length=length,
+            return dict(type='capsule', material=_mat, center=center.tolist(), length=length,
                         radius=radius, rot_axis=rot_axis, rot_angle=rot_angle,
                         mass=m, Iperp=Iperp, Iaxial=Iaxial)
 
@@ -408,7 +415,7 @@ def mujoco_xml_to_body(xml_str: str):
             pos_raw = np.array(parse_vec(geom_el.get('pos', '0 0 0')))
             pos_loc = (pos_raw - bpos) if is_global_coord else pos_raw
             m, I    = sphere_inertia(radius, geom_density)
-            return dict(type='sphere', center=pos_loc.tolist(), radius=radius, mass=m, I=I)
+            return dict(type='sphere', material=_mat, center=pos_loc.tolist(), radius=radius, mass=m, I=I)
 
         elif gtype == 'box':
             sz      = [float(x) for x in geom_el.get('size', '1 1 1').split()]
@@ -419,7 +426,7 @@ def mujoco_xml_to_body(xml_str: str):
             Ixx = m * (sy**2 + sz_v**2) / 12
             Iyy = m * (sx**2 + sz_v**2) / 12
             Izz = m * (sx**2 + sy**2)   / 12
-            return dict(type='box', center=pos_loc.tolist(),
+            return dict(type='box', material=_mat, center=pos_loc.tolist(),
                         size=[2*sx, 2*sy, 2*sz_v], mass=m, Ixx=Ixx, Iyy=Iyy, Izz=Izz)
 
         return None
@@ -603,6 +610,10 @@ def mujoco_xml_to_body(xml_str: str):
             out.append(f'      {m[3]:.6g}, {m[4]:.6g}, {m[5]:.6g},')
             out.append(f'      {m[6]:.6g}, {m[7]:.6g}, {m[8]:.6g} ]')
             shape = lk['shape']
+            # ⭐ リンク単位の物理材質。`elements:` より前、リンク直下に書く
+            #   （`StdBodyLoader.cpp` の `node->read("material", symbol)` → `link->setMaterial()`）。
+            if shape and shape.get('material'):
+                out.append(f'    material: {shape["material"]}')
             if shape:
                 st = shape['type']
                 cx, cy, cz = shape['center']
@@ -943,6 +954,23 @@ class ChoreonoidSimWorld:
 
         self.sim_item = AISTSimulatorItem()
         self.sim_item.setTimeStep(0.01)
+
+        # ⭐⭐ 反発係数（2026-09-26、9-173）。
+        #   ⛔⛔ **AISTSimulator は材質ごとの `restitution` を読まない。**
+        #     `restitution` を消費しているのは AGXDynamics と PhysX のプラグインだけで、
+        #     AIST は `ConstraintForceSolver::setCoefficientOfRestitution()` の
+        #     **ワールド全体で 1 つのスカラー**しか持たない（AISTSimulatorItem.cpp:453）。
+        #   ⭐ **摩擦は材質ごとに効く**（同 422 行で materialTable が CFS へ渡る）。
+        #   ⚠️ **既定では何もしない。**`CNOID_RESTITUTION` が指定されたときだけ設定するので、
+        #     プロセスが分かれている既存 run には影響しない。
+        _eps = os.environ.get('CNOID_RESTITUTION')
+        if _eps:
+            self.sim_item.setEpsilon(float(_eps))
+            print(f'[choreonoid] 反発係数（ワールド全体）を設定した: {_eps}', flush=True)
+        _fr = os.environ.get('CNOID_FRICTION')
+        if _fr:
+            self.sim_item.setFriction(float(_fr))
+            print(f'[choreonoid] 摩擦（ワールド全体）を設定した: {_fr}', flush=True)
         self.sim_item.setRealtimeSyncMode(3)  # manual / non-realtime
         # SimulatorItem::Impl::flushRecords()（SimulatorItem.cpp）は
         # isRecordingEnabled==false の時だけ毎flushでフロントエンド（Scene表示）の
