@@ -391,6 +391,66 @@ def zonotope_chain_reach(lengths, ranges_deg, d, dz, offset_half, budget=ZONO_GR
     return True, dmin <= slack, float(dmin), float(slack)
 
 
+def _has_walls(xml_name):
+    """XML に壁の body があるか（ホッケーかどうかの判別に使う）。"""
+    if not xml_name:
+        return False
+    try:
+        import xml.etree.ElementTree as _ET
+        r = _ET.parse(os.path.join(ASSET_DIR, f'{xml_name}.xml')).getroot()
+        wb = r.find('worldbody')
+        return any((b.get('name') or '').startswith('wall_') for b in (wb.findall('body') if wb is not None else []))
+    except Exception:
+        return False
+
+
+def shot_directions(puck, goal_x, goal_half_y, walls_y):
+    """パックから**ゴールへ通る向き**を幾何で列挙する（9-178）。
+
+    ⭐ 直接シュートと、左右の側壁で 1 回反射するシュート（鏡像法）を出す。
+    ⚠️ **鏡像法は反射が弾性であることを前提にする。**9-177 で e=0.75 の反射を
+    実装し、実走で反射解が 7 通りあることを確認済み（それ以前は 0 通りで、
+    この前提自体が成り立っていなかった。9-80 の訂正と同じ轍を踏まないこと）。
+
+    返り値: 単位ベクトルのリスト
+    """
+    px, py = float(puck[0]), float(puck[1])
+    dirs = []
+    for gy in (-goal_half_y, 0.0, goal_half_y):          # ゴール口の端と中央
+        v = np.array([goal_x - px, gy - py], dtype=float)
+        n = np.linalg.norm(v)
+        if n > 1e-9:
+            dirs.append(v / n)
+        # 側壁での鏡像（ゴールを壁の向こうへ折り返して直線で狙う）
+        for wy in walls_y:
+            v2 = np.array([goal_x - px, (2.0 * wy - gy) - py], dtype=float)
+            n2 = np.linalg.norm(v2)
+            if n2 > 1e-9:
+                dirs.append(v2 / n2)
+    return dirs
+
+
+def strikeable(lengths, ranges_deg, d_strike, puck, dirs, puck_z):
+    """パックを `dirs` のどれかへ飛ばせる打点に届くか。
+
+    打点 S = P − d_strike·û（先端は飛ばしたい向きの**反対側**に触れる）。
+    ⚠️ **棄却の側だけが確実**になるよう、`planar_chain_reach` の
+    「判定できたか」と余裕をそのまま使う（9-78 の設計）。
+
+    返り値: (届く向きの数, 全向き数, 1 つでも届くのに要る最小の水平距離)
+    """
+    ok = 0
+    need = float('inf')
+    for u in dirs:
+        S = np.asarray(puck[:2], dtype=float) - d_strike * np.asarray(u, dtype=float)
+        d = float(np.hypot(S[0], S[1]))
+        done, reach, _dmin, _slack = planar_chain_reach(lengths, ranges_deg, d, puck_z, steps=41)
+        if (not done) or reach:
+            ok += 1
+        need = min(need, d)
+    return ok, len(dirs), need
+
+
 def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFSET_HALF):
     """第1層: 幾何だけで即答できる不適合。(所見リスト, 致命的か) を返す。"""
     findings = []
@@ -553,6 +613,46 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                 f'**目標の高さが腕の動く平面から {dz:.3f} m ずれています**。\n'
                 f'      全関節が同じ軸を向いているため、腕は1つの平面内でしか動けません。\n'
                 f'      → 関節の向きが想定と違う可能性があります。スケッチを描き直すか、目標の高さを合わせてください。'))
+
+    elif task == 'hockey':
+        # ⭐⭐ 9-178: **狙える向きに当てられるか**。Reach/Pusher に無い「経路の制約」。
+        if geo['cube'] is None:
+            findings.append(('warn', '打つ対象（cube）が XML に見つかりません'))
+        else:
+            cpos, half = geo['cube']['pos'], geo['cube']['half']
+            radii = geo.get('radii') or []
+            r_tip = float(radii[-1]) if len(radii) else 0.06
+            d_strike = float(half) + r_tip
+            goal_x, goal_half_y = 1.55, 0.15
+            walls_y = (0.50, -0.50)                   # 側壁の内面
+            ys = [cpos[1]] if spread_y <= 0 else list(np.linspace(cpos[1] - spread_y,
+                                                                  cpos[1] + spread_y, 5))
+            findings.append(('info',
+                f'ゴール口は x={goal_x:.2f}・|y|≤{goal_half_y:.2f}、側壁の内面は y=±{walls_y[0]:.2f}。\n'
+                f'      打点はパック中心から {d_strike:.3f} m'
+                f'（パック半幅 {half:.3f} ＋ 先端半径 {r_tip:.3f}）'))
+            worst_need, worst_y, n_blocked = 0.0, None, 0
+            for y in ys:
+                puck = np.array([cpos[0], y], dtype=float)
+                dirs = shot_directions(puck, goal_x, goal_half_y, walls_y)
+                ok, tot, need = strikeable(lengths, geo.get('ranges_deg') or [],
+                                           d_strike, puck, dirs, float(cpos[2]))
+                if ok == 0:
+                    n_blocked += 1
+                    if need > worst_need:
+                        worst_need, worst_y = need, y
+                else:
+                    findings.append(('info',
+                        f'パック y={y:+.2f}: 狙える {tot} 通りのうち **{ok} 通り**に当てられます'))
+            if n_blocked:
+                fatal = True
+                findings.append(('fatal',
+                    f'**この形態では、パックを狙える向きへ打ち出せません**'
+                    f'（{n_blocked}/{len(ys)} の位置で、ゴールへ通る向きが 1 つも作れない）。\n'
+                    f'      届く範囲は {r_max:.3f} m ですが、打点は最も近いものでも'
+                    f' **{worst_need:.3f} m** 先です（パック y={worst_y:+.2f}）。\n'
+                    f'      → 腕全体を **{scale_advice(worst_need / r_max):.2f} 倍**に伸ばしてください。\n'
+                    f'      　（届くだけでは足りません。**飛ばしたい向きの反対側に回り込む**必要があります）'))
 
     elif task == 'pusher':
         if geo['cube'] is None:
@@ -830,7 +930,7 @@ def report(title, groups):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--xml', help='assets/mujoco_envs 内の XML 名（拡張子なし）')
-    ap.add_argument('--task', default='reach', choices=['reach', 'pusher'])
+    ap.add_argument('--task', default='reach', choices=['reach', 'pusher', 'hockey'])
     ap.add_argument('--target', nargs=3, type=float, default=None,
                     help='目標位置。既定は reach が [0.8,0,0.15]、'
                          'pusher は XML の対象位置（9-46）')
@@ -858,6 +958,19 @@ def main():
         if rs.get('use_reach'):
             args.task = 'reach'
             args.target = [rs.get('target_x', 0.8), rs.get('target_y', 0.0), rs.get('target_z', 0.15)]
+        elif rs.get('use_target_reward') and _has_walls(args.xml):
+            # ⭐ 9-178: 壁があって目標報酬なら **ホッケー**。
+            #   Reach/Pusher は「届くか」を問うが、ホッケーは「**狙える向きに当てられるか**」を問う。
+            args.task = 'hockey'
+            # ⚠️⚠️ **腕が届くべきはパックであってゴールではない。**
+            #   ⛔ 既定のままだとゴール (1.55, 0) への到達を要求し、
+            #     **狙える向きに当てられる形態まで「届かない」と棄却してしまう**
+            #     （2026-09-27 に 0.50 倍で実際に起きた）。
+            #   ⭐ 9-46 の pusher と同じく、目標は XML の対象位置から取る。
+            args.target = None            # 後段で cube の位置から埋める
+            es = cfgd.get('env_specs') or {}
+            if not args.spread_y:
+                args.spread_y = float(es.get('cube_y_noise', 0.0) or 0.0)
         else:
             args.task = 'pusher'
             # 9-46: pusher 系は目標を XML の対象位置から取る（既定 [0.8,0,0.15] は
@@ -886,8 +999,20 @@ def main():
         # 9-46: pusher 系の既定は XML の対象位置。以前の既定 [0.8,0,0.15] は
         # 実際の対象の高さと食い違い、非平面の水平限界を誤らせていた。
         # ⚠️ **明示的に --target が渡されたら上書きしない**（渡した値を黙って捨てない）。
-        if args.task == 'pusher' and geo.get('cube') is not None:
-            args.target = list(map(float, geo['cube']['pos']))
+        if args.task in ('pusher', 'hockey') and geo.get('cube') is not None:
+            _c = np.array(list(map(float, geo['cube']['pos'])), dtype=float)
+            if args.task == 'hockey':
+                # ⚠️⚠️ **腕が届くべきは「パックの中心」ではなく「打点」である。**
+                #   打点は飛ばしたい向きの**反対側**＝パック中心より **d_strike だけ手前**。
+                #   ⛔ 中心を要求すると、**実際には当てられる形態まで「届かない」と棄却する**
+                #     （2026-09-27 に 0.50 倍で実際に起きた。9/9 の向きに当てられるのに棄却された）。
+                #   ⭐ pusher が `near = |cpos| - half` を使うのと同じ考え方。
+                _radii = geo.get('radii') or []
+                _d = float(geo['cube']['half']) + (float(_radii[-1]) if len(_radii) else 0.06)
+                _r = float(np.linalg.norm(_c[:2]))
+                if _r > _d:
+                    _c[:2] *= (_r - _d) / _r
+            args.target = list(map(float, _c))
         else:
             args.target = [0.8, 0.0, 0.15]
     f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float),
