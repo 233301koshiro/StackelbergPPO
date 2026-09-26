@@ -916,6 +916,28 @@ class ChoreonoidSimWorld:
                 vel = self._joint_vel_limits.get((body_key, j.jointName))
                 if vel is not None:
                     vel_limits.append((eb, j, vel))
+        # ⭐ 壁反射用にパックの body と slide 関節を掴む（9-176）
+        self._puck_joints = None
+        self._puck_body = None
+        if getattr(self, '_wall_boxes', None):
+            for sb, _ in entries:
+                eb = sb.body()
+                names = [eb.joint(k).jointName for k in range(eb.numJoints)]
+                if 'cube_slide' in names and 'cube_slide2' in names:
+                    self._puck_body = eb
+                    self._puck_joints = (eb.joint(names.index('cube_slide')),
+                                         eb.joint(names.index('cube_slide2')))
+                    # ⚠️ **link(0) は `cube_fixed_root` で動かない。**
+                    #   ⭐ 実体は末端リンク（`cube`）。2026-09-26 にここを読み違えて反射が発火しなかった
+                    #   ＝ 9-174 の型④（別のものを測っていた）を再発防止を書いた直後に自分で踏んだ。
+                    self._puck_link = eb.link(eb.numLinks - 1)
+                    lnames = [eb.link(k).name for k in range(eb.numLinks)]
+                    print(f'[choreonoid] 壁反射: パックを捕捉した joints={names} '
+                          f'links={lnames} → 実体は "{self._puck_link.name}"', flush=True)
+                    break
+            if self._puck_joints is None:
+                print('[choreonoid] ⛔ 壁反射: パック（cube_slide/2）が見つからない', flush=True)
+
         self._joint_decay            = decay
         self._joint_limits_compiled  = limits
         self._joint_vel_limits_compiled = vel_limits
@@ -986,6 +1008,111 @@ class ChoreonoidSimWorld:
         self.body_items.clear()
         self.sim_bodies.clear()
         self._sim_body_entries = []
+
+    def _parse_wall_boxes(self, xml_str: str):
+        """⭐ 壁との反射を env 側で掛けるための箱を XML から拾う（2026-09-26、9-176）。
+
+        ⛔⛔ **AIST は材質ごとの反発係数を読まない**（9-173。`restitution` を消費するのは
+        AGXDynamics と PhysX のプラグインだけ）。`setEpsilon()` も実測で効かなかった。
+        ⭐ Bullet は読むが、Python バインディングに**コンストラクタが無い**ので生成できない（9-175）。
+
+        ⭐⭐ **そこで、関節ダンピング・速度クランプ・可動域クランプと同じ場所
+        （`step()` の中）で反射を掛ける。**このファイルは元々
+        「AIST が無視する量を env が明示的に適用する」設計になっており（下の `_joint_decay`）、
+        **流儀としては一貫している。**
+
+        ⚠️ **修論には「壁との接触は物理エンジンではなく速度反射としてモデル化した」と明記する。**
+        ⭐ エアホッケーの壁は実際ほぼ弾性（e=0.6〜0.8）なので、モデル化として正当である。
+
+        ⚠️ **既定では無効。**`HOCKEY_WALL_RESTITUTION` を指定したときだけ働くので、
+        **既存 110 run には一切影響しない。**
+        """
+        from lxml import etree
+        self._wall_boxes = []
+        self._puck_dq_target = None
+        self._puck_joints = None
+        self._puck_body = None
+        self._wall_e = float(os.environ.get('HOCKEY_WALL_RESTITUTION', '0') or 0)
+        if self._wall_e <= 0:
+            return
+        try:
+            root = etree.fromstring(xml_str.encode())
+        except Exception:
+            return
+        wb = root.find('worldbody')
+        if wb is None:
+            return
+        for body in wb.findall('body'):
+            nm = body.get('name', '')
+            if not (nm.startswith('wall_') or nm == 'goal_board'):
+                continue
+            g = body.find('geom')
+            if g is None or g.get('type') != 'box':
+                continue
+            pos = np.array([float(x) for x in body.get('pos', '0 0 0').split()], dtype=float)
+            gp = np.array([float(x) for x in g.get('pos', '0 0 0').split()], dtype=float)
+            sz = np.array([float(x) for x in g.get('size').split()], dtype=float)
+            c = pos + gp
+            self._wall_boxes.append((nm, c[:2] - sz[:2], c[:2] + sz[:2]))
+        # パックの半幅（反射の判定に要る）
+        for body in wb.findall('body'):
+            if body.get('name') != 'cube':
+                continue
+            g = body.find('geom')
+            if g is not None and g.get('size'):
+                s = [float(x) for x in g.get('size').split()]
+                self._puck_half = np.array(s[:2] if len(s) >= 2 else [s[0], s[0]], dtype=float)
+        print(f'[choreonoid] 壁の反射を有効化: e={self._wall_e} / 箱 {len(self._wall_boxes)} 個 '
+              f'{[n for n, _, _ in self._wall_boxes]}', flush=True)
+
+    def _puck_pre_tick(self):
+        """tick の**前**にパックの関節速度を控える。
+
+        ⛔⛔ **これが要る理由（2026-09-26 に 3 回間違えた）**:
+        `tickRequest()` の中で Choreonoid の接触が速度を殺すので、
+        **tick の後には入射速度が残っていない。**
+        ⛔ tick の内側で位置を押し出すと、積分器がそれを速度として拾って **1.74 倍に増幅**した。
+        ⭐⭐ **正しくは「tick 前の速度を控え、衝突が起きたらその値から反射させる」。位置には触らない。**
+        """
+        if not getattr(self, '_puck_joints', None):
+            return None
+        jx, jy = self._puck_joints
+        return (jx.dq, jy.dq)
+
+    def _reflect_puck_on_walls(self, pre):
+        """パックが壁の箱に入ったら、**tick 前の速度から** −e 倍で反射させる。
+
+        ⚠️ **位置は動かさない。**押し出しは積分器に速度として拾われる（上記）。
+        """
+        if pre is None or not getattr(self, '_wall_boxes', None):
+            return 0
+        jx, jy = self._puck_joints
+        half = getattr(self, '_puck_half', np.array([0.05, 0.05]))
+        p = np.asarray(self._puck_link.p, dtype=float)[:2]
+        n_hit = 0
+        for _nm, lo, hi in self._wall_boxes:
+            d_lo, d_hi = (p - (lo - half)), ((hi + half) - p)
+            if not (np.all(d_lo > 0) and np.all(d_hi > 0)):
+                continue
+            depth = np.minimum(d_lo, d_hi)
+            k = int(np.argmin(depth))
+            j = (jx, jy)[k]
+            out = -1.0 if d_lo[k] < d_hi[k] else 1.0
+            before = pre[k]
+            # ⚠️ **tick 前に壁へ向かっていたときだけ反射する**
+            if before * out >= 0:
+                continue
+            j.dq = -before * self._wall_e
+            # ⭐ env step の最後に当て直すため控える（2026-09-26、A'）。
+            #   ⛔ **反射した直後の残り tick で、接触解決が押し出しながら速度を 2.3 倍にする。**
+            #     反射の計算自体は検証済み（比 0.750）なので、**適用のタイミングだけの問題**。
+            self._puck_dq_target = (k, j.dq)
+            n_hit += 1
+            if os.environ.get('HOCKEY_WALL_DEBUG'):
+                print(f'[wall] {_nm} 軸{"xy"[k]} 食い込み {depth[k]*1000:5.1f} mm  '
+                      f'tick前 dq {before:+.4f} → {j.dq:+.4f}  '
+                      f'比 {abs(j.dq / before):.3f}（期待 {self._wall_e}）', flush=True)
+        return n_hit
 
     def _load_body_defs(self, body_defs: list, actuators_map: dict,
                         timestep: float, joint_armatures: dict) -> dict:
@@ -1069,6 +1196,7 @@ class ChoreonoidSimWorld:
     def load_model(self, xml_str: str, frame_skip: int) -> dict:
         self.frame_skip = frame_skip
         self._clear_bodies()
+        self._parse_wall_boxes(xml_str)
 
         body_defs, _all_order, actuators_map, timestep, joint_armatures = \
             mujoco_xml_to_body(xml_str)
@@ -1123,6 +1251,7 @@ class ChoreonoidSimWorld:
                 j.u = float(ctrl[i]) * ainfo['gear']
 
         for _ in range(n_frames):
+            _pre = self._puck_pre_tick()
             self.sim_item.tickRequest(True)
             IU.processEvent()
             # Choreonoid AIST ignores joint_damping (all bodies) and joint_range
@@ -1148,6 +1277,21 @@ class ChoreonoidSimWorld:
                     clamped_bodies[id(eb)] = eb
             for eb in clamped_bodies.values():
                 eb.calcForwardKinematics()
+            self._wall_hits = (getattr(self, '_wall_hits', 0)
+                               + self._reflect_puck_on_walls(_pre))
+
+        # ⭐ 反射した速度を env step の最後に当て直す（接触解決が足した分を打ち消す）
+        tgt = getattr(self, '_puck_dq_target', None)
+        if tgt is not None:
+            k, want = tgt
+            j = self._puck_joints[k]
+            got = j.dq
+            j.dq = want
+            self._puck_dq_target = None
+            if os.environ.get('HOCKEY_WALL_DEBUG'):
+                print(f'[wall] 当て直し 軸{"xy"[k]}  接触解決後 {got:+.4f} → {want:+.4f}'
+                      f'（接触が {abs(got / want) if want else float("nan"):.2f} 倍していた）',
+                      flush=True)
 
         return _get_state_dict(self._sim_body_entries)
 
