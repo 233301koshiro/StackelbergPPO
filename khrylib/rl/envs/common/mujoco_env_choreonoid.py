@@ -924,13 +924,19 @@ class ChoreonoidSimWorld:
         # ⚠️⚠️ **末端リンクには子が無いので「親→子の原点」では本体が抜ける**（2026-09-27 に実測）。
         #   ⭐ **測定と同じ「原点 → 原点 + R·bone_offset」にそろえる**ため、
         #     `robot.bodies` の bone_offset をリンク名で引けるようにしておく。
-        self._arm_bone = {}
-        try:
-            for b_ in self.robot.bodies:
-                self._arm_bone[b_.name] = np.asarray(
-                    getattr(b_, 'bone_offset', [0, 0, 0]), dtype=float)
-        except Exception:
-            pass
+        # ⭐ `.body` から拾ったカプセル本体を **sim のリンク名で引けるように詰め替える**。
+        #   ⚠️ `_link_caps` の鍵は (body_key, joint_name)。腕は body_key='robot'。
+        self._arm_caps = {}
+        if self._arm_body is not None:
+            eb0 = self._arm_body
+            for k in range(eb0.numJoints):
+                j = eb0.joint(k)
+                c = self._link_caps.get(('robot', j.jointName))
+                if c is not None:
+                    self._arm_caps[j.name] = c
+            if os.environ.get('HOCKEY_ARM_BLOCK'):
+                print(f'[choreonoid] 腕のカプセル本体: {len(self._arm_caps)} / '
+                      f'{eb0.numLinks} リンクを捕捉', flush=True)
         self._arm_block = bool(os.environ.get('HOCKEY_ARM_BLOCK'))
         if self._arm_block and getattr(self, '_wall_boxes', None):
             print(f'[choreonoid] 腕の壁貫通を塞ぐ: 有効'
@@ -1140,10 +1146,11 @@ class ChoreonoidSimWorld:
             # ⭐ **測定（`check_obstacle_clearance` / `plot_run`）と同じ定義にそろえる**:
             #   リンクの実体は「自分の原点 → 原点 + R·bone_offset」（カプセル本体）。
             #   ⛔ **「親→子の原点」だと末端リンクの本体が丸ごと抜ける**（2026-09-27 に実測）。
-            bo = self._arm_bone.get(lk.name)
-            if bo is not None:
-                end = a + (np.asarray(lk.R, dtype=float).reshape(3, 3) @ bo)[:2]
-                segs = [(a, end)]
+            cap = self._arm_caps.get(lk.name)
+            if cap is not None:
+                R = np.asarray(lk.R, dtype=float).reshape(3, 3)
+                o = np.asarray(lk.p, dtype=float)
+                segs = [((o + R @ cap[0])[:2], (o + R @ cap[1])[:2])]
             else:
                 bs = [np.asarray(eb.link(c).p, dtype=float)[:2]
                       for c in range(eb.numLinks) if eb.link(c).parent is lk]
@@ -1214,6 +1221,7 @@ class ChoreonoidSimWorld:
         self._joint_damping    = {}
         self._joint_limits     = {}
         self._joint_vel_limits = {}
+        self._link_caps = {}
 
         import re as _re
         for i, (item_name, body_yaml) in enumerate(body_defs):
@@ -1240,6 +1248,26 @@ class ChoreonoidSimWorld:
                 vel = _re.search(r'joint_velocity:\s*([\d.eE+\-]+)', blk)
                 if vel:
                     self._joint_vel_limits[(body_key, jnm.group(1))] = float(vel.group(1))
+                # ⭐⭐ リンク本体（カプセル）のローカル両端（2026-09-28、9-184 の是正）。
+                #   ⛔⛔ **`self.robot` はこのクラスに無い**ので bone_offset は引けなかった
+                #     （try/except が AttributeError を飲み込み、**先端リンクの本体が
+                #     壁の判定から丸ごと抜けていた**。9-174 型④の 4 回目）。
+                #   ⭐ **`.body` の記述から直接取る。**カプセルはローカル Y 軸に沿い、
+                #     `translation` が中心、`height` が軸方向の長さ、`rotation` が向き。
+                cap = _re.search(r'translation:\s*\[([^\]]+)\][\s\S]{0,240}?'
+                                 r'type:\s*Capsule,\s*radius:\s*([\d.eE+\-]+),\s*'
+                                 r'height:\s*([\d.eE+\-]+)', blk)
+                if cap:
+                    ctr = np.array([float(v) for v in cap.group(1).split(',')], dtype=float)
+                    h = float(cap.group(3))
+                    ax = np.array([0.0, 1.0, 0.0])
+                    rot = _re.search(r'rotation:\s*\[([^\]]+)\]', blk)
+                    if rot:
+                        v = [float(x) for x in rot.group(1).split(',')]
+                        if len(v) == 4 and abs(abs(v[3]) - 90.0) < 1e-6:
+                            ax = np.array([0.0, 0.0, 1.0])   # X 軸まわり 90° で Y → Z
+                    self._link_caps[(body_key, jnm.group(1))] = (
+                        ctr - 0.5 * h * ax, ctr + 0.5 * h * ax)
 
             with tempfile.NamedTemporaryFile(suffix='.body', mode='w', delete=False) as f:
                 f.write(body_yaml)
