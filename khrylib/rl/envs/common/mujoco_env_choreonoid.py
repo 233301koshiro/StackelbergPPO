@@ -917,8 +917,25 @@ class ChoreonoidSimWorld:
                 if vel is not None:
                     vel_limits.append((eb, j, vel))
         # ⭐ 壁反射用にパックの body と slide 関節を掴む（9-176）
+        #   ⭐ あわせて腕の body も掴む（9-184。腕の壁貫通を塞ぐため）
         self._puck_joints = None
         self._puck_body = None
+        self._arm_body = entries[0][0].body() if entries else None
+        # ⚠️⚠️ **末端リンクには子が無いので「親→子の原点」では本体が抜ける**（2026-09-27 に実測）。
+        #   ⭐ **測定と同じ「原点 → 原点 + R·bone_offset」にそろえる**ため、
+        #     `robot.bodies` の bone_offset をリンク名で引けるようにしておく。
+        self._arm_bone = {}
+        try:
+            for b_ in self.robot.bodies:
+                self._arm_bone[b_.name] = np.asarray(
+                    getattr(b_, 'bone_offset', [0, 0, 0]), dtype=float)
+        except Exception:
+            pass
+        self._arm_block = bool(os.environ.get('HOCKEY_ARM_BLOCK'))
+        if self._arm_block and getattr(self, '_wall_boxes', None):
+            print(f'[choreonoid] 腕の壁貫通を塞ぐ: 有効'
+                  f'（リンク {self._arm_body.numLinks} 本 / 箱 {len(self._wall_boxes)} 個）',
+                  flush=True)
         if getattr(self, '_wall_boxes', None):
             for sb, _ in entries:
                 eb = sb.body()
@@ -1064,6 +1081,80 @@ class ChoreonoidSimWorld:
                 self._puck_half = np.array(s[:2] if len(s) >= 2 else [s[0], s[0]], dtype=float)
         print(f'[choreonoid] 壁の反射を有効化: e={self._wall_e} / 箱 {len(self._wall_boxes)} 個 '
               f'{[n for n, _, _ in self._wall_boxes]}', flush=True)
+
+    def _arm_pre_tick(self):
+        """tick の**前**に腕の関節角と速度を控える（9-184）。
+
+        ⭐ 反射（9-176）と同じ設計: **tick 後には接触解決が状態を変えてしまう**ので、
+        **tick 前を控えておき、壁に入っていたら差し戻す。**
+        ⚠️ **位置を押し出さない。**押し出すと積分器が速度として拾う（9-176 の 2 回目の失敗）。
+        """
+        if not getattr(self, '_arm_body', None):
+            return None
+        eb = self._arm_body
+        return [(eb.joint(k), eb.joint(k).q, eb.joint(k).dq) for k in range(eb.numJoints)]
+
+    def _block_arm_on_walls(self, pre):
+        """腕のリンクが壁に入ったら、**tick 前の姿勢へ差し戻して止める**。
+
+        ⛔⛔ **9-93 の「腕が壁をすり抜ける」は 9-181 の時点でまだ直っていなかった**
+        （`hockey_bank` で腕が壁の中に 1676 標本）。
+        ⭐ **壁越しに押せるなら方策は反射を使う必要が無い**ので、
+        **反射の効果を測る前にこれを塞ぐ必要がある。**
+
+        ⚠️ **腕は revolute なので押し出せない**（逆運動学が要る）。
+        ⭐ **代わりに「入る直前の姿勢へ戻して速度を 0 にする」** ＝ 既存の可動域クランプと同じ流儀。
+        ⚠️ **tick 前に既に入っていたら何もしない**（初期姿勢が壁の中だと永久に固まるため）。
+        """
+        if pre is None or not getattr(self, '_wall_boxes', None):
+            return 0
+        eb = self._arm_body
+        if self._arm_in_wall():
+            # いま入っている → tick 前は入っていなかったか確かめる
+            now = [(j, j.q, j.dq) for j, _, _ in pre]
+            for j, q0, _dq0 in pre:
+                j.q = q0
+            eb.calcForwardKinematics()
+            was_in = self._arm_in_wall()
+            if was_in:
+                # ⚠️ **元から入っていた。**差し戻しても意味が無いので現状へ復帰
+                for (j, _q, _d), (_j2, q1, dq1) in zip(pre, now):
+                    j.q, j.dq = q1, dq1
+                eb.calcForwardKinematics()
+                return 0
+            for j, _q0, _dq0 in pre:
+                j.dq = 0.0                 # 壁で止まる
+            eb.calcForwardKinematics()
+            if os.environ.get('HOCKEY_WALL_DEBUG'):
+                print('[arm] 壁に入ったので tick 前の姿勢へ差し戻し、関節速度を 0 にした',
+                      flush=True)
+            return 1
+        return 0
+
+    def _arm_in_wall(self):
+        """腕のどれかのリンク（線分）が壁の箱に入っているか。"""
+        eb = self._arm_body
+        for k in range(eb.numLinks):
+            lk = eb.link(k)
+            a = np.asarray(lk.p, dtype=float)[:2]
+            # ⭐ **測定（`check_obstacle_clearance` / `plot_run`）と同じ定義にそろえる**:
+            #   リンクの実体は「自分の原点 → 原点 + R·bone_offset」（カプセル本体）。
+            #   ⛔ **「親→子の原点」だと末端リンクの本体が丸ごと抜ける**（2026-09-27 に実測）。
+            bo = self._arm_bone.get(lk.name)
+            if bo is not None:
+                end = a + (np.asarray(lk.R, dtype=float).reshape(3, 3) @ bo)[:2]
+                segs = [(a, end)]
+            else:
+                bs = [np.asarray(eb.link(c).p, dtype=float)[:2]
+                      for c in range(eb.numLinks) if eb.link(c).parent is lk]
+                segs = [(a, b) for b in bs] or [(a, a)]
+            for p0, p1 in segs:
+                for _nm, lo, hi in self._wall_boxes:
+                    for u in np.linspace(0, 1, 9):
+                        q = p0 + (p1 - p0) * u
+                        if np.all(q >= lo) and np.all(q <= hi):
+                            return True
+        return False
 
     def _puck_pre_tick(self):
         """tick の**前**にパックの関節速度を控える。
@@ -1252,6 +1343,7 @@ class ChoreonoidSimWorld:
 
         for _ in range(n_frames):
             _pre = self._puck_pre_tick()
+            _apre = self._arm_pre_tick() if getattr(self, '_arm_block', False) else None
             self.sim_item.tickRequest(True)
             IU.processEvent()
             # Choreonoid AIST ignores joint_damping (all bodies) and joint_range
@@ -1279,6 +1371,9 @@ class ChoreonoidSimWorld:
                 eb.calcForwardKinematics()
             self._wall_hits = (getattr(self, '_wall_hits', 0)
                                + self._reflect_puck_on_walls(_pre))
+            if _apre is not None:
+                self._arm_blocks = (getattr(self, '_arm_blocks', 0)
+                                    + self._block_arm_on_walls(_apre))
 
         # ⭐ 反射した速度を env step の最後に当て直す（接触解決が足した分を打ち消す）
         tgt = getattr(self, '_puck_dq_target', None)
