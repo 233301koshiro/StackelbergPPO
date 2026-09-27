@@ -82,6 +82,7 @@
 | ⭐ `probe_shot_strikeability.py` | **狙える向きに当てられるか**を幾何で測る（9-178）。判定器に基準を足す前に「差が出るか」を確かめる用 |
 | `probe_replay_shot.py` | 9-135 の実際の撃ち出しを反射あり/なしで再現する（9-179）。⚠️ **本番を再現できておらず信用しない**（腕を畳んでいる） |
 | ⭐⭐ `check_code_docs_sync.py` | **コードと md のずれ**を見る（2026-09-27 新設）。⛔ **既存 4 本は docs の中しか見ず、「コードを変えたのに md が追随していない」を素通りする**。A 索引 / B 壊れ参照 / C 環境変数 / D queue の辿れなさ |
+| ⭐⭐⭐ `audit_all_traces.py` | **全軌跡を過去の事故の型で洗う**（9-182）。⭐ **床下・step 数だけでは 2 本、6 項目にしたら 21 本。**①1step ②床下 ③可動域の端 ④通り抜け ⑤速度発散 ⑥対象が動かない |
 | `make_slide8_links_figure.py` | 進捗発表スライド 8「リンクに切り分けて寸法を測った」の図（→ `figures/slide8_links_split.png`） |
 | `make_slide9_m1_variance_figure.py` | 同スライド 9「M1 のばらつき」の図（→ `figures/slide9_m1_variance.png`） |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
