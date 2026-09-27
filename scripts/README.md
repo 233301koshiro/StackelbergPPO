@@ -77,6 +77,13 @@
 | `check_stale_claims.py` | 主張の側から全 MD を横断検出 |
 | `check_docs_inventory.py` | 孤立ファイル・壊れリンク・archive の注記漏れ。⭐ **冒頭に前回の棚卸しからの経過日数を出す**（1 週間を超えると ⛔。周期を散文ではなく検査に持たせるため。2026-09-25） |
 | ⭐⭐ `probe_material_table_inert.py` | **ホッケー Phase 1 の関門**（9-172）。材質を足しても既存 run の物理が変わらないことを実測する。⭐ **再現性が無いときは判定せずに止まる**（方策の再生は `cube_y_noise` で 851 mm 揺れる） |
+| ⭐⭐ `probe_puck_wall_restitution.py` | **パックが側壁で跳ね返るか**を実走で測る（9-173・9-176）。⭐ **期待値と実測を並べて出す**ので、効いていないときに推測が要らない |
+| `probe_puck_coast.py` | パックの惰行距離を測る（9-173）。⚠️ **9-174 型④の実例**: 惰行のつもりで「中央板までの距離」を測っていた |
+| ⭐ `probe_shot_strikeability.py` | **狙える向きに当てられるか**を幾何で測る（9-178）。判定器に基準を足す前に「差が出るか」を確かめる用 |
+| `probe_replay_shot.py` | 9-135 の実際の撃ち出しを反射あり/なしで再現する（9-179）。⚠️ **本番を再現できておらず信用しない**（腕を畳んでいる） |
+| ⭐⭐ `check_code_docs_sync.py` | **コードと md のずれ**を見る（2026-09-27 新設）。⛔ **既存 4 本は docs の中しか見ず、「コードを変えたのに md が追随していない」を素通りする**。A 索引 / B 壊れ参照 / C 環境変数 / D queue の辿れなさ |
+| `make_slide8_links_figure.py` | 進捗発表スライド 8「リンクに切り分けて寸法を測った」の図（→ `figures/slide8_links_split.png`） |
+| `make_slide9_m1_variance_figure.py` | 同スライド 9「M1 のばらつき」の図（→ `figures/slide9_m1_variance.png`） |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
 | ⭐ **`doc_refs.py`** | **識別子の逆引き。「ここを変えたらどこも変わる」を出す。** `--hubs` で影響の広い識別子、`--undefined` で壊れ参照 |
 | `dump_thesis_outline.py` | 修論の見出しを書き出す。`--write` で 構成.md の一覧を再生成、`--check` で食い違い検査 |

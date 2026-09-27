@@ -22,6 +22,8 @@
 一致しないなら、この検査では判定できない。
 
     python3 scripts/probe_material_table_inert.py <run名>
+
+環境変数: `PROBE_DIR`（軌跡の一時ファイルを置く場所。既定 /tmp）
 """
 import os
 import subprocess
