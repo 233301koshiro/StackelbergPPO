@@ -170,6 +170,13 @@ def max_reach_after_design(lengths, offset_half=OFFSET_HALF):
     return sum(float(np.hypot(l + offset_half, offset_half)) for l in lengths)
 
 
+# ⭐ **機械可読の助言**（2026-09-27、指摘12 の連結子のため）。
+#   ⚠️ **日本語の本文を正規表現で拾うのは脆い**ので、`scale_advice()` が呼ばれたら
+#     その倍率をここに積む。`close_loop.py` がこれを読む。
+#   ⭐ **表示は一切変えない**（`report()` は 'advice' を知らないので出力に出ない）。
+ADVICE = []
+
+
 def scale_advice(need):
     """必要倍率を返す。**判定を覆すのに必要な最小の変更**そのもの。
 
@@ -196,8 +203,11 @@ def scale_advice(need):
     要請するのも「判定を覆すのに必要な**最小の**変更」であり、
     理論上の要件と実験結果がここで一致した（第2章 2.4）。
     """
-    return math.ceil(need * 100) / 100
-
+    _s = math.ceil(need * 100) / 100
+    ADVICE.append(_s)
+    return _s
+    ADVICE.append(_s)
+    return _s
 
 
 def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61):
