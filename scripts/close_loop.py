@@ -36,15 +36,16 @@ import diagnose_morphology as D                                    # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def judge(xml, task, spread_y):
+def judge(xml, task, spread_y, tip_ub=None):
     """第1層にかけ、(棄却されたか, 助言された倍率, 所見) を返す。"""
     D.ADVICE.clear()
+    tip_ub = D.TIP_RADIUS_UB if tip_ub is None else tip_ub
     geo = D.parse_arm_xml(os.path.join(ROOT, D.ASSET_DIR, f'{xml}.xml'))
     if task in ('pusher', 'hockey') and geo.get('cube') is not None:
         c = np.array(list(map(float, geo['cube']['pos'])), dtype=float)
         if task == 'hockey':
-            radii = geo.get('radii') or []
-            d = float(geo['cube']['half']) + (float(radii[-1]) if len(radii) else 0.06)
+            # ⭐ Bug 50: 先端半径は「設計空間の上限と実値の大きい方」
+            d = float(geo['cube']['half']) + D.tip_radius(geo, tip_ub)
             r = float(np.linalg.norm(c[:2]))
             if r > d:
                 c[:2] *= (r - d) / r
@@ -52,7 +53,7 @@ def judge(xml, task, spread_y):
     else:
         target = [0.8, 0.0, 0.15]
     f1, fatal = D.layer1(geo, task, np.array(target, dtype=float),
-                         length_frozen=True, spread_y=spread_y)
+                         length_frozen=True, spread_y=spread_y, tip_ub=tip_ub)
     return fatal, (max(D.ADVICE) if D.ADVICE else None), f1
 
 
@@ -61,13 +62,15 @@ def main():
     ap.add_argument('--xml', required=True, help='判定する XML 名（拡張子なし）')
     ap.add_argument('--task', default='pusher', choices=['reach', 'pusher', 'hockey'])
     ap.add_argument('--spread-y', type=float, default=0.0)
+    ap.add_argument('--tip-ub', type=float, default=None, dest='tip_ub',
+                    help='先端カプセル半径の探索上限（cfg の geom_params.size.ub）。Bug 50')
     ap.add_argument('--name', help='修正後の XML 名（既定は <xml>_fix）')
     ap.add_argument('--launch', action='store_true', help='通過したら学習も投入する')
     ap.add_argument('--cfg', default='pusher_tripo_v3')
     a = ap.parse_args()
 
     print(f'=== ① 判定: {a.xml}（task={a.task}）')
-    fatal, scale, f1 = judge(a.xml, a.task, a.spread_y)
+    fatal, scale, f1 = judge(a.xml, a.task, a.spread_y, a.tip_ub)
     for kind, msg in f1:
         if kind in ('fatal', 'warn'):
             print(f'  {D.ICON[kind]} {msg.splitlines()[0]}')
@@ -91,7 +94,7 @@ def main():
         print('⛔ スケールに失敗'); return 1
 
     print(f'\n=== ③ 再判定: {name}')
-    fatal2, scale2, f2 = judge(name, a.task, a.spread_y)
+    fatal2, scale2, f2 = judge(name, a.task, a.spread_y, a.tip_ub)
     for kind, msg in f2:
         if kind in ('fatal', 'warn'):
             print(f'  {D.ICON[kind]} {msg.splitlines()[0]}')

@@ -138,6 +138,31 @@ def kinematic_reach(lengths, offsets):
     return sum(offsets[:len(lengths)]) + lengths[-1]
 
 
+# ⭐⭐ Bug 50（2026-09-28）: **先端カプセルの半球キャップはリンク端より半径ぶん前に出る。**
+#   第1層は長らくリンク長の連鎖だけで「届かない」と言っていたが、物理では
+#   **半径ぶん遠くまで触れる**。`e2e_b1`（系譜 9-186）はこれで誤って棄却された
+#   （判定 0.789 m・打点 0.850 m → 61 mm 不足。実際は 0.789 + 0.100 = 0.889 m で届いた）。
+#
+# ⛔⛔ **さらに悪いのは、その半径が設計変数であること**（`geom_params.size`）。
+#   `body_params: {}` はリンク長を凍結するだけで太さは凍結しない。
+#   ⚠️ 実測では両 run とも先端が**上限に張り付いていた**。
+#
+# ⭐⭐ **原則: 棄却するなら、設計空間の中で最も有利な値を使って棄却しなければならない。**
+#   「棄却側だけが確実」（9-78）はそれを満たして初めて成り立つ。
+#   ⚠️ 上限は cfg によって 0.08 と 0.10 がある（実測 8 本 / 24 本）。既定は広い方。
+TIP_RADIUS_UB = 0.10   # design_opt/cfg/*.yml の geom_params.size.ub
+
+
+def tip_radius(geo, ub=TIP_RADIUS_UB):
+    """⭐ 判定に使う先端カプセルの半径。**設計空間の上限と実値の大きい方**。
+
+    上限を使うと棄却が**厳しくなる側**（＝届くと見なす側）へ倒れる。
+    棄却だけを保証する第1層では、これが安全な向きである。
+    """
+    radii = geo.get('radii') or []
+    return max(float(radii[-1]) if radii else 0.0, float(ub))
+
+
 def reach_annulus(lengths):
     """N リンク直列アームの到達可能な円環 (最小半径, 最大半径)。
     1本が他の総和より長いと中心付近に届かない穴ができる。"""
@@ -461,7 +486,8 @@ def strikeable(lengths, ranges_deg, d_strike, puck, dirs, puck_z):
     return ok, len(dirs), need
 
 
-def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFSET_HALF):
+def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFSET_HALF,
+           tip_ub=TIP_RADIUS_UB):
     """第1層: 幾何だけで即答できる不適合。(所見リスト, 致命的か) を返す。"""
     findings = []
     fatal = False
@@ -554,7 +580,8 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                 #   ことは見ていない。両者は独立で、どちらかに掛かれば棄却する。
                 d_b = float(np.linalg.norm(target[:2] - base[:2]))
                 if task == 'pusher' and geo.get('cube') is not None:
-                    d_b -= float(geo['cube']['half'])      # 対象は手前の面まで
+                    # ⭐ Bug 50: 対象は手前の面まで。**さらに先端半径ぶん手前で触れる。**
+                    d_b -= float(geo['cube']['half']) + tip_radius(geo, tip_ub)
                 #   ⚠️ 9-91: **設計モードでは、B が要求する高さも dz_s と同じく 0 とみなす。**
                 #   par（肩の高さを決めるリンク）も設計変数なので、frozen 前提の
                 #   `target[2] - shoulder_z`（実際の高さの差）をそのまま渡すと、
@@ -574,11 +601,44 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                     zonotope_chain_reach(list(perp), perp_rng, d_b, dz_b, offset_half))
                 if ok_b and not reach_b:
                     fatal = True
+                    # ⭐ Bug 50 の副作用（2026-09-28）: この棄却は長らく「狙える向き」の棄却に
+                    #   隠れており、**倍率の助言を出していなかった**。Bug 50 で前者が
+                    #   （正しく）発火しなくなった結果、ホッケーの閉ループが閉じなくなった。
+                    #   ⛔ 旧メッセージは「スケールでは直らない」と書いていたが**誤り**で、
+                    #   実測では `e2e_hockey_s035` は **1.30 倍で通過する**。
+                    #   ⚠️ **一様比（要求距離÷届く距離）では出せない。**高さの差 `dz_b` は
+                    #   スケールしないので、比例関係が崩れる（実測で 1.44 倍と答えたが
+                    #   実際には 1.30 倍で通った ＝ **11 % の過大**。9-11「余裕は単調に害」）。
+                    #   ⭐ **同じ判定関数を倍率について二分探索する**のが唯一正しい。
+                    def _reaches(sc):
+                        _p = [l * sc for l in perp]
+                        _ok, _r, _, _ = (planar_chain_reach(_p, perp_rng, d_b, dz_b)
+                                         if length_frozen else
+                                         zonotope_chain_reach(_p, perp_rng, d_b, dz_b, offset_half))
+                        return bool(_ok and _r)
+                    _lo, _hi = 1.0, 4.0
+                    if _reaches(_hi):
+                        for _ in range(24):          # 4.0 まで 0.2 % の分解能
+                            _mid = (_lo + _hi) / 2.0
+                            if _reaches(_mid):
+                                _hi = _mid
+                            else:
+                                _lo = _mid
+                        _scale_b = scale_advice(_hi)
+                    else:
+                        _scale_b = None
+                    _how = (f'腕全体を **{_scale_b:.2f} 倍**に伸ばすか、可動域（XML の '
+                            f'`joint range`）を広げてください'
+                            if _scale_b is not None else
+                            '⛔ **4 倍まで伸ばしても届きません。**可動域（XML の '
+                            '`joint range`）を広げるか、目標を動かしてください')
+                    if _scale_b is not None:
+                        ADVICE.append(_scale_b)
                     findings.append(('fatal',
                         f'**関節の可動域では目標に届きません**（残り {dmin_b:.3f} m、'
                         f'格子の余地 {slack_b:.3f} m）。\n'
-                        f'      腕の長さは足りていても、**関節が必要な角度まで曲がりません**。\n'
-                        f'      → 可動域（XML の `joint range`）を広げるか、目標を動かしてください。'))
+                        f'      腕の長さの総和は足りていても、**関節が必要な角度まで曲がりません**。\n'
+                        f'      → {_how}。'))
                 elif ok_b:
                     findings.append(('info',
                         f'可動域を入れても目標に届く姿勢があります（残り {dmin_b:.3f} m）'))
@@ -630,8 +690,7 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
             findings.append(('warn', '打つ対象（cube）が XML に見つかりません'))
         else:
             cpos, half = geo['cube']['pos'], geo['cube']['half']
-            radii = geo.get('radii') or []
-            r_tip = float(radii[-1]) if len(radii) else 0.06
+            r_tip = tip_radius(geo, tip_ub)     # ⭐ Bug 50: 上限と実値の大きい方
             d_strike = float(half) + r_tip
             goal_x, goal_half_y = 1.55, 0.15
             walls_y = (0.50, -0.50)                   # 側壁の内面
@@ -669,8 +728,11 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
             findings.append(('warn', '押す対象（cube）が XML に見つかりません'))
         else:
             cpos, half = geo['cube']['pos'], geo['cube']['half']
-            near = float(np.linalg.norm(cpos[:2] - base[:2])) - half
-            findings.append(('info', f'対象の手前の面までの距離: {near:.3f} m'))
+            # ⭐⭐ Bug 50: 先端カプセルの半径ぶん手前で触れる（hockey の d_strike と同じ考え方）。
+            r_tip = tip_radius(geo, tip_ub)
+            near = float(np.linalg.norm(cpos[:2] - base[:2])) - half - r_tip
+            findings.append(('info', f'打点までの距離: {near:.3f} m'
+                                     f'（対象の手前の面 − 先端半径 {r_tip:.3f}）'))
             if near > r_max:
                 fatal = True
                 findings.append(('fatal',
@@ -937,8 +999,56 @@ def report(title, groups):
             print(f'  {ICON[kind]} {msg}')
 
 
+def self_check():
+    """⭐ Bug 50 の回帰テスト（`--self-check`）。**新しいファイルを作らない。**
+
+    第1層の到達判定が**先端カプセルの半径**を勘定しているかを固定する。
+    ⛔ 修正前は半径を **0 として扱っており**（XML の実値 0.0693 すら使っていなかった）、
+    `e2e_b1` を「0.7891 m では打点 0.850 m に届かない」と誤って棄却した。
+    ⭐ 実際の実効到達は 0.7891 ＋ 設計上限 0.100 ＝ **0.8891 m** で、実走で押せた（系譜 9-186）。
+    """
+    import copy as _copy, os as _os
+    geo = parse_arm_xml(_os.path.join(
+        _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+        ASSET_DIR, 'e2e_b1.xml'))
+    tgt = np.array(list(map(float, geo['cube']['pos'])), dtype=float)
+
+    # ① ヘルパーは「設計上限と実値の大きい方」を返す
+    assert abs(tip_radius(geo, 0.10) - 0.10) < 1e-9, tip_radius(geo, 0.10)
+    assert abs(tip_radius(geo, 0.0) - 0.0693) < 1e-4, tip_radius(geo, 0.0)
+
+    # ② 打点は「対象の手前の面 − 先端半径」まで下がっている（Bug 50 の本体）
+    reach = kinematic_reach(geo['lengths'], geo['offsets'])
+    near = float(np.linalg.norm(tgt[:2] - np.array(geo['base_pos'])[:2])) \
+        - float(geo['cube']['half']) - tip_radius(geo, 0.10)
+    assert abs(reach - 0.7891) < 1e-3, reach
+    assert abs(near - 0.750) < 1e-3, near          # 0.850 − 0.100。修正前は 0.850 だった
+    assert reach > near, '⛔ e2e_b1 は届くはず（系譜 9-186 で実走が押した）'
+
+    ADVICE.clear()
+    _, fatal_ok = layer1(geo, 'pusher', tgt, length_frozen=True, tip_ub=0.10)
+    assert not fatal_ok, '⛔ 届く形態を棄却している。Bug 50 の修正が効いていない'
+
+    # ③ **本当に届かない形態はまだ棄却する**（修正が棄却を殺していないこと）
+    short = _copy.deepcopy(geo)
+    short['lengths'] = [l * 0.6 for l in geo['lengths']]
+    short['offsets'] = [o * 0.6 for o in geo['offsets']]
+    ADVICE.clear()
+    _, fatal_short = layer1(short, 'pusher', tgt, length_frozen=True, tip_ub=0.10)
+    assert fatal_short, '⛔ 0.6 倍でも棄却されない。判定が緩みすぎている'
+    assert ADVICE, '⛔ 棄却したのに倍率の助言が無い（閉ループが閉じない）'
+
+    print('✅ Bug 50 回帰テスト 3 項目すべて通過')
+    print(f'   先端半径: 実値 {tip_radius(geo, 0.0):.4f} / 設計上限込み {tip_radius(geo, 0.10):.4f}')
+    print(f'   e2e_b1: 実効到達 {reach:.4f} m > 打点 {near:.4f} m → 棄却しない ⭐')
+    print(f'   0.6 倍: 棄却する ⭐  助言 {max(ADVICE):.2f} 倍')
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument('--self-check', action='store_true', dest='self_check',
+                    help='Bug 50 の回帰テストだけ走らせる（XML を新たに作らない）')
     ap.add_argument('--xml', help='assets/mujoco_envs 内の XML 名（拡張子なし）')
     ap.add_argument('--task', default='reach', choices=['reach', 'pusher', 'hockey'])
     ap.add_argument('--target', nargs=3, type=float, default=None,
@@ -947,12 +1057,17 @@ def main():
     ap.add_argument('--offset-half', type=float, default=None,
                     help='bone_offset の探索幅（片側）。run 指定時は cfg から自動取得。'
                          f'既定 {OFFSET_HALF}（9-72）')
+    ap.add_argument('--tip-ub', type=float, default=TIP_RADIUS_UB, dest='tip_ub',
+                    help='先端カプセル半径の探索上限（cfg の geom_params.size.ub）。'
+                         'Bug 50: 棄却は設計空間で最も有利な値で行う')
     ap.add_argument('--spread-y', type=float, default=0.0,
                     help='対象の y 方向のばらつき（Shot の cube_y_noise）。'
                          '指定すると分布の最遠点で判定する（9-46）')
     ap.add_argument('--length-free', action='store_true',
                     help='リンク長も最適化対象として判定する（--run 指定時は cfg から自動判定）')
     args, _ = ap.parse_known_args()
+    if args.self_check:
+        return self_check()
     length_frozen = not args.length_free
 
     run = os.environ.get('EVAL_RESTORE_DIR', '')
@@ -1017,8 +1132,7 @@ def main():
                 #   ⛔ 中心を要求すると、**実際には当てられる形態まで「届かない」と棄却する**
                 #     （2026-09-27 に 0.50 倍で実際に起きた。9/9 の向きに当てられるのに棄却された）。
                 #   ⭐ pusher が `near = |cpos| - half` を使うのと同じ考え方。
-                _radii = geo.get('radii') or []
-                _d = float(geo['cube']['half']) + (float(_radii[-1]) if len(_radii) else 0.06)
+                _d = float(geo['cube']['half']) + tip_radius(geo, args.tip_ub)
                 _r = float(np.linalg.norm(_c[:2]))
                 if _r > _d:
                     _c[:2] *= (_r - _d) / _r
@@ -1026,7 +1140,7 @@ def main():
         else:
             args.target = [0.8, 0.0, 0.15]
     f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float),
-                       length_frozen, spread_y=args.spread_y,
+                       length_frozen, spread_y=args.spread_y, tip_ub=args.tip_ub,
                        offset_half=(OFFSET_HALF if args.offset_half is None else args.offset_half))
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
 
