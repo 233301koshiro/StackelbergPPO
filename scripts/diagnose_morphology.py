@@ -152,6 +152,21 @@ def kinematic_reach(lengths, offsets):
 #   ⚠️ 上限は cfg によって 0.08 と 0.10 がある（実測 8 本 / 24 本）。既定は広い方。
 TIP_RADIUS_UB = 0.10   # design_opt/cfg/*.yml の geom_params.size.ub
 
+# ⭐⭐⭐ Bug 51（2026-09-29）: **対象の初期位置は毎話 ±0.1 m 揺れる。**
+#   `transit_execution()` が `reset_state(True)` を呼び、
+#   `qpos = init_qpos + U(-0.1, +0.1, size=nq)` が **cube のスライド関節にも乗る**。
+#   ⚠️ 著者は cube の**速度**ノイズだけ `qvel[cube_x_idx] = 0.0` で潰しており
+#   （「Cube slide joints must start at rest regardless of add_noise」）、
+#   ⛔ **同じ手当てが位置に対して行われていない。**
+#   ⭐ 実測: 軌跡 4 本の cube 初期 x は 1.029 / 1.063 / 1.075 / 1.104（XML は 1.000）。
+#
+# ⭐⭐ **判定と助言で使うべき対象位置は逆である。**
+#   ・**棄却**は「どの話でも届かない」を保証したいので、**最も有利（手前 = −noise）**で判定する
+#   ・**助言**は「どの話でも届く」ようにしたいので、**最も不利（奥 = +noise）**で倍率を出す
+#   ⛔ 両方を公称位置でやると、9-186 のように**話ごとに届いたり届かなかったりする形態**を
+#     「通過」と答えてしまう。
+CUBE_POS_NOISE = 0.10  # design_opt/envs/pusher.py reset_state(add_noise=True) の一様ノイズ幅
+
 
 def tip_radius(geo, ub=TIP_RADIUS_UB):
     """⭐ 判定に使う先端カプセルの半径。**設計空間の上限と実値の大きい方**。
@@ -487,7 +502,7 @@ def strikeable(lengths, ranges_deg, d_strike, puck, dirs, puck_z):
 
 
 def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFSET_HALF,
-           tip_ub=TIP_RADIUS_UB):
+           tip_ub=TIP_RADIUS_UB, cube_noise=CUBE_POS_NOISE):
     """第1層: 幾何だけで即答できる不適合。(所見リスト, 致命的か) を返す。"""
     findings = []
     fatal = False
@@ -581,7 +596,8 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                 d_b = float(np.linalg.norm(target[:2] - base[:2]))
                 if task == 'pusher' and geo.get('cube') is not None:
                     # ⭐ Bug 50: 対象は手前の面まで。**さらに先端半径ぶん手前で触れる。**
-                    d_b -= float(geo['cube']['half']) + tip_radius(geo, tip_ub)
+                    # ⭐ Bug 51: これも棄却側の検査なので**最も有利な位置**で見る。
+                    d_b -= float(geo['cube']['half']) + tip_radius(geo, tip_ub) + cube_noise
                 #   ⚠️ 9-91: **設計モードでは、B が要求する高さも dz_s と同じく 0 とみなす。**
                 #   par（肩の高さを決めるリンク）も設計変数なので、frozen 前提の
                 #   `target[2] - shoulder_z`（実際の高さの差）をそのまま渡すと、
@@ -731,13 +747,22 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
             # ⭐⭐ Bug 50: 先端カプセルの半径ぶん手前で触れる（hockey の d_strike と同じ考え方）。
             r_tip = tip_radius(geo, tip_ub)
             near = float(np.linalg.norm(cpos[:2] - base[:2])) - half - r_tip
-            findings.append(('info', f'打点までの距離: {near:.3f} m'
-                                     f'（対象の手前の面 − 先端半径 {r_tip:.3f}）'))
-            if near > r_max:
+            # ⭐⭐⭐ Bug 51: 対象は毎話 ±CUBE_POS_NOISE 揺れる。**棄却は最も有利な位置で、
+            #   助言は最も不利な位置で**（上の定数のコメント）。
+            near_reject = near - cube_noise      # 手前に来た話でも届かないなら確実に棄却
+            near_advise = near + cube_noise      # 奥に来た話でも届く倍率を返す
+            findings.append(('info',
+                f'打点までの距離: {near:.3f} m'
+                f'（対象の手前の面 − 先端半径 {r_tip:.3f}）\n'
+                f'      ⚠️ **対象は毎話 ±{cube_noise:.2f} m 揺れる**（Bug 51）ので、'
+                f'実際の打点は **{near_reject:.3f}〜{near_advise:.3f} m**'))
+            if near_reject > r_max:
                 fatal = True
                 findings.append(('fatal',
-                    f'**腕が短すぎて対象に触れません**（届く範囲 {r_max:.3f} m、対象は {near:.3f} m 先）。\n'
-                    f'      → 腕全体を **{scale_advice(near / r_max):.2f} 倍**に伸ばしてください。\n'
+                    f'**腕が短すぎて対象に触れません**'
+                    f'（届く範囲 {r_max:.3f} m、最も手前に来た話でも {near_reject:.3f} m 先）。\n'
+                    f'      → 腕全体を **{scale_advice(near_advise / r_max):.2f} 倍**に伸ばしてください'
+                    f'（⭐ **最も奥に来た話でも届く倍率**）。\n'
                     f'      　（これが判定を覆すのに必要な最小の倍率です。'
                     f'余裕を上乗せすると到達精度はむしろ単調に悪化します。実験系譜 9-11）'))
             elif r_max > near + 2 * half:
