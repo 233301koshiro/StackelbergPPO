@@ -938,10 +938,11 @@ class ChoreonoidSimWorld:
                 print(f'[choreonoid] 腕のカプセル本体: {len(self._arm_caps)} / '
                       f'{eb0.numLinks} リンクを捕捉', flush=True)
         self._arm_block = bool(os.environ.get('HOCKEY_ARM_BLOCK'))
+        self._arm_last_free = None
         if self._arm_block and getattr(self, '_wall_boxes', None):
             print(f'[choreonoid] 腕の壁貫通を塞ぐ: 有効'
-                  f'（リンク {self._arm_body.numLinks} 本 / 箱 {len(self._wall_boxes)} 個）',
-                  flush=True)
+                  f'（リンク {self._arm_body.numLinks} 本 / 箱 {len(self._wall_boxes)} 個 / '
+                  f'掃過 {self._ARM_SWEEP} 点）', flush=True)
         if getattr(self, '_wall_boxes', None):
             for sb, _ in entries:
                 eb = sb.body()
@@ -1088,6 +1089,16 @@ class ChoreonoidSimWorld:
         print(f'[choreonoid] 壁の反射を有効化: e={self._wall_e} / 箱 {len(self._wall_boxes)} 個 '
               f'{[n for n, _, _ in self._wall_boxes]}', flush=True)
 
+    # ⭐⭐ Bug 52 / 9-189: 腕が壁を**一跨ぎで飛び越える**のを止めるための掃過の分解能。
+    #   ⛔ **実測**: 先端は 1 記録 step で最大 **1231 mm** 動く（`frame_skip=4` なので 1 tick で約 308 mm）。
+    #   ⭐ 側壁の厚みは **400 mm**（y ∈ [0.50, 0.90]）。
+    #   ⭐ 8 点なら 1 tick の掃過を **約 44 mm 刻み**で見るので、400 mm の壁を飛び越えられない。
+    #   ⚠️ 増やすと 1 tick あたりの `calcForwardKinematics()` が線形に増える。
+    #   ⭐⭐ `ARM_SWEEP_OFF=1` で **2 点（＝旧実装）** に戻る。
+    #     ⭐ **既知の失敗を再現できるか確かめるため**（`probe_arm_wall_block.py`）。
+    #     ⛔ 再現できないプローブの PASS は根拠にならない（CLAUDE.md §5-2 ⑤-3）。
+    _ARM_SWEEP = 2 if os.environ.get('ARM_SWEEP_OFF') else 8
+
     def _arm_pre_tick(self):
         """tick の**前**に腕の関節角と速度を控える（9-184）。
 
@@ -1101,7 +1112,7 @@ class ChoreonoidSimWorld:
         return [(eb.joint(k), eb.joint(k).q, eb.joint(k).dq) for k in range(eb.numJoints)]
 
     def _block_arm_on_walls(self, pre):
-        """腕のリンクが壁に入ったら、**tick 前の姿勢へ差し戻して止める**。
+        """腕のリンクが壁に入ったら、**壁の外だった最後の姿勢へ差し戻して止める**。
 
         ⛔⛔ **9-93 の「腕が壁をすり抜ける」は 9-181 の時点でまだ直っていなかった**
         （`hockey_bank` で腕が壁の中に 1676 標本）。
@@ -1109,33 +1120,64 @@ class ChoreonoidSimWorld:
         **反射の効果を測る前にこれを塞ぐ必要がある。**
 
         ⚠️ **腕は revolute なので押し出せない**（逆運動学が要る）。
-        ⭐ **代わりに「入る直前の姿勢へ戻して速度を 0 にする」** ＝ 既存の可動域クランプと同じ流儀。
-        ⚠️ **tick 前に既に入っていたら何もしない**（初期姿勢が壁の中だと永久に固まるため）。
+        ⭐ **代わりに「壁の外だった姿勢へ戻して速度を 0 にする」** ＝ 既存の可動域クランプと同じ流儀。
+
+        ⭐⭐ **2026-09-30 に 2 つ直した**（9-189）。どちらも 9-185 の 14 GPU 時間を無駄にした原因。
+
+        | ⛔ 旧 | ⭐ 新 |
+        |---|---|
+        | tick 前と後の**2 点**だけ見る | **掃過**を見る（関節角を補間して `SWEEP` 点） |
+        | tick 前に入っていたら**何もしない** | **壁の外だった最後の姿勢**へ戻す |
+
+        ⛔⛔ **旧①がすり抜けの正体**: 側壁の厚みは 400 mm、先端は 1 step で最大 1231 mm 動く。
+        **一跨ぎで飛び越えると前後どちらも箱の外**なので、ブロックが一度も発火しない。
+        ⭐ 実測で先端は壁の外面の **80 cm 外**（|y|=1.701 m）まで出ていた。
+
+        ⛔ **旧②が「入ったら出られない」の正体**: `hockey_bank2_s2` は **975/1201 標本**が壁の中で、
+        **step175 で入って 976 step 出てこなかった**。方策は「壁の中に居座る」を学習する。
         """
         if pre is None or not getattr(self, '_wall_boxes', None):
             return 0
         eb = self._arm_body
+        now = [(j, j.q, j.dq) for j, _, _ in pre]
+
+        def _apply(qs):
+            for (j, _q, _d), q in zip(pre, qs):
+                j.q = q
+            eb.calcForwardKinematics()
+
+        # ⭐ 掃過判定: tick 前 → 後 を関節角で補間し、途中のどこかで壁に入るなら当たり。
+        #   ⚠️ **端点だけでは足りない**（上表の旧①）。
+        hit = False
+        for u in np.linspace(0.0, 1.0, self._ARM_SWEEP):
+            _apply([q0 + (q1 - q0) * u for (_j, q0, _d0), (_j2, q1, _d1) in zip(pre, now)])
+            if self._arm_in_wall():
+                hit = True
+                break
+
+        if not hit:
+            # ⭐ 壁の外を通った。現状へ戻し、**この姿勢を「最後に自由だった姿勢」として控える**
+            for (j, _q, _d), (_j2, q1, dq1) in zip(pre, now):
+                j.q, j.dq = q1, dq1
+            eb.calcForwardKinematics()
+            self._arm_last_free = [q for _j, q, _d in now]
+            return 0
+
+        # ⭐ 当たった。戻す先は「tick 前」。⚠️ **tick 前も壁の中なら「最後に自由だった姿勢」へ。**
+        _apply([q0 for _j, q0, _d0 in pre])
         if self._arm_in_wall():
-            # いま入っている → tick 前は入っていなかったか確かめる
-            now = [(j, j.q, j.dq) for j, _, _ in pre]
-            for j, q0, _dq0 in pre:
-                j.q = q0
-            eb.calcForwardKinematics()
-            was_in = self._arm_in_wall()
-            if was_in:
-                # ⚠️ **元から入っていた。**差し戻しても意味が無いので現状へ復帰
-                for (j, _q, _d), (_j2, q1, dq1) in zip(pre, now):
-                    j.q, j.dq = q1, dq1
-                eb.calcForwardKinematics()
-                return 0
-            for j, _q0, _dq0 in pre:
-                j.dq = 0.0                 # 壁で止まる
-            eb.calcForwardKinematics()
-            if os.environ.get('HOCKEY_WALL_DEBUG'):
-                print('[arm] 壁に入ったので tick 前の姿勢へ差し戻し、関節速度を 0 にした',
-                      flush=True)
-            return 1
-        return 0
+            free = getattr(self, '_arm_last_free', None)
+            if free is not None and len(free) == len(pre):
+                _apply(free)
+            # ⚠️ **それでも壁の中なら諦めて tick 前に置く**（初期姿勢が壁の中の場合）。
+            if self._arm_in_wall():
+                _apply([q0 for _j, q0, _d0 in pre])
+        for j, _q0, _dq0 in pre:
+            j.dq = 0.0                 # 壁で止まる
+        eb.calcForwardKinematics()
+        if os.environ.get('HOCKEY_WALL_DEBUG'):
+            print('[arm] 壁に入ったので差し戻し、関節速度を 0 にした', flush=True)
+        return 1
 
     def _arm_in_wall(self):
         """腕のどれかのリンク（線分）が壁の箱に入っているか。"""
