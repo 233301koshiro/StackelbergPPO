@@ -32,8 +32,7 @@ CHAPTER_ORDER = [
     ('第3章前段_前提.md',       False, {'title': '提案手法: スケッチ起点の形態検証パイプライン'}),
     ('第3章_提案手法.md',       False, {'merge': True}),
     ('第4章_実験および評価.md', False, {}),
-    ('第5章_考察.md',           False, {}),
-    ('第6章_結論.md',           False, {}),
+    ('第5章_結論.md',           False, {}),
     # 参考文献は本文の最後、付録の前に置く。章番号は振らない（unnumbered=True）
     ('参考文献.md',             True,  {}),
     ('付録A_プロンプト全文.md', True,  {}),
