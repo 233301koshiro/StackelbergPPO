@@ -59,7 +59,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 # ⚠️ 画像生成モデル。⭐ **版を固定して記録する**（Web UI ではこれができなかった）
-MODEL_ID = os.environ.get('GEMINI_MODEL', 'gemini-2.5-flash-image')
+# ⭐⭐ 既定は **gemini-3-pro-image**（2026-09-30）。
+#   ⚠️ ブラウザ時代の M1 は **3.1 Pro（拡張機能）**であり、2.5-flash に落とすと
+#   ⛔ **マゼンタ球がリンクに埋まり、先端カプセルが画面端で切れた**（実測比較）。
+#   ⭐ 区間比の再現も 3-pro が最良（1.00 対 0.99。ブラウザは 0.97）。
+MODEL_ID = os.environ.get('GEMINI_MODEL', 'gemini-3-pro-image')
 
 
 def key():
@@ -73,22 +77,34 @@ def key():
     return k
 
 
-def build_prompt(links, ratios):
+def build_prompt(name, ratios):
     """⭐ プロンプトは `make_m1_prompt.py` が唯一の出所。**ここで組み直さない。**
 
     ⚠️ **2 箇所に同じことを書く構造を作らない**（CLAUDE.md §4-2）。
     付録A.2 もこのスクリプトの出力を転記する形にしてある。
+
+    ⛔⛔ **2026-09-30 の事故**: ここは `--links` を渡していたが
+    **`make_m1_prompt.py` にその引数は無い**。引数エラーで stdout が空になり、
+    ⛔ **`returncode` を見ていなかったので空のプロンプトで 2 枚生成した**（課金つき）。
+    ⭐ **失敗と空文字列を必ず例外にする。**
     """
     import subprocess
-    cmd = [sys.executable, str(ROOT / 'scripts' / 'make_m1_prompt.py'),
-           '--links', str(links)]
+    cmd = [sys.executable, str(ROOT / 'scripts' / 'make_m1_prompt.py')]
+    if name:
+        cmd += ['--sketch', name]
     if ratios:
         cmd += ['--ratios'] + [str(r) for r in ratios]
-    return subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT).stdout
+    r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    if r.returncode != 0:
+        raise RuntimeError(f'make_m1_prompt.py が失敗（exit {r.returncode}）: '
+                           + (r.stderr or '')[-300:])
+    if not r.stdout.strip():
+        raise RuntimeError('make_m1_prompt.py の出力が空。⛔ 空のプロンプトで生成しない')
+    return r.stdout
 
 
 def generate(sketch, prompt, out, temperature=0.0, seed=None):
-    """⚠️ **未検証。**キーが無いので一度も動かしていない。"""
+    """⭐ 2026-09-30 に実疎通を確認（gemini-2.5-flash-image / gemini-3-pro-image）。"""
     from google import genai
     from google.genai import types
 
@@ -105,6 +121,16 @@ def generate(sketch, prompt, out, temperature=0.0, seed=None):
         ],
         config=types.GenerateContentConfig(**cfg),
     )
+    # ⭐⭐ **課金の手がかりを必ず出す**（2026-09-30）。
+    #   ⚠️ 単価は API から取れないが、**トークン数は取れる**。
+    #   ⭐ 画像 1 枚が何トークンかが分かれば、公式の単価表と掛けて費用が出る。
+    u = getattr(resp, 'usage_metadata', None)
+    if u is not None:
+        print(f'    [usage] prompt={getattr(u,"prompt_token_count",None)} '
+              f'output={getattr(u,"candidates_token_count",None)} '
+              f'total={getattr(u,"total_token_count",None)}'
+              + (f' 内訳={u.candidates_tokens_details}'
+                 if getattr(u, 'candidates_tokens_details', None) else ''), flush=True)
     # ⚠️ 画像生成の戻り値は inline_data に入る。text ではない
     for part in resp.candidates[0].content.parts:
         if getattr(part, 'inline_data', None):
@@ -118,7 +144,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--check', action='store_true', help='疎通のみ（キーの有無を見る）')
     ap.add_argument('--sketch')
-    ap.add_argument('--links', type=int, default=3)
+    ap.add_argument('--name', help='data/test/<名前>/sketch/measured.json から比を読む')
     ap.add_argument('--ratios', nargs='*', type=float)
     ap.add_argument('--out', default='data/api/m1_out.png')
     ap.add_argument('--temperature', type=float, default=0.0)
@@ -138,12 +164,30 @@ def main() -> int:
         print('⛔ google-genai が未インストール。`pip install google-genai`')
         return 1
     if a.check:
-        print(f'✅ キーあり・ライブラリあり。model={MODEL_ID}')
-        return 0
+        # ⛔⛔ **キーの有無だけを見ていた（2026-09-30 まで）。**
+        #   無効なキーでも「✅ 準備完了」と出るので、**1 文字欠けたキーを合格と答えた。**
+        #   ⭐ `models.list` は**無料**なので、実際に叩いて確かめる。
+        from google import genai
+        # ⚠️ `models.list()` は遅延評価。**クライアントを変数で保持しないと**
+        #   途中で回収され `Cannot send a request, as the client has been closed` になる。
+        cli = genai.Client(api_key=k)
+        try:
+            names = [m.name.replace('models/', '') for m in cli.models.list()]
+        except Exception as e:
+            print(f'⛔ **API に届かない**: {type(e).__name__} {str(e)[:160]}')
+            print(f'   ⚠️ キーの長さ {len(k)} 文字（Google AI Studio は通常 39 文字）。'
+                  '⭐ **途中で欠けていないか確かめる**')
+            return 1
+        ok = MODEL_ID in names
+        print(f'✅ 疎通成功。呼べるモデル {len(names)} 個')
+        print(f'{"⭐ **目的のモデルあり**" if ok else "⛔ **目的のモデルが無い**"}: {MODEL_ID}')
+        if not ok:
+            print('   ⚠️ **権限がモデル単位で制限されている可能性がある**（外部API.md の確認事項 1）')
+        return 0 if ok else 1
     if not a.sketch:
         ap.error('--sketch を指定してください')
 
-    prompt = build_prompt(a.links, a.ratios)
+    prompt = build_prompt(a.name, a.ratios)
     print(f'プロンプト {len(prompt)} 文字（make_m1_prompt.py 由来）')
     for i in range(a.n):
         out = a.out if a.n == 1 else a.out.replace('.png', f'_{i+1}.png')
