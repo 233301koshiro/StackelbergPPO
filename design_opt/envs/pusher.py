@@ -1,4 +1,5 @@
 import numpy as np
+import re
 import os
 from gym import utils
 if os.environ.get('USE_CHOREONOID', '0') == '1':
@@ -736,41 +737,45 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
     def _safe_init_angle(self):
         """⭐⭐ `arm_safe_init` の初期肩角。**既定は従来どおり π/2（90°）。**
 
-        ⭐ 本来の目的は「腕が初期姿勢で対象に重なり、分離インパルスが対象を
-        無償で吹き飛ばす」のを防ぐこと。**対象と反対（+y）を向ければ、
-        リーチに依らず安全**という設計だった。
+        ⭐ 本来の目的は「腕が初期姿勢で対象に重なり、分離インパルスが対象を無償で
+        吹き飛ばす」のを防ぐこと。**対象と反対（+y）を向ければリーチに依らず安全**という設計だった。
 
         ⛔⛔ **壁のある環境（ホッケー）ではその性質が壊れる**（系譜 9-192）。
-        リーチ 1.0425 m の腕を +y に向けると、先端は側壁の外面 0.90 の
-        **14 cm 外側**に出る。⛔ **貫通を塞ぐと腕は壁の外に閉じ込められ、
-        パックに永久に届かない**（`fwd_cube` が 198 epoch すべて厳密に 0）。
-        ⛔ **逆に貫通を許すと「壁をすり抜けて押す」ことになり、ホッケーではない**（9-93）。
+        リーチ 1.0425 m の腕を +y に向けると先端は側壁の外面 0.90 の **14 cm 外**に出る。
+        ⛔ **貫通を塞ぐと腕は壁の外に閉じ込められ、パックに永久に届かない。**
 
-        ⭐⭐ **`arm_init_clear_y` を与えると、リーチから初期角を計算する。**
+        ⭐⭐ `arm_init_clear_y` を与えると、**リーチから初期角を計算する。**
 
         | 条件 | 式 |
         |---|---|
         | 先端が壁の内側に収まる | `θ ≤ arcsin(clear_y / R)` |
         | 対象と初期接触しない | `θ ≥ arcsin(need / d_obj)` |
 
-        ⭐ `need = 対象の半幅 + 腕の最大半径 + margin`。
-        ⚠️ **窓が無ければ例外にする。**⛔ **黙って従来値へ落とすと、
-        壁の外から始まったことに気づけない**（§5-2 ⑤-3-2）。
+        ⛔⛔ **2026-10-02 の事故**: 初版は `get_body_com('cube')` と `self._body_xpos` を
+        引いていた。⛔ **これは `_body_xpos[name]` の辞書引きで、`reset_model()` の時点では
+        `'cube'` がまだ無く `KeyError` になる。**worker が死んでプールが待ち続け、
+        ⛔⛔ **9.5 時間 0 epoch のハングになった**（CPU 4.4 %）。
+        ⭐⭐ **`reset_state` の中でシミュレーションを引いてはいけない。**
+        ⭐ **XML（静的）とロボットモデルからだけ計算する。**
         """
         clear_y = self.env_specs.get('arm_init_clear_y')
         if clear_y is None:
             return np.pi / 2                      # ⭐ 従来どおり。既存 run は無影響
+        if hasattr(self, '_safe_init_cached'):
+            return self._safe_init_cached
 
-        # ⭐ リーチ（bone_offset の総和）と腕の最大半径
+        # ⭐ リーチ（bone_offset の総和）と腕の最大半径。**どちらも静的**
         R = float(sum(np.linalg.norm(np.asarray(getattr(b, 'bone_offset', [0, 0, 0]),
                                                 dtype=float))
                       for b in self.robot.bodies))
         need = (self._get_cube_half_size() + self._get_max_arm_radius()
                 + self.env_specs.get('arm_init_margin', 0.03))
-        obj = np.asarray(self.get_body_com('cube'), dtype=float)[:2]
-        base = np.asarray(self._body_xpos.get(self.robot.bodies[0].name, [0, 0, 0]),
-                          dtype=float)[:2]
-        d_obj = float(np.linalg.norm(obj - base))
+        # ⭐ 対象の位置は **XML から読む**（シミュレーションを引かない）
+        xml = getattr(self, 'cur_xml_str', None) or getattr(self, 'init_xml_str', '')
+        mm = re.search(r'<body\s+name="cube"\s+pos="([-\d.eE]+)\s+([-\d.eE]+)', xml)
+        if mm is None:
+            raise RuntimeError('arm_init_clear_y: XML から cube の位置を読めない')
+        d_obj = float(np.hypot(float(mm.group(1)), float(mm.group(2))))
 
         if R <= 1e-6 or d_obj <= 1e-6:
             raise RuntimeError(f'arm_init_clear_y: 幾何が取れない R={R} d_obj={d_obj}')
@@ -779,19 +784,16 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         if lo > hi:
             raise RuntimeError(
                 f'⛔⛔ arm_safe_init の窓が無い: リーチ {R:.4f} m / 対象まで {d_obj:.4f} m / '
-                f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m\n'
-                f'   → 壁の内側に収まる上限 {np.degrees(hi):.1f}° < '
-                f'対象から離れる下限 {np.degrees(lo):.1f}°。'
-                f'⭐ 壁を広げるか対象を遠ざけるかしないと、初期姿勢が作れない')
-        th = 0.5 * (lo + hi)
-        if not getattr(self, '_safe_init_logged', False):
-            # ⭐⭐ **何に対して効いたかを必ず出す**（§5-2 ⑤-3-2）
-            print(f'[arm_safe_init] リーチ {R:.4f} m / 対象まで {d_obj:.4f} m / '
-                  f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m '
-                  f'→ 窓 [{np.degrees(lo):.1f}°, {np.degrees(hi):.1f}°] '
-                  f'→ ⭐ 初期肩角 {np.degrees(th):.1f}°', flush=True)
-            self._safe_init_logged = True
-        return float(th)
+                f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m → '
+                f'上限 {np.degrees(hi):.1f}° < 下限 {np.degrees(lo):.1f}°')
+        th = float(0.5 * (lo + hi))
+        self._safe_init_cached = th
+        # ⭐⭐ **何に対して効いたかを必ず出す**（§5-2 ⑤-3-2）
+        print(f'[arm_safe_init] リーチ {R:.4f} m / 対象まで {d_obj:.4f} m / '
+              f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m '
+              f'→ 窓 [{np.degrees(lo):.1f}°, {np.degrees(hi):.1f}°] '
+              f'→ ⭐ 初期肩角 {np.degrees(th):.1f}°', flush=True)
+        return th
 
     def reset_state(self, add_noise):
         if add_noise:
