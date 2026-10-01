@@ -17,8 +17,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DRAFT = ROOT / 'docs/研究応用/修論ドラフト'
 OUTLINE = DRAFT / '構成.md'
+# ⚠️ 2026-09-30 の再編で独立した考察章（旧 第5章）を廃止し、旧 第6章（結論）が
+# 第5章へ繰り上がった。付録は build_thesis_pdf.py の CHAPTER_ORDER と揃える。
 FILES = ['第1章_序論', '第2章_関連研究', '第3章前段_前提', '第3章_提案手法',
-         '第4章_実験および評価', '第5章_考察', '第6章_結論']
+         '第4章_実験および評価', '第5章_結論',
+         '付録A_プロンプト全文', '付録C_本研究の限界', '付録D_再現情報と補足実験']
 BEGIN, END = '<!-- OUTLINE:BEGIN -->', '<!-- OUTLINE:END -->'
 
 
