@@ -72,6 +72,24 @@ def main() -> int:
                 if num not in sections:
                     bad.append((name, i, num, line.strip()[:90]))
 
+    # ⛔ 見出しの深さと番号の桁数が合っているか（2026-10-02 追加）。
+    # md の `####` が 3 桁番号（4.5.5）に付いていると、番号を捨てて振り直す実装では
+    # PDF が 4.5.4.1 と印字する。build_thesis_pdf.py は md の番号を正とするよう直したが、
+    # **ずれていること自体が md の誤り**なので検出する。
+    depth_bad = []
+    for name in BODY:
+        raw = (DRAFT / name).read_text(encoding='utf-8')
+        for i, line in enumerate(raw.splitlines(), 1):
+            m = re.match(r'^(#{2,5})\s+((?:\d+\.)+\d*)\s', line)
+            if m and len(m.group(1)) != len(m.group(2).rstrip('.').split('.')):
+                depth_bad.append((name, i, m.group(2), len(m.group(1))))
+
+    if depth_bad:
+        print(f'⛔ 見出しの # の数と節番号の桁数が合わない {len(depth_bad)} 件\n')
+        for name, i, num, lv in depth_bad:
+            print(f'  {name}:{i}  「{num}」は {len(num.rstrip(".").split("."))} 桁なのに # が {lv} 個')
+        print()
+
     if bad:
         print(f'⛔ 実在しない節への参照 {len(bad)} 件\n')
         for name, i, num, line in bad:
@@ -80,7 +98,10 @@ def main() -> int:
         print(f'\n⭐ 実在する節: {len(sections)} 個 / 章: {sorted(chapters)}')
         return 1
 
+    if depth_bad:
+        return 1
     print(f'✅ 節参照はすべて実在する節を指している（参照先候補 {len(sections)} 節）')
+    print('✅ 見出しの深さと節番号の桁数も一致している')
     return 0
 
 

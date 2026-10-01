@@ -86,6 +86,20 @@ def md_inline(text: str) -> str:
             result.append(p)
     return ''.join(result)
 
+def heading_number(title: str):
+    """見出し先頭の節番号を整数列で返す。'4.3.2 R2…' → [4, 3, 2]。無ければ None。
+
+    ⛔ **2026-10-02 まで、この番号を捨てて LaTeX に振り直させていた。**
+    ⚠️ md 側に欠番（4.3.1・4.3.3.2・4.3.4）があったため PDF の番号が md とずれ、
+    **PDF 本文が「4.3.3.3 節」と書いているのに、その節が 4.3.2.2 と印字されていた。**
+    ⭐ md の番号は本文・台帳・CLAUDE.md が参照する SSOT なので、**md を正とする。**
+    """
+    m = re.match(r'^((?:\d+\.)+\d*)\s+', title)
+    if not m:
+        return None
+    return [int(x) for x in m.group(1).rstrip('.').split('.') if x != '']
+
+
 def strip_heading_number(title: str) -> str:
     """見出し先頭の番号表記（例: '3.1 ', '第3章 '）を除去して LaTeX 自動番号に委ねる"""
     # 数字番号: "3.1 " "5.2.1 " など
@@ -184,8 +198,17 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 if level == 1:  # 章タイトルだけ目次に掲載
                     out.append(f'\\addcontentsline{{toc}}{{chapter}}{{{title}}}')
             else:
+                # ⭐ md の番号が在るなら、その**深さ**で LaTeX の階層を決め、
+                #    カウンタを合わせて同じ番号を印字させる（md が正）。
+                #    番号が無い見出し（「学習ログとは独立な再現確認」等）は # の数で決める。
+                parts = heading_number(raw_title)
                 cmds = {1: 'chapter', 2: 'section', 3: 'subsection', 4: 'subsubsection'}
-                out.append(f'\\{cmds.get(level, "paragraph")}{{{title}}}')
+                if parts and 2 <= len(parts) <= 4:
+                    cmd = cmds[len(parts)]
+                    out.append(f'\\setcounter{{{cmd}}}{{{parts[-1] - 1}}}')
+                    out.append(f'\\{cmd}{{{title}}}')
+                else:
+                    out.append(f'\\{cmds.get(level, "paragraph")}{{{title}}}')
             i += 1
             continue
 
