@@ -734,66 +734,203 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             all_obs.append(lapPE)
         return all_obs
 
+    # ────────────────────────────────────────────────────────────────────
+    # ⭐⭐ 順運動学（FK）— **シミュレータを引かずに XML から腕の形を復元する**
+    #
+    # ⛔⛔ 2026-10-02（系譜 9-196）: 旧実装は腕を「原点から伸びる長さ R の直線の棒」
+    #   として扱い、`tip_y = R·sin(θ)` で初期角を決めていた。**その形状は存在しない。**
+    #   ⛔ 実際は 4 関節の連鎖で、**`qpos[0]` はヨー（z 軸回り）なのに式はピッチを記述していた。**
+    #   ⛔ 結果、`hockey_bank5` は先端が 1201 step 中 0 step しかリンク内に入らなかった。
+    #   ⛔ さらに R を `_safe_init_cached` で初回値に固定しており、co-design が腕を
+    #     1.0425 → 2.5532 m に伸ばしても再計算されなかった。
+    #
+    # ⭐ 是正: **XML（＝いまの形態）から連鎖を読み、実際に FK を回して先端位置を得る。**
+    #   ⚠️ `reset_model()` の時点では Choreonoid の `_body_xpos` が空なので
+    #     **シミュレータは引けない**（引くと KeyError → worker 死 → 9.5 時間ハング）。
+    # ────────────────────────────────────────────────────────────────────
+
+    def _parse_arm_chain(self, xml):
+        """XML から腕の運動連鎖を読む。戻り値は根元から順の list。
+
+        各要素 = dict(offset=親関節からの位置, axis=関節軸, bone=リンク先端までのベクトル)
+        ⭐ すべて静的な値。シミュレータを引かない。
+        """
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml if isinstance(xml, str) else xml.decode())
+        # 腕の根元 body（worldbody 直下で joint を持つ子を辿れるもの）を探す
+        wb = root.find('worldbody')
+        if wb is None:
+            raise RuntimeError('_parse_arm_chain: worldbody が無い')
+
+        def first_hinge_child(node):
+            for b in node.findall('body'):
+                if b.find('joint[@type="hinge"]') is not None:
+                    return b
+            return None
+
+        start, root_pos = None, np.zeros(3)
+        for b in wb.findall('body'):
+            if b.find('joint[@type="hinge"]') is not None:
+                start, root_pos = b, np.zeros(3)
+                break
+            kid = first_hinge_child(b)
+            if kid is not None:
+                # ⭐ 根元 body（関節を持たない台座）の pos を取りこぼさない。
+                #   ⛔ e2e_hockey_easy では body "0" が pos=(0,0,0.020) を持つ。
+                start = kid
+                root_pos = np.array([float(v) for v in b.attrib.get('pos', '0 0 0').split()])
+                break
+        if start is None:
+            raise RuntimeError('_parse_arm_chain: hinge を持つ body が見つからない')
+
+        chain, node = [], start
+        while node is not None:
+            jt = node.find('joint[@type="hinge"]')
+            if jt is None:
+                break
+            cap = node.find('geom[@type="capsule"]')
+            if cap is None or 'fromto' not in cap.attrib:
+                bone = np.zeros(3)
+            else:
+                ft = np.array([float(v) for v in cap.attrib['fromto'].split()])
+                bone = ft[3:] - ft[:3]
+            chain.append(dict(
+                name=node.attrib.get('name', '?'),
+                offset=np.array([float(v) for v in node.attrib.get('pos', '0 0 0').split()]),
+                axis=np.array([float(v) for v in jt.attrib.get('axis', '0 0 1').split()]),
+                bone=bone))
+            node = first_hinge_child(node)
+        if not chain:
+            raise RuntimeError('_parse_arm_chain: 連鎖が空')
+        chain[0]['offset'] = chain[0]['offset'] + root_pos
+        return chain
+
+    @staticmethod
+    def _rot(axis, ang):
+        """軸 axis まわりに ang 回す回転行列（Rodrigues）。"""
+        a = np.asarray(axis, dtype=float)
+        n = np.linalg.norm(a)
+        if n < 1e-12:
+            return np.eye(3)
+        a = a / n
+        K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+        return np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * (K @ K)
+
+    def _fk_points(self, chain, angles):
+        """FK。各リンクの始点と終点をワールド座標で返す (N+1, 3) ではなく区間の list。
+
+        戻り値: [(始点, 終点), ...]  リンクごと
+        """
+        R = np.eye(3)
+        p = np.zeros(3)
+        segs = []
+        for lk, th in zip(chain, angles):
+            p = p + R @ lk['offset']
+            R = R @ self._rot(lk['axis'], float(th))
+            q = p + R @ lk['bone']
+            segs.append((p.copy(), q.copy()))
+            # ⚠️ p は**この body の原点**のまま次へ渡す。子の offset は親の body 原点から測る
+        return segs
+
+    @staticmethod
+    def _seg_point_dist(a, b, c):
+        """線分 ab と 点 c の最短距離。"""
+        ab = b - a
+        L2 = float(ab @ ab)
+        if L2 < 1e-12:
+            return float(np.linalg.norm(c - a))
+        t = float(np.clip((c - a) @ ab / L2, 0.0, 1.0))
+        return float(np.linalg.norm(a + t * ab - c))
+
     def _safe_init_angle(self):
-        """⭐⭐ `arm_safe_init` の初期肩角。**既定は従来どおり π/2（90°）。**
+        r"""⭐⭐ `arm_safe_init` の初期ヨー角。**既定は従来どおり π/2（90°）。**
 
-        ⭐ 本来の目的は「腕が初期姿勢で対象に重なり、分離インパルスが対象を無償で
-        吹き飛ばす」のを防ぐこと。**対象と反対（+y）を向ければリーチに依らず安全**という設計だった。
+        ⭐ 目的は 2 つ。**①腕が初期姿勢で対象に重なり、分離インパルスが対象を無償で
+        吹き飛ばすのを防ぐ。②壁のある環境で腕が壁の外に出ないようにする。**
 
-        ⛔⛔ **壁のある環境（ホッケー）ではその性質が壊れる**（系譜 9-192）。
-        リーチ 1.0425 m の腕を +y に向けると先端は側壁の外面 0.90 の **14 cm 外**に出る。
-        ⛔ **貫通を塞ぐと腕は壁の外に閉じ込められ、パックに永久に届かない。**
+        ⭐⭐ `arm_init_clear_y` を与えると、**FK を実際に回して条件を満たすヨー角を探す。**
 
-        ⭐⭐ `arm_init_clear_y` を与えると、**リーチから初期角を計算する。**
-
-        | 条件 | 式 |
+        | 条件 | 判定 |
         |---|---|
-        | 先端が壁の内側に収まる | `θ ≤ arcsin(clear_y / R)` |
-        | 対象と初期接触しない | `θ ≥ arcsin(need / d_obj)` |
+        | 全リンクが壁の内側 | すべての線分上の点で `\|y\| ≤ clear_y` |
+        | 対象と初期接触しない | すべてのリンクと対象の距離 ≥ `need` |
 
-        ⛔⛔ **2026-10-02 の事故**: 初版は `get_body_com('cube')` と `self._body_xpos` を
-        引いていた。⛔ **これは `_body_xpos[name]` の辞書引きで、`reset_model()` の時点では
-        `'cube'` がまだ無く `KeyError` になる。**worker が死んでプールが待ち続け、
-        ⛔⛔ **9.5 時間 0 epoch のハングになった**（CPU 4.4 %）。
-        ⭐⭐ **`reset_state` の中でシミュレーションを引いてはいけない。**
-        ⭐ **XML（静的）とロボットモデルからだけ計算する。**
+        ⭐ 満たす角のうち **先端が対象に最も近いもの**を選ぶ（動き出しやすい側）。
+        ⛔ **一つも無ければ例外。**それは「この設計空間ではこの環境の初期姿勢が作れない」
+        という結果である（系譜 9-193 の事前登録の読み ④）。
+
+        ⛔⛔ **2026-10-02 の是正（系譜 9-196）**: 旧実装は腕を直線の棒と見なし、
+        **ヨー角に対してピッチの式を当てていた**ので先端位置が全く合わなかった。
+        ⛔ また `R` を初回値に固定していたので、co-design が腕を伸ばしても追随しなかった。
+        ⭐ **本実装は毎回 XML（＝いまの形態）から連鎖を読み直す。**
         """
         clear_y = self.env_specs.get('arm_init_clear_y')
         if clear_y is None:
             return np.pi / 2                      # ⭐ 従来どおり。既存 run は無影響
-        if hasattr(self, '_safe_init_cached'):
+        clear_y = float(clear_y)
+
+        xml = getattr(self, 'cur_xml_str', None) or getattr(self, 'init_xml_str', '')
+        if not xml:
+            raise RuntimeError('arm_init_clear_y: XML が取れない')
+        # ⭐ 形態が変われば作り直す（⛔ 旧実装はここを固定して壊れた）
+        key = hash(xml if isinstance(xml, str) else bytes(xml))
+        if getattr(self, '_safe_init_key', None) == key:
             return self._safe_init_cached
 
-        # ⭐ リーチ（bone_offset の総和）と腕の最大半径。**どちらも静的**
-        R = float(sum(np.linalg.norm(np.asarray(getattr(b, 'bone_offset', [0, 0, 0]),
-                                                dtype=float))
-                      for b in self.robot.bodies))
+        chain = self._parse_arm_chain(xml)
         need = (self._get_cube_half_size() + self._get_max_arm_radius()
                 + self.env_specs.get('arm_init_margin', 0.03))
-        # ⭐ 対象の位置は **XML から読む**（シミュレーションを引かない）
-        xml = getattr(self, 'cur_xml_str', None) or getattr(self, 'init_xml_str', '')
-        mm = re.search(r'<body\s+name="cube"\s+pos="([-\d.eE]+)\s+([-\d.eE]+)', xml)
+
+        mm = re.search(r'<body\s+name="cube"\s+pos="([-\d.eE]+)\s+([-\d.eE]+)\s+([-\d.eE]+)', 
+                       xml if isinstance(xml, str) else xml.decode())
         if mm is None:
             raise RuntimeError('arm_init_clear_y: XML から cube の位置を読めない')
-        d_obj = float(np.hypot(float(mm.group(1)), float(mm.group(2))))
+        cube = np.array([float(mm.group(1)), float(mm.group(2)), float(mm.group(3))])
 
-        if R <= 1e-6 or d_obj <= 1e-6:
-            raise RuntimeError(f'arm_init_clear_y: 幾何が取れない R={R} d_obj={d_obj}')
-        hi = np.arcsin(np.clip(float(clear_y) / R, -1.0, 1.0))      # 壁の内側に収まる上限
-        lo = np.arcsin(np.clip(need / d_obj, -1.0, 1.0))            # 対象から離れる下限
-        if lo > hi:
+        # ⭐ ピッチ側の角は init_qpos をそのまま使う（変数を増やさない）
+        base = np.zeros(len(chain))
+        iq = np.asarray(getattr(self, 'init_qpos', np.zeros(len(chain))), dtype=float)
+        for k in range(1, len(chain)):
+            if k < len(iq):
+                base[k] = iq[k]
+
+        best = None
+        n_ok = 0
+        for th in np.linspace(-np.pi, np.pi, 1441):      # 0.25° 刻み
+            ang = base.copy(); ang[0] = th
+            segs = self._fk_points(chain, ang)
+            ok = True
+            for a, b in segs:
+                if max(abs(a[1]), abs(b[1])) > clear_y:   # 壁の内側か
+                    ok = False; break
+                if self._seg_point_dist(a, b, cube) < need:   # 対象から離れているか
+                    ok = False; break
+            if not ok:
+                continue
+            n_ok += 1
+            d_tip = float(np.linalg.norm(segs[-1][1][:2] - cube[:2]))
+            if best is None or d_tip < best[1]:
+                best = (th, d_tip, segs)
+
+        if best is None:
             raise RuntimeError(
-                f'⛔⛔ arm_safe_init の窓が無い: リーチ {R:.4f} m / 対象まで {d_obj:.4f} m / '
-                f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m → '
-                f'上限 {np.degrees(hi):.1f}° < 下限 {np.degrees(lo):.1f}°')
-        th = float(0.5 * (lo + hi))
-        self._safe_init_cached = th
-        # ⭐⭐ **何に対して効いたかを必ず出す**（§5-2 ⑤-3-2）
-        print(f'[arm_safe_init] リーチ {R:.4f} m / 対象まで {d_obj:.4f} m / '
-              f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m '
-              f'→ 窓 [{np.degrees(lo):.1f}°, {np.degrees(hi):.1f}°] '
-              f'→ ⭐ 初期肩角 {np.degrees(th):.1f}°', flush=True)
-        return th
+                f'⛔⛔ arm_safe_init: FK で条件を満たすヨー角が一つも無い。'
+                f'リンク {len(chain)} 本 / 対象 {cube[:2]} / 必要離隔 {need:.4f} m / '
+                f'壁の内側 {clear_y} m → ⭐ この設計空間ではこの環境の初期姿勢が作れない')
+
+        th, d_tip, segs = best
+        self._safe_init_cached = float(th)
+        self._safe_init_key = key
+        tip = segs[-1][1]
+        reach = float(np.linalg.norm(tip))
+        # ⭐⭐ **何に対して効いたかを必ず出す**（CLAUDE.md §5-2 ⑤-3-2）
+        print(f'[arm_safe_init] ⭐ FK で探索: リンク {len(chain)} 本 '
+              f'{[c["name"] for c in chain]} / 対象 ({cube[0]:.3f},{cube[1]:.3f}) / '
+              f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m\n'
+              f'[arm_safe_init] ⭐ 条件を満たすヨー角 {n_ok}/1441 → 採用 {np.degrees(th):.1f}° '
+              f'→ 先端 ({tip[0]:.3f},{tip[1]:.3f},{tip[2]:.3f}) '
+              f'原点から {reach:.3f} m / 対象まで {d_tip:.3f} m', flush=True)
+        return float(th)
 
     def reset_state(self, add_noise):
         if add_noise:
