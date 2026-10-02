@@ -1449,6 +1449,18 @@ class ChoreonoidSimWorld:
                 eb.calcForwardKinematics()
             self._wall_hits = (getattr(self, '_wall_hits', 0)
                                + self._reflect_puck_on_walls(_pre))
+            # ⭐⭐ **反射した速度を「この env step の残り tick すべて」で当て直す**
+            #   （2026-10-02、系譜 9-200。借用策 ③）。
+            #   ⛔⛔ **旧実装は env step の最後に 1 回だけ当て直していた。**
+            #     反射が tick 1 で発火すると、**残り 3 tick は接触解決が押し出し続け、
+            #     その変位が積算される。**最後に速度だけ直しても**変位は戻らない。**
+            #   ⛔ プローブは**変位**で e を測るので、設定 0.75 に対し実測 2.0593 が出ていた。
+            #   ⭐ **他エンジンの定石は「反発を非貫通拘束と一緒に解く」**（Bullet / ODE）。
+            #     ⭐ **各 tick で速度を固定するのは、その近似にあたる。**
+            _tgt = getattr(self, '_puck_dq_target', None)
+            if _tgt is not None:
+                _k, _want = _tgt
+                self._puck_joints[_k].dq = _want
             if _apre is not None:
                 self._arm_blocks = (getattr(self, '_arm_blocks', 0)
                                     + self._block_arm_on_walls(_apre))
