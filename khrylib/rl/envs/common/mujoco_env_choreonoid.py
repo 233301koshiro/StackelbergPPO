@@ -1009,6 +1009,14 @@ class ChoreonoidSimWorld:
         #   ⭐ **摩擦は材質ごとに効く**（同 422 行で materialTable が CFS へ渡る）。
         #   ⚠️ **既定では何もしない。**`CNOID_RESTITUTION` が指定されたときだけ設定するので、
         #     プロセスが分かれている既存 run には影響しない。
+        #
+        #   ⛔⛔ **2026-10-02（9-198）: `setEpsilon()` が効かない理由が判明した。**
+        #     `ConstraintForceSolver` の `defaultCoefficientOfRestitution` は
+        #     **宣言(199) / 初期化=0.0(379) / setter(2266) / getter(2272) の 4 箇所しか無く、
+        #     求解コードから一度も読まれない。**⭐ **デッドパラメータである。**
+        #     ⭐ 既定 0.0（完全非弾性）が実測 0.055 とほぼ一致するのはこのため。
+        #     ⚠️ **この `setEpsilon` 呼び出しは残してあるが、効果は無い。**
+        #       （将来 Choreonoid 側が実装したときに効くように、かつ既定では呼ばないため無害）
         _eps = os.environ.get('CNOID_RESTITUTION')
         if _eps:
             self.sim_item.setEpsilon(float(_eps))
