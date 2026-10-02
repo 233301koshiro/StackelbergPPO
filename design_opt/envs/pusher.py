@@ -908,7 +908,12 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             if not ok:
                 continue
             n_ok += 1
-            d_tip = float(np.linalg.norm(segs[-1][1][:2] - cube[:2]))
+            # ⛔⛔⛔ **2026-10-02（9-203）: ここが `[:2]` だった。**
+            #   ⛔ 離隔の制約は 3 次元で見ているのに、採用する角度は**水平距離**で選んでいた。
+            #   ⛔⛔ **その結果、パックの 65 cm 真上にホバリングする姿勢が選ばれ、
+            #     `hockey_bank6` は 1201 step すべてでパックの 39〜44 cm 上を掃いた。**
+            #   ⭐ **3 次元距離にする。**
+            d_tip = float(np.linalg.norm(segs[-1][1] - cube))
             if best is None or d_tip < best[1]:
                 best = (th, d_tip, segs)
 
@@ -929,7 +934,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
               f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m\n'
               f'[arm_safe_init] ⭐ 条件を満たすヨー角 {n_ok}/1441 → 採用 {np.degrees(th):.1f}° '
               f'→ 先端 ({tip[0]:.3f},{tip[1]:.3f},{tip[2]:.3f}) '
-              f'原点から {reach:.3f} m / 対象まで {d_tip:.3f} m', flush=True)
+              f'原点から {reach:.3f} m / ⭐ 対象まで {d_tip:.3f} m（3 次元）'
+              f' / 高さの差 {abs(tip[2] - cube[2]):.3f} m', flush=True)
         return float(th)
 
     def reset_state(self, add_noise):
