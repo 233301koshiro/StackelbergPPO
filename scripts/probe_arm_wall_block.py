@@ -96,6 +96,7 @@ def main():
     # ── 1 エピソード走らせて腕の位置を全部見る ──────────────────────
     state = env.reset()
     inside, outside_max, n = 0, 0.0, 0
+    reach_y, reach_x = 0.0, -9.9   # ⭐ 9-96: 動く物体の極値を必ず出す
     for _ in range(STEPS):
         sv = tensorfy([state])
         if agent.obs_norm is not None:
@@ -103,10 +104,22 @@ def main():
         with torch.no_grad():
             a = agent.policy_net.select_action(sv, mean_action=True).numpy().astype(np.float64)
         state, _r, done, _, _ = env.step(a)
+        # ⛔⛔⛔ **2026-10-02: body は設計フェーズごとに作り直される。**
+        #   ⭐ ループ前に掴んだ `eb` は**古い実体**で、位置が更新されず全部ゼロになる。
+        #   ⚠️ **`腕のカプセル本体: 4 / 5 リンクを捕捉` が何度も出る**のがその証拠だった。
+        #   ⭐ **毎 step 取り直す。**
+        eb = getattr(inner, '_arm_body', None)
         if env.stage != 'execution' or eb is None:
             if done: break
             continue
         n += 1
+        nlink = eb.numLinks        # ⭐ 作り直しでリンク数が変わることがある
+        # ⛔⛔⛔ **2026-10-02: これが無いと `lk.p` が更新されず全部ゼロになる。**
+        #   ⭐ `_block_arm_on_walls` は位置を読む前に必ずこれを呼んでいる。
+        #   ⛔⛔ **プローブが呼んでいなかったので、貫通を一度も検出できていなかった**
+        #     （「腕が壁の中の標本 0」「すり抜けなし」は偽の合格だった）。
+        #   ⭐ **発火回数 2070 なのに腕の位置が全部 0.000 という矛盾で気づけた**（9-96）。
+        eb.calcForwardKinematics()
         for k in range(nlink):
             lk = eb.link(k)
             o = np.asarray(lk.p, dtype=float); R = np.asarray(lk.R, dtype=float).reshape(3, 3)
@@ -117,14 +130,31 @@ def main():
                     if np.all(q >= lo[:2]) and np.all(q <= hi[:2]):
                         inside += 1
                 # ⭐⭐ すり抜けの証拠: **側壁の外面を越えた距離**
-                outside_max = max(outside_max, abs(q[1]) - 0.90)
+                # ⛔⛔ **2026-10-02 訂正: x を見ていなかった。**
+                #   ⭐ 壁は x∈[0.15, 1.95] にしかない。⛔ **x=0.03 で |y|=1.38 は
+                #   「すり抜け」ではなく「壁の手前で横に振れている」だけ**だった。
+                #   ⚠️ **これで「すり抜けている」と誤読しかけた。**
+                if 0.15 <= q[0] <= 1.95:
+                    outside_max = max(outside_max, abs(q[1]) - 0.90)
+                # ⭐⭐ 9-96: **動く物体の極値を必ず出す。**
+                #   ⛔⛔ これが無いと「腕が壁に近づきもしていない」ことに気づけず、
+                #     **「すり抜けなし」を合格と読んでしまう**（2026-10-02 に実際に踏んだ）。
+                reach_y = max(reach_y, abs(q[1]))
+                reach_x = max(reach_x, q[0])
         if done: break
 
     fires = getattr(inner, '_arm_blocks', 0)
     print(f'[probe] ⭐ step数 {n}')
+    # ⭐⭐ **腕がそもそも壁に近づいたか**を先に出す（9-96）
+    print(f'[probe] ⭐⭐ 腕の到達: |y| 最大 {reach_y:.3f} m / x 最大 {reach_x:.3f} m')
+    print(f'[probe]    側壁の内面 |y|=0.50 ・ 外面 |y|=0.90 ・ リンクの x 範囲 [0.15, 1.95]')
+    if reach_y < 0.45:
+        print('[probe] ⛔⛔ **腕が側壁に近づいてすらいない。**'
+              'このプローブはブロックを一度も試していない。'
+              '⭐ **腕が壁へ到達する run を `EVAL_RESTORE_DIR` に指定すること。**')
     print(f'[probe] ⭐ ブロックの発火回数: {fires}')
     print(f'[probe] ⭐⭐ 腕が壁の中の標本: {inside}')
-    print(f'[probe] ⭐⭐⭐ 側壁の外面(|y|=0.90)を越えた最大: {outside_max*1000:+.1f} mm')
+    print(f'[probe] ⭐⭐⭐ 側壁の外面を越えた最大（⭐ **x∈[0.15,1.95] の点のみ**）: {outside_max*1000:+.1f} mm')
     if outside_max > 0.001:
         print('[probe] ⛔⛔ **すり抜けている。**掃過判定が効いていない')
     else:
