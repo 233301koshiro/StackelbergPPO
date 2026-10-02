@@ -36,6 +36,34 @@ MARKS = [
 ]
 
 
+# ⚠️ 印を含むが「穴」ではない行。⭐ 凡例・この検査自身の説明・過去の失敗の記述
+SKIP = [
+    '**やる。** 未着手・未測定で、着手すれば埋まる',   # 凡例
+    'のまま残っていた',                                 # 過去の失敗の記述
+    '未測」のまま',
+]
+
+
+def self_check() -> int:
+    """⭐ **本物の穴を見落とさないか**を既知の文字列で確かめる（§5-2 ⑤-3）。"""
+    pat = re.compile('|'.join(re.escape(m) for m, _ in MARKS))
+    cases = [
+        ('| seed 固定での再現性 | ❌ 🔧 未測 | — |', True,  '本物の穴'),
+        ('| 関節数 3 以外 | ❌ 🚧 やらないと決めた | — |', False, 'やらないと決めた限界'),
+        ('| 禁止物 | ⏳ 未確認 |', True,  '未確認'),
+        ('| ❌ 🔧 | **やる。** 未着手・未測定で、着手すれば埋まる |', False, '凡例'),
+        ('| 長さ | ✅ 済 |', False, '埋まっている'),
+    ]
+    bad = 0
+    for line, want, why in cases:
+        got = bool(pat.search(line)) and not any(x in line for x in SKIP)
+        ok = (got == want)
+        print(f'  {"✅" if ok else "⛔"} {why:22s} 期待 {want} / 実際 {got}')
+        bad += (not ok)
+    print('✅ 自己検査 5 項目一致' if not bad else f'⛔ {bad} 件 失敗')
+    return bad
+
+
 def last_commit_days(p: Path):
     try:
         out = subprocess.run(
@@ -52,7 +80,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=float, default=0.0,
                     help='これより長く更新されていないファイルだけ出す')
+    ap.add_argument('--self-check', action='store_true',
+                    help='⭐ 本物の穴を見落とさないかを既知の文字列で確かめる')
     args = ap.parse_args()
+    if args.self_check:
+        return self_check()
 
     pat = re.compile('|'.join(re.escape(m) for m, _ in MARKS))
     hits = {}
@@ -60,7 +92,13 @@ def main() -> int:
         if 'archive' in p.parts or p.name.startswith('archive_'):
             continue
         text = p.read_text(encoding='utf-8', errors='replace')
-        rows = [(i, l.strip()) for i, l in enumerate(text.splitlines(), 1) if pat.search(l)]
+        rows = []
+        for i, l in enumerate(text.splitlines(), 1):
+            if not pat.search(l):
+                continue
+            if any(x in l for x in SKIP):
+                continue
+            rows.append((i, l.strip()))
         if rows:
             hits[p] = rows
 
