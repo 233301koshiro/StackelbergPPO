@@ -120,9 +120,25 @@ def main():
         #     （「腕が壁の中の標本 0」「すり抜けなし」は偽の合格だった）。
         #   ⭐ **発火回数 2070 なのに腕の位置が全部 0.000 という矛盾で気づけた**（9-96）。
         eb.calcForwardKinematics()
+        # ⛔⛔⛔ **2026-10-02（9-204）: `eb.link(k).p` は親プロセスのモデルで、動いていない。**
+        #   ⭐ `_body_xpos` は **worker からの応答**（`_cache_state`）で作られる実際の位置。
+        #   ⭐⭐ **`record_arm_trace.py` が `_body_xpos` を読んで成功しているのと同じ読み方にそろえる。**
+        #   ⚠️ **これが「発火 2041 回なのに位置が全部 0.000」の正体だった。**
+        # ⛔⛔⛔ **`_body_xpos` は `inner`（= ChoreonoidSimWorld）ではなく
+        #   `env`（= ChoreonoidEnv）にある。**⚠️ **9-184 と同じ 2 クラスの取り違え。**
+        #   ⛔ 初版は `inner` から取り、`or {}` で握りつぶして**全部ゼロのまま通していた。**
+        bx = getattr(env, '_body_xpos', None)
+        bm = getattr(env, '_body_xmat', None)
+        if not bx:
+            raise RuntimeError('⛔⛔ `_body_xpos` が取れない。'
+                               '⚠️ 位置を読めないままでは測定値に意味が無い')
         for k in range(nlink):
             lk = eb.link(k)
-            o = np.asarray(lk.p, dtype=float); R = np.asarray(lk.R, dtype=float).reshape(3, 3)
+            if lk.name in bx:
+                o = np.asarray(bx[lk.name], dtype=float)
+                R = np.asarray(bm[lk.name], dtype=float).reshape(3, 3)
+            else:
+                o = np.asarray(lk.p, dtype=float); R = np.asarray(lk.R, dtype=float).reshape(3, 3)
             c = caps.get(lk.name)
             pts = [o[:2]] if c is None else [(o + R @ c[0])[:2], (o + R @ c[1])[:2]]
             for q in pts:
