@@ -1220,7 +1220,10 @@ class ChoreonoidSimWorld:
                 for _nm, lo, hi in self._wall_boxes:
                     if np.any(smax < lo) or np.any(smin > hi):
                         continue                      # ⭐ 箱が離れている。細かく見るまでもない
-                    for u in _SEG_U:                  # ⭐ 定数化（毎回 linspace を作らない）
+                    # ⛔⛔ `self.` を落として `NameError` を出した（9-210 の自作バグ、9-212 で発覚）。
+                    #   ⚠️ **外接箱の早期棄却を通り抜けたときだけ踏む**ので、
+                    #     発火 0 の性能測定では一度も通らなかった。
+                    for u in self._SEG_U:             # ⭐ 定数化（毎回 linspace を作らない）
                         q = p0 + (p1 - p0) * u
                         if np.all(q >= lo) and np.all(q <= hi):
                             return True

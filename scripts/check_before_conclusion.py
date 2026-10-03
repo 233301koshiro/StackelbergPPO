@@ -185,9 +185,39 @@ def ck_prereg(r):
     return False, '⚠️ 事前登録が見つからない（結果を見てから読み方を決めていないか）'
 
 
+def ck_entered_exec(r):
+    """⭐⭐⭐ **execution フェーズへ本当に入ったか**（2026-10-03、系譜 9-211）。
+
+    ⛔⛔ **`hockey_bank7` は 20 epoch すべて `exec_R_eps` が厳密に 0.00 だった。**
+      初期姿勢の探索が全滅して `transit_execution()` が例外で落ち、
+      **1 エピソードも execution へ入っていなかった。**
+      ⛔ だが裸の `except:` が例外を握りつぶしていたので、ログは「学習が進んでいない」に見えた。
+      ⭐ 既知良好の `hockey_bank6` は同じ ep18 で **−0.38** だった。
+
+    ⚠️⚠️ **他の 6 項目はどれもこれを検出できない。**完走するし、再生もでき、
+      軌跡ファイルも作られる（中身が空でも）。⭐ **「厳密に 0.00 が続く」が署名である。**
+
+    ⚠️ 0.00 が 1〜2 epoch なら偶然もありうるので、**5 epoch 以上続いたら赤**にする。
+    """
+    log = run_dir(r) / 'log' / 'log_train.txt'
+    if not log.exists():
+        return False, '学習ログが無い'
+    import re as _re
+    vals = _re.findall(r'exec_R_eps\s+(-?[\d.]+)', log.read_text(encoding='utf-8', errors='ignore'))
+    if not vals:
+        return None, '⚠️ exec_R_eps が読めない（古い形式？）'
+    zeros = sum(1 for v in vals if abs(float(v)) == 0.0)
+    if zeros == len(vals) and len(vals) >= 5:
+        return False, (f'⛔⛔ **exec_R_eps が {len(vals)} epoch すべて厳密に 0.00。**'
+                       f'1 エピソードも execution へ入っていない疑い（9-211）。'
+                       f'⭐ stdout を `grep arm_safe_init` し、`transit_execution` の例外を見ること')
+    return True, f'exec_R_eps が非ゼロの epoch {len(vals)-zeros}/{len(vals)}'
+
+
 CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
-          ('版', ck_version), ('事前登録', ck_prereg)]
+          ('版', ck_version), ('事前登録', ck_prereg),
+          ('⭐⭐ exec 到達', ck_entered_exec)]
 
 
 def audit(r):
