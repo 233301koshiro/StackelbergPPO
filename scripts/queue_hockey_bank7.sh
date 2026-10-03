@@ -47,7 +47,9 @@
 # ⚠️⚠️⚠️ **投入後に必ず見るもの（Bug 53 の再発検知）**
 #   ```bash
 #   python3 scripts/check_before_conclusion.py hockey_bank7    # ⭐ 7 項目目「exec 到達」
-#   grep -c "第1段" single_run/hockey_bank7/stdout.log         # ⭐ 床なしの段へ落ちた回数
+#   cut -f1 single_run/hockey_bank7/log/arm_init_stage.log | sort | uniq -c   # ⭐ 採用した段の内訳
+#   # ⛔⛔ **stdout を grep してはいけない。**`arm_safe_init` は worker の出力なので
+#   #   `stdout.log` に 1 行も残らない（9-193）。⚠️ **0 件を「落ちなかった」と誤読する。**
 #   ```
 #   ⛔⛔ **`exec_R_eps` が 5 epoch 以上すべて厳密に 0.00 なら、また空回りしている。**
 #   ⚠️ **大小ではなく「厳密に 0.00 か」で見る**（ep20 で報酬が小さいのは正常。bank6 は ep116 で動いた）
