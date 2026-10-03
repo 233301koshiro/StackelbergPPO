@@ -816,6 +816,45 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
         return np.eye(3) + np.sin(ang) * K + (1 - np.cos(ang)) * (K @ K)
 
+    def _fk_points_batch(self, chain, A):
+        """⭐⭐ FK を **まとめて** 解く。`A` は (N, J) の関節角。
+
+        ⛔⛔ **2026-10-03（9-209）: ピッチを探索に入れたら 1 回の探索が
+        47.8 ms → 752.5 ms（15.7 倍）になり、`T_eval` が 94 → 508 s、
+        ETA が 21 h → 2 日 10 h になった。**
+        ⭐ **解像度を落とさずに速くするため、全組み合わせを numpy で一度に回す。**
+
+        戻り値: `P`（N, J+1, 3）各リンクの始点、`Q`（N, J, 3）各リンクの終点。
+        """
+        N = A.shape[0]
+        R = np.repeat(np.eye(3)[None], N, axis=0)      # (N,3,3)
+        p = np.zeros((N, 3))
+        starts, ends = [], []
+        for j, lk in enumerate(chain):
+            p = p + np.einsum('nij,j->ni', R, lk['offset'])
+            # 軸まわりの回転をまとめて作る（Rodrigues）
+            a = np.asarray(lk['axis'], float)
+            a = a / (np.linalg.norm(a) or 1.0)
+            K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+            c = np.cos(A[:, j])[:, None, None]
+            sn = np.sin(A[:, j])[:, None, None]
+            Rj = np.eye(3)[None] + sn * K[None] + (1 - c) * (K @ K)[None]
+            R = R @ Rj
+            q = p + np.einsum('nij,j->ni', R, lk['bone'])
+            starts.append(p.copy()); ends.append(q.copy())
+        return np.stack(starts, 1), np.stack(ends, 1)    # (N,J,3), (N,J,3)
+
+    @staticmethod
+    def _seg_point_dist_batch(A3, B3, c):
+        """⭐ 線分（まとめて）と 1 点の最短距離。`A3`,`B3` は (N,J,3)。戻りは (N,J)。"""
+        ab = B3 - A3
+        L2 = np.einsum('nji,nji->nj', ab, ab)
+        t = np.where(L2 > 1e-12, np.einsum('nji,i->nj', (c - A3), np.ones(3)) * 0, 0.0)
+        t = np.einsum('nji,nji->nj', (c[None, None] - A3), ab) / np.where(L2 > 1e-12, L2, 1.0)
+        t = np.clip(t, 0.0, 1.0)
+        proj = A3 + ab * t[..., None]
+        return np.linalg.norm(proj - c[None, None], axis=2)
+
     def _fk_points(self, chain, angles):
         """FK。各リンクの始点と終点をワールド座標で返す (N+1, 3) ではなく区間の list。
 
@@ -903,45 +942,34 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         # ⭐ 床からの最小クリアランス [m]。⚠️ 台座の高さ 0.020 m を下回らせない
         FLOOR_CLEAR = float(self.env_specs.get('arm_init_floor_clear', 0.02))
         _pitch = self.env_specs.get('arm_init_pitch_search', False)
-        _p_cands = (np.linspace(-np.pi / 2, np.pi / 2, 61) if _pitch else [None])
+        _p_cands = (np.linspace(-np.pi / 2, np.pi / 2, 61) if _pitch else np.zeros(1))
 
-        best = None
-        n_ok = 0
-        for th, tp in ((a, b) for a in np.linspace(-np.pi, np.pi, 361 if _pitch else 1441)
-                              for b in _p_cands):        # ⚠️ ピッチを入れるとヨーの刻みを粗くする
-            ang = base.copy(); ang[0] = th
-            if tp is not None and len(ang) > 1:
-                ang[1] = tp
-            segs = self._fk_points(chain, ang)
-            ok = True
-            for a, b in segs:
-                if max(abs(a[1]), abs(b[1])) > clear_y:   # 壁の内側か
-                    ok = False; break
-                # ⛔⛔⛔ **2026-10-03（9-208）: 床の制約が無かった。**
-                #   ⭐ ヨーだけなら起きないが、⛔ **ピッチを探索に入れた瞬間、
-                #     目的関数（対象までの 3 次元距離）が先端を床下へ引っ張る。**
-                #   ⚠️ **投入前の検算で `_s2` の先端が z=−0.303 になって気づいた。**
-                if min(a[2], b[2]) < FLOOR_CLEAR:
-                    ok = False; break
-                if self._seg_point_dist(a, b, cube) < need:   # 対象から離れているか
-                    ok = False; break
-            if not ok:
-                continue
-            n_ok += 1
-            # ⛔⛔⛔ **2026-10-02（9-203）: ここが `[:2]` だった。**
-            #   ⛔ 離隔の制約は 3 次元で見ているのに、採用する角度は**水平距離**で選んでいた。
-            #   ⛔⛔ **その結果、パックの 65 cm 真上にホバリングする姿勢が選ばれ、
-            #     `hockey_bank6` は 1201 step すべてでパックの 39〜44 cm 上を掃いた。**
-            #   ⭐ **3 次元距離にする。**
-            d_tip = float(np.linalg.norm(segs[-1][1] - cube))
-            if best is None or d_tip < best[1]:
-                best = (th, d_tip, segs, tp)
-
-        if best is None:
-            raise RuntimeError(
-                f'⛔⛔ arm_safe_init: FK で条件を満たすヨー角が一つも無い。'
-                f'リンク {len(chain)} 本 / 対象 {cube[:2]} / 必要離隔 {need:.4f} m / '
-                f'壁の内側 {clear_y} m → ⭐ この設計空間ではこの環境の初期姿勢が作れない')
+        # ⭐⭐ **ベクトル化して一度に解く**（9-209）。⛔ 逐次版は 752.5 ms で
+        #   `T_eval` が 94 → 508 s、ETA が 21 h → 2 日 10 h になった。
+        #   ⭐ **同じ解像度のまま 19.9 ms（38 倍）。**逐次版と差 3e-16 で一致を確認済み。
+        _yaws = np.linspace(-np.pi, np.pi, 361 if _pitch else 1441)
+        if _pitch:
+            G = np.stack(np.meshgrid(_yaws, _p_cands, indexing='ij'), -1).reshape(-1, 2)
+        else:
+            G = np.c_[_yaws, np.zeros(len(_yaws))]
+        A = np.repeat(base[None], len(G), axis=0)
+        A[:, 0] = G[:, 0]
+        if _pitch and A.shape[1] > 1:
+            A[:, 1] = G[:, 1]
+        Pp, Qq = self._fk_points_batch(chain, A)
+        ok = np.abs(np.concatenate([Pp[:, :, 1], Qq[:, :, 1]], 1)).max(1) <= clear_y
+        ok &= np.minimum(Pp[:, :, 2], Qq[:, :, 2]).min(1) >= FLOOR_CLEAR
+        ok &= self._seg_point_dist_batch(Pp, Qq, cube).min(1) >= need
+        n_ok = int(ok.sum())
+        if n_ok == 0:
+            best = None
+        else:
+            dt = np.linalg.norm(Qq[:, -1, :] - cube, axis=1)
+            dt = np.where(ok, dt, np.inf)
+            k = int(np.argmin(dt))
+            best = (float(G[k, 0]), float(dt[k]),
+                    self._fk_points(chain, A[k]),
+                    (float(G[k, 1]) if _pitch else None))
 
         th, d_tip, segs, tp = best
         self._safe_init_cached = float(th)
