@@ -1,7 +1,7 @@
 #!/bin/bash
 # ⭐⭐ hockey_bank7 / _s2 — **初期姿勢の探索にピッチを入れた後の再投入**（系譜 9-208）
 #
-# code: 8da8032 (feat/init-pitch-search)
+# code: edc041b (feat/init-pitch-search)
 #
 # ⭐⭐ 変えたのは **初期姿勢の探索だけ**。⚠️ 他の設定は hockey_bank6 と 1 文字も同じ。
 #   `+env_specs.arm_init_pitch_search=true` を足しただけ。
@@ -32,6 +32,25 @@
 #        → ⛔⛔ **初期姿勢の高さは原因ではなかった。**読みを取り下げ、打撃の学習へ移る
 #   ⛔ ④ 例外「FK で条件を満たす角が一つも無い」
 #        → ⭐ **床の制約が厳しすぎる。**`arm_init_floor_clear` を下げる
+#
+# ⛔⛔⛔ **2026-10-03: 3 度目の投入を ep1〜4 で打ち切った**（`_aborted_hockey_bank7_swallow`）。
+#   ⛔⛔⛔ **2 度目の 20 epoch は 1 エピソードも execution へ入っていなかった**（Bug 53 / 9-211）。
+#     ⛔ 9-208 で足した床の制約を満たす角が 0 本になり、`best = None` の unpack が `TypeError`、
+#       **`transit_execution()` の裸の `except:` がそれを握りつぶしていた。**
+#     ⛔ EP-FILTER が **8336 話**を落とし `train_R_eps` は**厳密に 0.00**（bank6 は −0.38）。
+#   ⛔ **3 度目は加えて `_SEG_U` の `self.` 落ち**（9-210 の自作バグ）で、
+#     腕が壁に近づくたび話が黙って打ち切られていた。
+#   ⭐ 直した: 裸の `except:` 4 箇所を一掃 / 探索を段階化（最終段 = bank6 と同一条件）/
+#     門の発火理由を印字 / `self._SEG_U`。
+#   ⭐⭐ **ETA は実測 9 時間 52 分**（旧 3 日 5 時間）。
+#
+# ⚠️⚠️⚠️ **投入後に必ず見るもの（Bug 53 の再発検知）**
+#   ```bash
+#   python3 scripts/check_before_conclusion.py hockey_bank7    # ⭐ 7 項目目「exec 到達」
+#   grep -c "第1段" single_run/hockey_bank7/stdout.log         # ⭐ 床なしの段へ落ちた回数
+#   ```
+#   ⛔⛔ **`exec_R_eps` が 5 epoch 以上すべて厳密に 0.00 なら、また空回りしている。**
+#   ⚠️ **大小ではなく「厳密に 0.00 か」で見る**（ep20 で報酬が小さいのは正常。bank6 は ep116 で動いた）
 #
 # ⛔⛔ **2026-10-03: 2 度目の投入を ep20〜21 で打ち切った**（`_aborted_hockey_bank7_slowblock`）。
 #   ⛔ **腕ブロックの衝突判定が 1 step を 41 倍にしていた**（24.23 ms。ブロック無効なら 0.59 ms）。
