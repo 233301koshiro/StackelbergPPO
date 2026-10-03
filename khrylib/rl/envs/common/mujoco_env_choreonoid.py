@@ -1157,7 +1157,9 @@ class ChoreonoidSimWorld:
         # ⭐ 掃過判定: tick 前 → 後 を関節角で補間し、途中のどこかで壁に入るなら当たり。
         #   ⚠️ **端点だけでは足りない**（上表の旧①）。
         hit = False
-        for u in np.linspace(0.0, 1.0, self._ARM_SWEEP):
+        if getattr(self, '_sweep_u', None) is None or len(self._sweep_u) != self._ARM_SWEEP:
+            self._sweep_u = np.linspace(0.0, 1.0, self._ARM_SWEEP)   # ⭐ 毎 tick 作らない（9-210）
+        for u in self._sweep_u:
             _apply([q0 + (q1 - q0) * u for (_j, q0, _d0), (_j2, q1, _d1) in zip(pre, now)])
             if self._arm_in_wall():
                 hit = True
@@ -1187,6 +1189,9 @@ class ChoreonoidSimWorld:
             print('[arm] 壁に入ったので差し戻し、関節速度を 0 にした', flush=True)
         return 1
 
+    # ⭐ 線分を刻む比率。⛔ 毎回 `np.linspace` を作ると最内ループで効く（9-210）
+    _SEG_U = np.linspace(0.0, 1.0, 9)
+
     def _arm_in_wall(self):
         """腕のどれかのリンク（線分）が壁の箱に入っているか。"""
         eb = self._arm_body
@@ -1206,8 +1211,16 @@ class ChoreonoidSimWorld:
                       for c in range(eb.numLinks) if eb.link(c).parent is lk]
                 segs = [(a, b) for b in bs] or [(a, a)]
             for p0, p1 in segs:
+                # ⭐⭐ **早期棄却**（2026-10-03、系譜 9-210）。
+                #   ⛔⛔ **発火 0 回でも 1 step 24.2 ms かかっていた**（ブロック無効なら 0.59 ms）。
+                #   ⭐ **「当たっていないか調べる」だけで 41 倍を払っていた。**
+                #   ⭐ まず**線分の外接箱**と壁の外接箱が重なるかだけ見る。重ならなければ即棄却。
+                smin = np.minimum(p0, p1)
+                smax = np.maximum(p0, p1)
                 for _nm, lo, hi in self._wall_boxes:
-                    for u in np.linspace(0, 1, 9):
+                    if np.any(smax < lo) or np.any(smin > hi):
+                        continue                      # ⭐ 箱が離れている。細かく見るまでもない
+                    for u in _SEG_U:                  # ⭐ 定数化（毎回 linspace を作らない）
                         q = p0 + (p1 - p0) * u
                         if np.all(q >= lo) and np.all(q <= hi):
                             return True
