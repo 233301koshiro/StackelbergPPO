@@ -1,7 +1,7 @@
 #!/bin/bash
 # ⭐⭐ hockey_bank7 / _s2 — **初期姿勢の探索にピッチを入れた後の再投入**（系譜 9-208）
 #
-# code: a4fc5cc (feat/init-pitch-search)
+# code: 51cb017 (feat/init-pitch-search)
 #
 # ⭐⭐ 変えたのは **初期姿勢の探索だけ**。⚠️ 他の設定は hockey_bank6 と 1 文字も同じ。
 #   `+env_specs.arm_init_pitch_search=true` を足しただけ。
@@ -33,7 +33,12 @@
 #   ⛔ ④ 例外「FK で条件を満たす角が一つも無い」
 #        → ⭐ **床の制約が厳しすぎる。**`arm_init_floor_clear` を下げる
 #
+# ⛔⛔ **2026-10-03: 1 度目の投入を ep1〜2 で打ち切った**（`_aborted_hockey_bank7_slow`）。
+#   ⛔ **FK 探索が逐次で 752.5 ms かかり、ETA が 2 日 5 時間になった**（9-209）。
+#   ⭐ **ベクトル化して 19.9 ms。**⭐ **ETA は bank6 並み（約 21 h）に戻る見込み。**
+#
 # ⚠️⚠️ **投入後 15 分で `log/log_train.txt` に epoch が出ているか確かめる**（Bug 51 の型）
+# ⚠️ **起動は遅い。**1 度目は 15 分で 0 バイトだったが、その後動き出した。⭐ **25 分見る**
 # ⚠️ **`[arm_safe_init]` は stdout に出ない**（worker の出力は捕捉されない。9-193 の訂正）
 # ⚠️ **完走後に `check_before_conclusion.py`（6 項目）と `plot_run.py`。目視記録へ 1 行。**
 # ⛔⛔ **30 epoch では判定できない。**bank6_s2 で動いたのは **ep116 以降**（9-207）
