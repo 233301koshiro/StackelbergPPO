@@ -89,9 +89,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         self.cur_xml_str = xml_str.decode('utf-8')
         try:
             self.reload_sim_model(xml_str.decode('utf-8'))
-        except:
-            print(self.cur_xml_str)
-            return False      
+        except Exception:
+            self._report_swallowed('apply_skel_action / reload_sim_model',
+                                   'この話は骨格変形で打ち切られる')
+            return False
         self.design_cur_params = self.get_attr_design()
         return True
 
@@ -104,8 +105,9 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         self.cur_xml_str = xml_str.decode('utf-8')
         try:
             self.reload_sim_model(xml_str.decode('utf-8'))
-        except:
-            print(self.cur_xml_str)
+        except Exception:
+            self._report_swallowed('set_design_params / reload_sim_model',
+                                   'この話は属性変形で打ち切られる')
             return False
         if self.use_projected_params:
             self.design_cur_params = self.get_attr_design()
@@ -195,8 +197,9 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             yposbefore = self.get_body_com("cube")[1]
             try:
                 self.do_simulation(ctrl, self.frame_skip)
-            except:
-                print(self.cur_xml_str)
+            except Exception:
+                self._report_swallowed('step / do_simulation',
+                                       'この話は実行中に打ち切られ、報酬 0 で返る')
                 return self._get_obs(), 0, True, False, {'use_transform_action': False, 'stage': 'execution', 'reward_ctrl': 0.0}
             
             xposafter = self.get_body_com("cube")[0]
@@ -470,13 +473,30 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             zs.append(float(tip[2]))
         return bool(zs) and min(zs) < margin
 
+    def _report_swallowed(self, where, consequence):
+        """⭐⭐⭐ **握りつぶした例外を必ず出す**（2026-10-03、Bug 53 / 系譜 9-211）。
+
+        ⛔⛔⛔ **旧実装はここが裸の `except:` で、XML を印字するだけだった。**
+          ⛔ **症状が別の症状に化ける**: `_safe_init_angle` の `TypeError` が
+            「腕が動かない」「ブロックが発火しない」「学習が進まない」に見えた。
+          ⛔⛔ **`hockey_bank7` は 20 epoch すべてこれで、EP-FILTER が 8336 話を落としていた。**
+        ⚠️ **返り値・制御の流れは変えていない。**出力を足しただけ。
+        ⭐ XML は長いので `TRANSIT_DUMP_XML=1` のときだけ出す。
+        """
+        import traceback
+        print(f'⛔⛔ [{where}] 例外を握りつぶした。{consequence}:', flush=True)
+        traceback.print_exc()
+        if os.environ.get('TRANSIT_DUMP_XML'):
+            print(getattr(self, 'cur_xml_str', '(cur_xml_str 無し)'), flush=True)
+
     def transit_execution(self):
         self.stage = 'execution'
         self.control_nsteps = 0
         try:
             self.reset_state(True)
-        except:
-            print(self.cur_xml_str)
+        except Exception:
+            self._report_swallowed('transit_execution / reset_state(True)',
+                                   'この話は execution へ入れないまま done になる')
             return False
         # 初期接触チェック: arm tip が cube に触れている形態への対処。
         # Leader が「接触してインパルスで押す」exploit を学習するのを防ぐ。
@@ -493,7 +513,23 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         #   収束した（2026-07-10 L2/TP1 再走 ep10 で実測）。50 ≈ ctrl コスト満額 + マージン。
         # init_contact_penalty <= 0: 旧挙動（棄却）。
         self._init_contact_penalty_pending = False
-        if self._check_initial_contact() or self._check_floor_penetration():
+        _ic, _fp = self._check_initial_contact(), self._check_floor_penetration()
+        if _ic or _fp:
+            # ⭐⭐ **どちらの門が、何の値で発火したかを出す**（2026-10-03、系譜 9-211）。
+            #   ⛔⛔ **出していなかったので「腕が動かない」と誤診した。**
+            #     実際は 1 step でペナルティ終了しており、物理は一度も進んでいなかった。
+            try:
+                _t = np.asarray(self._arm_tip_pos, dtype=float)
+                _c = np.asarray(self.get_body_com('cube'), dtype=float)
+                _th = (self._get_cube_half_size() + self._get_max_arm_radius() + 0.03)
+                print(f'⚠️⚠️ [init_gate] **1 step でペナルティ終了する。**'
+                      f'初期接触={_ic} / 床貫通={_fp} / '
+                      f'先端 ({_t[0]:.3f},{_t[1]:.3f},{_t[2]:.3f}) / '
+                      f'cube ({_c[0]:.3f},{_c[1]:.3f},{_c[2]:.3f}) / '
+                      f'|dx|={abs(_t[0]-_c[0]):.3f} |dy|={abs(_t[1]-_c[1]):.3f} '
+                      f'（どちらも閾値 {_th:.3f} 未満なら接触判定）', flush=True)
+            except Exception:
+                pass
             if self.cfg.reward_specs.get('init_contact_penalty', 50.0) > 0:
                 self._init_contact_penalty_pending = True
             else:
@@ -947,31 +983,79 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         # ⭐⭐ **ベクトル化して一度に解く**（9-209）。⛔ 逐次版は 752.5 ms で
         #   `T_eval` が 94 → 508 s、ETA が 21 h → 2 日 10 h になった。
         #   ⭐ **同じ解像度のまま 19.9 ms（38 倍）。**逐次版と差 3e-16 で一致を確認済み。
-        _yaws = np.linspace(-np.pi, np.pi, 361 if _pitch else 1441)
-        if _pitch:
-            G = np.stack(np.meshgrid(_yaws, _p_cands, indexing='ij'), -1).reshape(-1, 2)
-        else:
-            G = np.c_[_yaws, np.zeros(len(_yaws))]
-        A = np.repeat(base[None], len(G), axis=0)
-        A[:, 0] = G[:, 0]
-        if _pitch and A.shape[1] > 1:
-            A[:, 1] = G[:, 1]
-        Pp, Qq = self._fk_points_batch(chain, A)
-        ok = np.abs(np.concatenate([Pp[:, :, 1], Qq[:, :, 1]], 1)).max(1) <= clear_y
-        ok &= np.minimum(Pp[:, :, 2], Qq[:, :, 2]).min(1) >= FLOOR_CLEAR
-        ok &= self._seg_point_dist_batch(Pp, Qq, cube).min(1) >= need
-        n_ok = int(ok.sum())
-        if n_ok == 0:
-            best = None
-        else:
-            dt = np.linalg.norm(Qq[:, -1, :] - cube, axis=1)
-            dt = np.where(ok, dt, np.inf)
+        def _solve(use_pitch, floor):
+            """⭐ 1 段分を解く。返すのは (n_ok, best)。`best` は条件を満たす解が無ければ None。"""
+            yaws = np.linspace(-np.pi, np.pi, 361 if use_pitch else 1441)
+            if use_pitch:
+                G = np.stack(np.meshgrid(yaws, _p_cands, indexing='ij'), -1).reshape(-1, 2)
+            else:
+                G = np.c_[yaws, np.zeros(len(yaws))]
+            A = np.repeat(base[None], len(G), axis=0)
+            A[:, 0] = G[:, 0]
+            if use_pitch and A.shape[1] > 1:
+                A[:, 1] = G[:, 1]
+            Pp, Qq = self._fk_points_batch(chain, A)
+            ok = np.abs(np.concatenate([Pp[:, :, 1], Qq[:, :, 1]], 1)).max(1) <= clear_y
+            if floor is not None:
+                ok &= np.minimum(Pp[:, :, 2], Qq[:, :, 2]).min(1) >= floor
+            ok &= self._seg_point_dist_batch(Pp, Qq, cube).min(1) >= need
+            n = int(ok.sum())
+            if n == 0:
+                return 0, None
+            dt = np.where(ok, np.linalg.norm(Qq[:, -1, :] - cube, axis=1), np.inf)
             k = int(np.argmin(dt))
-            best = (float(G[k, 0]), float(dt[k]),
-                    self._fk_points(chain, A[k]),
-                    (float(G[k, 1]) if _pitch else None))
+            return n, (float(G[k, 0]), float(dt[k]), self._fk_points(chain, A[k]),
+                       (float(G[k, 1]) if use_pitch else None))
+
+        # ⭐⭐⭐ **段階的に緩める**（2026-10-03、系譜 9-211）。
+        #   ⛔⛔⛔ **旧実装は条件を満たす角が 0 本のとき `best = None` のまま unpack していた。**
+        #     ⛔ `TypeError` が `transit_execution()` の裸の `except:` に飲まれ、
+        #       **エピソードは execution へ入れないまま done になる。**
+        #     ⛔⛔ **`hockey_bank7` は 20 epoch すべてこれで、`train_R_eps` が完全に 0.00、
+        #       EP-FILTER が 8336 エピソードを落としていた**（bank6 は −0.38）。
+        #   ⭐⭐ **床のクリアランス（9-208 で足した）が厳しすぎると全滅する。**
+        #     ⭐ **全滅したら緩めた段へ落とす。**最後の段は 9-207（bank6）と同一条件なので、
+        #       ⭐⭐ **少なくとも bank6 が通った設計空間では必ず解がある。**
+        #   ⚠️ **これは「うまくいかないので条件を緩める」ではない**（§5-2 ①）。
+        #     ⭐ **緩めた段を使ったことを必ず出力する**ので、どの条件で成立したかが結果に残る。
+        #   ⭐⭐⭐ **順序が大事（2026-10-03 に 1 度間違えた）。**
+        #     ⛔⛔ 初稿は 2 段目で**床の制約を外した**。⛔ その結果リンクが床下へ出る姿勢が選ばれ、
+        #       **初期接触ペナルティ（1 step で終了）に変わっただけだった**（step 0 → 1）。
+        #     ⭐⭐ **床は最後まで残す。**先に落とすのは**ピッチ探索**の方。
+        #     ⭐ 2 段目は `hockey_bank6`（9-207 で完走）と**同一条件**なので、
+        #       ⭐⭐ **bank6 が通った設計空間では必ず解がある。**
+        #   ⛔⛔ **2026-10-03: 段の名前を 1 度間違えた。**「ヨーのみ＋床」を
+        #     「9-207 と同一条件」と書いたが、⭐ **床の制約は 9-208 で私が足したもので、
+        #     `hockey_bank6`（9-207）は持っていない。**同一条件は最終段の方である。
+        _stages = [('ピッチ＋床', _pitch, FLOOR_CLEAR),
+                   ('ヨーのみ＋床', False, FLOOR_CLEAR),
+                   ('ピッチのみ・床なし', _pitch, None),
+                   ('ヨーのみ・床なし（9-207 = bank6 と同一条件）', False, None)]
+        _tried, best, used = [], None, None
+        _seen = set()
+        for _nm, _up, _fl in _stages:
+            if (_up, _fl) in _seen:
+                continue                   # ⭐ ピッチ探索が無効なら 1・2 段と 3・4 段は同一
+            _seen.add((_up, _fl))
+            n_ok, best = _solve(_up, _fl)
+            _tried.append(f'{_nm}:{n_ok}')
+            if best is not None:
+                used = _nm
+                break
+
+        if best is None:
+            # ⭐ 9-208 以前の明示的な例外へ戻す。⛔ 黙って None を返さない
+            raise RuntimeError(
+                f'⛔⛔ arm_safe_init: FK で条件を満たす角が一つも無い（全段で 0）。'
+                f'段ごとの件数 {" / ".join(_tried)} / リンク {len(chain)} 本 / '
+                f'対象 {cube[:2]} / 必要離隔 {need:.4f} m / 壁の内側 {clear_y} m '
+                f'→ ⭐ この設計空間ではこの環境の初期姿勢が作れない')
 
         th, d_tip, segs, tp = best
+        if used != _stages[0][0]:
+            # ⭐⭐ **緩めた段を使ったことを黙って通さない**（§5-2 ①「例外を握りつぶす」）
+            print(f'⚠️⚠️ [arm_safe_init] **第1段「{_stages[0][0]}」が 0 件だったので '
+                  f'「{used}」へ落とした。**段ごとの件数 {" / ".join(_tried)}', flush=True)
         self._safe_init_cached = float(th)
         # ⭐⭐ 採用したピッチも保持する（qpos[1] に当てる。⛔ 無いと探索した意味が無い）
         self._safe_init_pitch = (None if tp is None else float(tp))
@@ -982,7 +1066,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         print(f'[arm_safe_init] ⭐ FK で探索: リンク {len(chain)} 本 '
               f'{[c["name"] for c in chain]} / 対象 ({cube[0]:.3f},{cube[1]:.3f}) / '
               f'必要離隔 {need:.4f} m / 壁の内側 {clear_y} m\n'
-              f'[arm_safe_init] ⭐ 条件を満たすヨー角 {n_ok}/1441 → 採用 {np.degrees(th):.1f}° '
+              f'[arm_safe_init] ⭐ 採用した段「{used}」/ 段ごとの件数 {" / ".join(_tried)}\n'
+              f'[arm_safe_init] ⭐ 条件を満たす角 {n_ok} 本 → 採用 ヨー {np.degrees(th):.1f}° '
               f'→ 先端 ({tip[0]:.3f},{tip[1]:.3f},{tip[2]:.3f}) '
               f'原点から {reach:.3f} m / ⭐ 対象まで {d_tip:.3f} m（3 次元）'
               f' / ⭐⭐ 高さの差 {abs(tip[2] - cube[2]):.3f} m'
