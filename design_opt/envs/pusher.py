@@ -1052,6 +1052,16 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 f'→ ⭐ この設計空間ではこの環境の初期姿勢が作れない')
 
         th, d_tip, segs, tp = best
+        # ⭐⭐⭐ **段をファイルへ落とす**（2026-10-03、系譜 9-211 の追補）。
+        #   ⛔⛔ **stdout では見えない。**`arm_safe_init` の印字は worker の出力なので
+        #     `single_run/<run>/stdout.log` に 1 行も残らない（9-193）。
+        #   ⛔ 「床なしの段へ落ちた回数 0」を**証拠として読んでしまった**（実際は見えていないだけ）。
+        #   ⭐ hydra は cwd を run ディレクトリにするので、ここへ書けば run ごとに溜まる。
+        try:
+            with open(os.environ.get('ARM_INIT_STAGE_LOG', 'log/arm_init_stage.log'), 'a') as _fh:
+                _fh.write(f'{used}\t{" / ".join(_tried)}\n')
+        except Exception:
+            pass                       # ⚠️ 記録が取れなくても学習は止めない
         if used != _stages[0][0]:
             # ⭐⭐ **緩めた段を使ったことを黙って通さない**（§5-2 ①「例外を握りつぶす」）
             print(f'⚠️⚠️ [arm_safe_init] **第1段「{_stages[0][0]}」が 0 件だったので '
