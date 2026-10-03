@@ -1,7 +1,7 @@
 #!/bin/bash
 # ⭐⭐ hockey_bank7 / _s2 — **初期姿勢の探索にピッチを入れた後の再投入**（系譜 9-208）
 #
-# code: de3de56 (feat/init-pitch-search)
+# code: a4fc5cc (feat/init-pitch-search)
 #
 # ⭐⭐ 変えたのは **初期姿勢の探索だけ**。⚠️ 他の設定は hockey_bank6 と 1 文字も同じ。
 #   `+env_specs.arm_init_pitch_search=true` を足しただけ。
