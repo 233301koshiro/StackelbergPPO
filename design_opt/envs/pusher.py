@@ -894,14 +894,34 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             if k < len(iq):
                 base[k] = iq[k]
 
+        # ⭐⭐ **2026-10-03（9-208）: 第2関節（ピッチ）も探索に入れる。**
+        #   ⛔⛔ **ヨーだけでは先端の高さが変えられない**（9-203）。
+        #     `hockey_bank6` は 1201 step すべてでパックの 39〜44 cm 上を掃いた。
+        #   ⭐ seed1 は学習で下ろせたが（高さ差 0.040 m）、⛔ **seed0 は下ろせなかった**（0.269 m）。
+        #   ⭐⭐ **初期姿勢で高さを合わせられるなら、そこが seed 間の差を生んでいる可能性がある。**
+        #   ⚠️ **既定では無効**（`arm_init_pitch_search` を指定したときだけ）。既存 run は無影響。
+        # ⭐ 床からの最小クリアランス [m]。⚠️ 台座の高さ 0.020 m を下回らせない
+        FLOOR_CLEAR = float(self.env_specs.get('arm_init_floor_clear', 0.02))
+        _pitch = self.env_specs.get('arm_init_pitch_search', False)
+        _p_cands = (np.linspace(-np.pi / 2, np.pi / 2, 61) if _pitch else [None])
+
         best = None
         n_ok = 0
-        for th in np.linspace(-np.pi, np.pi, 1441):      # 0.25° 刻み
+        for th, tp in ((a, b) for a in np.linspace(-np.pi, np.pi, 361 if _pitch else 1441)
+                              for b in _p_cands):        # ⚠️ ピッチを入れるとヨーの刻みを粗くする
             ang = base.copy(); ang[0] = th
+            if tp is not None and len(ang) > 1:
+                ang[1] = tp
             segs = self._fk_points(chain, ang)
             ok = True
             for a, b in segs:
                 if max(abs(a[1]), abs(b[1])) > clear_y:   # 壁の内側か
+                    ok = False; break
+                # ⛔⛔⛔ **2026-10-03（9-208）: 床の制約が無かった。**
+                #   ⭐ ヨーだけなら起きないが、⛔ **ピッチを探索に入れた瞬間、
+                #     目的関数（対象までの 3 次元距離）が先端を床下へ引っ張る。**
+                #   ⚠️ **投入前の検算で `_s2` の先端が z=−0.303 になって気づいた。**
+                if min(a[2], b[2]) < FLOOR_CLEAR:
                     ok = False; break
                 if self._seg_point_dist(a, b, cube) < need:   # 対象から離れているか
                     ok = False; break
@@ -915,7 +935,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             #   ⭐ **3 次元距離にする。**
             d_tip = float(np.linalg.norm(segs[-1][1] - cube))
             if best is None or d_tip < best[1]:
-                best = (th, d_tip, segs)
+                best = (th, d_tip, segs, tp)
 
         if best is None:
             raise RuntimeError(
@@ -923,8 +943,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 f'リンク {len(chain)} 本 / 対象 {cube[:2]} / 必要離隔 {need:.4f} m / '
                 f'壁の内側 {clear_y} m → ⭐ この設計空間ではこの環境の初期姿勢が作れない')
 
-        th, d_tip, segs = best
+        th, d_tip, segs, tp = best
         self._safe_init_cached = float(th)
+        # ⭐⭐ 採用したピッチも保持する（qpos[1] に当てる。⛔ 無いと探索した意味が無い）
+        self._safe_init_pitch = (None if tp is None else float(tp))
         self._safe_init_key = key
         tip = segs[-1][1]
         reach = float(np.linalg.norm(tip))
@@ -935,7 +957,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
               f'[arm_safe_init] ⭐ 条件を満たすヨー角 {n_ok}/1441 → 採用 {np.degrees(th):.1f}° '
               f'→ 先端 ({tip[0]:.3f},{tip[1]:.3f},{tip[2]:.3f}) '
               f'原点から {reach:.3f} m / ⭐ 対象まで {d_tip:.3f} m（3 次元）'
-              f' / 高さの差 {abs(tip[2] - cube[2]):.3f} m', flush=True)
+              f' / ⭐⭐ 高さの差 {abs(tip[2] - cube[2]):.3f} m'
+              f' / ピッチ {"探索せず" if tp is None else f"{np.degrees(tp):+.1f}°"}', flush=True)
         return float(th)
 
     def reset_state(self, add_noise):
@@ -982,6 +1005,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         # Requires shoulder joint range widened to ±90° in rrbot_arm.xml.
         if self.env_specs.get('arm_safe_init', False):
             qpos[0] = self._safe_init_angle()
+            # ⭐⭐ ピッチも探索したなら当てる（9-208）。⚠️ 既定（探索しない）では None で無影響
+            _tp = getattr(self, '_safe_init_pitch', None)
+            if _tp is not None and len(qpos) > 1:
+                qpos[1] = _tp
 
         if self.env_specs.get('init_height', True) and not self.is_fixed_base:
             qpos[2] = 0.4
