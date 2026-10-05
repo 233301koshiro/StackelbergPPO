@@ -81,6 +81,7 @@
 | `check_docs_inventory.py` | 孤立ファイル・壊れリンク・archive の注記漏れ。⭐ **冒頭に前回の棚卸しからの経過日数を出す**（1 週間を超えると ⛔。周期を散文ではなく検査に持たせるため。2026-09-25） |
 | ⭐⭐ `probe_material_table_inert.py` | **ホッケー Phase 1 の関門**（9-172）。材質を足しても既存 run の物理が変わらないことを実測する。⭐ **再現性が無いときは判定せずに止まる**（方策の再生は `cube_y_noise` で 851 mm 揺れる） |
 | `demo_target.py` | run の目標位置を `x,y,z` で 1 行出す（`demo_cnoid.sh` の目標の印用。mp4 の記録と同じ読み方） |
+| ⭐⭐ `check_self_penetration.py` | ⭐⭐ **腕のリンクどうしのすり抜け（自己干渉）を既存の軌跡で測る**（系譜 9-221、学習なし）。離れた組はそのまま、隣り合う組は関節のまわりを削ってから（折り返しだけ拾う）。`--self-check` で線分間距離の自己検査 |
 | ⭐⭐ `demo_cnoid.sh` | ⭐ **Choreonoid の画面でデモを再生する**（大きな発表用）。`bash scripts/demo_cnoid.sh reach｜pusher｜target_pusher｜obstacle_avoid｜obstacle_reach`。⭐ 腕は**元のカラフルなメッシュ**で表示（見た目だけ、物理はカプセルのまま。`CNOID_VISUAL_MESHES`・`CNOID_VISUAL_GLB`）。⚠️ 事前にホスト側で `xhost +SI:localuser:root`。簡単なミーティングは mp4（`demo/color_*.mp4`） |
 | ⭐⭐⭐ `probe_max_shot.py` | ⭐⭐ **この形態でパックに出せる最大の速さを、台本の全力打撃で測る**（系譜 9-214）。FK でパックの脇に先端を置き、全関節に全力トルク（ctrl=±1）を符号 16 通りで掛ける。⭐ **出せるなら学習の問題、出せないなら形態の答え。**⭐ 構えが 0 件なら**条件ごとの通過数**を出す。`PROBE_DZ`・`PROBE_DH`・`PROBE_POSES`・`PROBE_STEPS` |
 | ⭐⭐⭐ `probe_step_cost.py` | ⭐⭐ **1 step の所要時間を直接測る**（系譜 9-210）。⛔⛔ **腕ブロックが発火 0 回でも 1 step を 41 倍にしていた**のを見つけた道具。⭐ `HOCKEY_ARM_SWEEP` を変えて比較する（0＝無効 / 2 / 8）。⭐⭐ **発火回数も出す**ので「判定の costs」と「応答の costs」を切り分けられる。⚠️ `HOCKEY_WALL_RESTITUTION` も必ず指定（無いと壁の箱が作られない） |
