@@ -18,7 +18,7 @@
 # ⚠️ 学習と同時に走らせると重い（7/31 に GUI が落ちた記録がある）。発表の前に学習は止めておく。
 set -eu
 TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach}
-EPS=${2:-3}
+EPS=${2:-1}   # ⭐ 既定は 1 話（録画用。2026-10-05。複数回は第 2 引数で）
 # HIDE: 見えなくする物体（物理には残す）／MARK: 目標の印を出すか
 # CAM: 最初のカメラ（視点x,y,z,注視点x,y,z）。発表中はマウスで自由に動かせる
 case "$TASK" in
