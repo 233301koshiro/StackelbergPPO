@@ -447,8 +447,31 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         arm_rad   = self._get_max_arm_radius()
         margin    = 0.03   # 安全マージン
         thresh    = cube_half + arm_rad + margin
-        return (abs(tip_xy[0] - cube_xy[0]) < thresh and
-                abs(tip_xy[1] - cube_xy[1]) < thresh)
+        if (abs(tip_xy[0] - cube_xy[0]) < thresh and
+                abs(tip_xy[1] - cube_xy[1]) < thresh):
+            return True
+        # ⭐⭐⭐ 9-219: **全リンク**とパックの重なりも見る（`init_contact_all_links`、既定は無効）。
+        #   ⛔⛔ 旧は先端しか見ず、**途中のリンクとの重なりを素通りしていた**（9-218）。
+        #     初期姿勢の探索はノイズ前のパック位置で離隔を確かめるが、その後パックは揺らされる（Bug 51）ので、
+        #     **置いた瞬間に途中のリンクと重なり、接触の解決で弾き出される。**
+        #     `hockey_bank7` / `_s2` でパックが動いた話はすべてこれで、離れたパックを打った話は 0 だった。
+        #   ⭐ 判定は 3 次元の線分‐点距離（リンクがパックの上を通る姿勢を誤って弾かない）。
+        #     閾値はリンクごとの半径 ＋ パック半幅 ＋ 上と同じ余裕 0.03 m。
+        if self.env_specs.get('init_contact_all_links', False):
+            c3 = np.asarray(self.get_body_com("cube"), dtype=float)
+            for body in self.robot.bodies:
+                p = self._body_xpos.get(body.name)
+                R = self._body_xmat.get(body.name)
+                if p is None or R is None:
+                    continue
+                p = np.asarray(p, dtype=float)
+                q = p + np.asarray(R, dtype=float).reshape(3, 3) @ np.asarray(body.bone_offset, dtype=float)
+                r = (float(np.asarray(body.geoms[0].size, dtype=float).flatten()[0])
+                     if getattr(body, 'geoms', None) else arm_rad)
+                if self._seg_point_dist(p, q, c3) < cube_half + r + margin:
+                    self._init_contact_link = body.name
+                    return True
+        return False
 
     def _check_floor_penetration(self):
         """実行開始時にアームのいずれかの関節・先端が床（z=0）を割っているか確認。
@@ -917,7 +940,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         t = float(np.clip((c - a) @ ab / L2, 0.0, 1.0))
         return float(np.linalg.norm(a + t * ab - c))
 
-    def _safe_init_angle(self):
+    def _safe_init_angle(self, q_now=None):
         r"""⭐⭐ `arm_safe_init` の初期ヨー角。**既定は従来どおり π/2（90°）。**
 
         ⭐ 目的は 2 つ。**①腕が初期姿勢で対象に重なり、分離インパルスが対象を無償で
@@ -949,7 +972,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             raise RuntimeError('arm_init_clear_y: XML が取れない')
         # ⭐ 形態が変われば作り直す（⛔ 旧実装はここを固定して壊れた）
         key = hash(xml if isinstance(xml, str) else bytes(xml))
-        if getattr(self, '_safe_init_key', None) == key:
+        # ⭐⭐ 9-219: `q_now`（揺らした後の qpos）を渡されたら**毎話探し直す**ので、形態だけで決まる控えは使わない
+        if q_now is None and getattr(self, '_safe_init_key', None) == key:
             return self._safe_init_cached
 
         chain = self._parse_arm_chain(xml)
@@ -961,10 +985,19 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         if mm is None:
             raise RuntimeError('arm_init_clear_y: XML から cube の位置を読めない')
         cube = np.array([float(mm.group(1)), float(mm.group(2)), float(mm.group(3))])
+        if q_now is not None:
+            # ⭐⭐ 9-219: **揺らした後のパック位置で探す。**
+            #   ⛔ 旧はノイズ前の位置（XML の body pos）で離隔を確かめ、その後パックが x 約 ±0.1・y ±0.25 m、
+            #     腕の関節が ±0.1 rad 揺れるので、**離隔ぎりぎりに選んだ姿勢の 75 % で途中のリンクが重なった**（9-218・9-219）。
+            #   ⭐ cube_slide / cube_slide2 は body pos からの変位（qpos の末尾 2 つ）
+            q_now = np.asarray(q_now, dtype=float)
+            cube = cube + np.array([q_now[-2], q_now[-1], 0.0])
 
         # ⭐ ピッチ側の角は init_qpos をそのまま使う（変数を増やさない）
         base = np.zeros(len(chain))
         iq = np.asarray(getattr(self, 'init_qpos', np.zeros(len(chain))), dtype=float)
+        if q_now is not None:
+            iq = q_now                    # ⭐ 9-219: ピッチ側の関節も揺らした後の角で
         for k in range(1, len(chain)):
             if k < len(iq):
                 base[k] = iq[k]
@@ -1127,7 +1160,9 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         # so no initial overlap regardless of arm length.
         # Requires shoulder joint range widened to ±90° in rrbot_arm.xml.
         if self.env_specs.get('arm_safe_init', False):
-            qpos[0] = self._safe_init_angle()
+            # ⭐⭐ 9-219: `arm_init_after_noise` なら揺らした後の qpos で毎話探す（既定は無効＝従来どおり）
+            qpos[0] = self._safe_init_angle(
+                q_now=qpos if self.env_specs.get('arm_init_after_noise', False) else None)
             # ⭐⭐ ピッチも探索したなら当てる（9-208）。⚠️ 既定（探索しない）では None で無影響
             _tp = getattr(self, '_safe_init_pitch', None)
             if _tp is not None and len(qpos) > 1:
