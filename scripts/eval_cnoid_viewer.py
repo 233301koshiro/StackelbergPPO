@@ -102,6 +102,20 @@ print(f'[viewer] ロボット形態: {[b.name for b in env.robot.bodies]}')
 print(f'[viewer] {args.fps} fps で再生開始  （Ctrl+C で停止）')
 print()
 
+# ⭐ 最初のカメラ（2026-10-05、デモ用）: VIEWER_CAMERA=視点x,y,z,注視点x,y,z。
+#   ⚠️ `viewAll` は床全体に合わせて腕が小さく映るので使わない。指定が無ければ Choreonoid の既定のまま
+_cam = os.environ.get('VIEWER_CAMERA')
+if _cam:
+    try:
+        from cnoid.Base import SceneView
+        v = [float(x) for x in _cam.split(',')]
+        eye, ctr = np.array(v[:3]), np.array(v[3:6])
+        SceneView.instance.sceneWidget.setCameraPosition(eye, (ctr - eye) / np.linalg.norm(ctr - eye),
+                                                         np.array([0.0, 0.0, 1.0]))
+        print(f'[viewer] カメラ: 視点 {eye.tolist()} → 注視点 {ctr.tolist()}')
+    except Exception as e:
+        print(f'[viewer] ⚠️ カメラを設定できない（既定のまま）: {e!r}')
+
 # ---- 再生ループ ----------------------------------------------------------
 ep = 0
 try:
