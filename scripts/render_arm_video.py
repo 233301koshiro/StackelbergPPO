@@ -67,8 +67,11 @@ COLORS = {'base': '#4a4a4a', 'upper_arm': '#e03131',
 LIGHT = np.array([0.4, -0.6, 0.7]); LIGHT = LIGHT / np.linalg.norm(LIGHT)
 
 
-def cluster_decimate(mesh, pitch):
-    """頂点をグリッドへ丸めて代表点（セル重心）に寄せる素朴な間引き。"""
+def cluster_decimate(mesh, pitch, vcol=None):
+    """頂点をグリッドへ丸めて代表点（セル重心）に寄せる素朴な間引き。
+
+    `vcol`（頂点ごとの RGB, 0〜1）を渡すと、**面ごとの色**も返す（まとめた頂点の色を平均し、面は 3 頂点の平均）。
+    """
     V, F = np.asarray(mesh.vertices), np.asarray(mesh.faces)
     key = np.floor(V / pitch).astype(np.int64)
     uniq, inv = np.unique(key, axis=0, return_inverse=True)
@@ -77,7 +80,34 @@ def cluster_decimate(mesh, pitch):
     nV /= cnt[:, None]
     nF = inv[F]
     ok = (nF[:, 0] != nF[:, 1]) & (nF[:, 1] != nF[:, 2]) & (nF[:, 0] != nF[:, 2])
-    return nV, np.unique(np.sort(nF[ok], axis=1), axis=0)
+    if vcol is None:
+        return nV, np.unique(np.sort(nF[ok], axis=1), axis=0)
+    nC = np.zeros((len(uniq), 3)); np.add.at(nC, inv, vcol); nC /= cnt[:, None]
+    nF = np.unique(np.sort(nF[ok], axis=1), axis=0)
+    return nV, nF, nC[nF].mean(axis=1)
+
+
+def glb_vertex_colors(glb_path, origins):
+    """⭐ 元の GLB の色を、リンクごとの STL の頂点へ移すための準備（2026-10-05、デモ用）。
+
+    `glb_to_links.py` は GLB を **Y-up → Z-up**（(x, y, z) → (x, −z, y)）に回し、
+    リンクごとに `frame_origins` を引いて STL にしている。⭐ **同じ変換を GLB に掛ければ頂点は一致する**
+    （A1・hockey で距離の中央値 1e-9 m を確認）。返すのはリンク名 → (KD 木, 色) の関数。
+    """
+    import warnings
+    from scipy.spatial import cKDTree
+    warnings.filterwarnings('ignore', category=DeprecationWarning)
+    sc = trimesh.load(glb_path)
+    g = sc.to_geometry() if hasattr(sc, 'to_geometry') else sc
+    col = np.asarray(g.visual.to_color().vertex_colors[:, :3], dtype=float) / 255.0
+    V = np.asarray(g.vertices)
+    Vz = np.c_[V[:, 0], -V[:, 2], V[:, 1]]
+
+    def colors_for(name, verts):
+        t = cKDTree(Vz - np.asarray(origins[name]))
+        dist, idx = t.query(verts)
+        return col[idx], float(np.median(dist))
+    return colors_for
 
 
 def align(a, b):
@@ -107,6 +137,8 @@ def main():
     ap.add_argument('--cube', action='store_true', help='対象物を描く（Pusher のとき）')
     ap.add_argument('--zoom', type=float, default=1.5, help='寄り。大きいほど腕が大きく映る')
     ap.add_argument('--tmax', type=int, default=0, help='この step までを描く（0 なら全部）')
+    ap.add_argument('--glb', default='',
+                    help='元の GLB。渡すと**元のモデルの色**で描く（無ければリンク名ごとの決め打ちの色）')
     args = ap.parse_args()
 
     d = np.load(args.trace, allow_pickle=True)
@@ -119,6 +151,7 @@ def main():
     mdir = pathlib.Path(args.meshes)
     origins = json.loads((mdir / 'joints.json').read_text())['frame_origins']
 
+    colors_for = glb_vertex_colors(args.glb, origins) if args.glb else None
     mesh_names = args.link_names
     skip = L - len(mesh_names)          # 先頭の取り付け球など、メッシュを持たない body
     if skip < 0:
@@ -132,7 +165,17 @@ def main():
         f = mdir / f'{mn}.stl'
         if not f.exists():
             print(f'  ⚠️ {f} が無いので {mn} は描かない'); continue
-        V, F = cluster_decimate(trimesh.load(f), args.pitch)
+        m = trimesh.load(f)
+        fcol = None
+        if colors_for is not None and mn in origins:
+            vcol, med = colors_for(mn, np.asarray(m.vertices))
+            if med < 1e-6:
+                V, F, fcol = cluster_decimate(m, args.pitch, vcol)
+            else:
+                # ⚠️ 対応づけがずれている（`--link-rot` で回したリンクなど）。黙って変な色にしない
+                print(f'  ⚠️ {mn}: GLB との距離の中央値 {med:.2e} m。元の色を使わず決め打ちの色にする')
+        if fcol is None:
+            V, F = cluster_decimate(m, args.pitch)
         # ① メッシュ座標でのボーン方向
         if j + 1 < len(mesh_names) and mesh_names[j + 1] in origins:
             bl = np.array(origins[mesh_names[j + 1]]) - np.array(origins[mn])
@@ -144,7 +187,8 @@ def main():
         bo = bone[i]; Lo = float(np.linalg.norm(bo))
         S = np.diag([1., 1., (Lo / Lb) if Lb > 1e-9 else 1.])
         R2 = align(np.array([0., 0., 1.]), bo) if Lo > 1e-9 else np.eye(3)
-        parts[i] = ((R2 @ S @ R1 @ V.T).T, F, COLORS.get(mn, '#888888'))
+        parts[i] = ((R2 @ S @ R1 @ V.T).T, F,
+                    fcol if fcol is not None else COLORS.get(mn, '#888888'))
         print(f'  {mn:10} (body {names[i]}) faces {len(F):5d}  '
               f'ボーン長 {Lb:.4f} → {Lo:.4f}（×{Lo/Lb:.3f}）')
 
@@ -177,8 +221,11 @@ def main():
             ln = np.linalg.norm(nrm, axis=1, keepdims=True)
             nrm = nrm / np.where(ln < 1e-12, 1.0, ln)
             lit = np.clip(np.abs(nrm @ LIGHT), 0.0, 1.0)
-            base_rgb = np.array(matplotlib.colors.to_rgb(col))
-            fc = np.clip(base_rgb[None, :] * (0.45 + 0.55 * lit)[:, None], 0, 1)
+            if isinstance(col, np.ndarray):          # 面ごとの元の色（--glb）
+                base_rgb = col
+            else:
+                base_rgb = np.array(matplotlib.colors.to_rgb(col))[None, :]
+            fc = np.clip(base_rgb * (0.45 + 0.55 * lit)[:, None], 0, 1)
             ax.add_collection3d(Poly3DCollection(tri, facecolors=fc, edgecolor='none'))
         ax.scatter(*target, s=90, marker='*', color='#f59f00', depthshade=False)
         if args.cube and cube.ndim == 2 and np.any(cube[t]):
