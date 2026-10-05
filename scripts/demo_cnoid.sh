@@ -51,4 +51,9 @@ env FONTCONFIG_FILE="$PWD/config/fontconfig_ja.conf" \
   VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS \
   CNOID_VISUAL_MESHES=data/test/A1/meshes CNOID_VISUAL_GLB=data/test/A1/3D/A1.glb \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
-  /choreonoid_ws/install/bin/choreonoid --python scripts/eval_cnoid_viewer.py
+  /choreonoid_ws/install/bin/choreonoid --python scripts/eval_cnoid_viewer.py &
+# ⭐ Ctrl+C で止まるようにする（2026-10-05）。⛔ Choreonoid は Ctrl+C（SIGINT）を受け付けず、ターミナルを握ったまま
+#   動き続けた（ユーザーが ^C を何度押しても戻らなかった）。裏で起動し、Ctrl+C を受けたらこのスクリプトが強制終了させる
+CPID=$!
+trap 'echo; echo "[デモ] 停止します"; kill -9 $CPID 2>/dev/null' INT TERM
+wait $CPID 2>/dev/null || true
