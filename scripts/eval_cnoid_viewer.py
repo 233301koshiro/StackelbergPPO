@@ -67,6 +67,9 @@ class args:
     epoch       = os.environ.get('VIEWER_EPOCH', 'best')
     fps         = int(os.environ.get('VIEWER_FPS', '25'))
     episodes    = int(os.environ.get('VIEWER_EPISODES', '3'))
+    # ⭐ デモ用（2026-10-05）。既定 0 なので従来どおり
+    start_delay  = float(os.environ.get('VIEWER_START_DELAY', '0'))    # 起動してから再生を始めるまで [s]（録画のウィンドウを選ぶ時間）
+    design_pause = float(os.environ.get('VIEWER_DESIGN_PAUSE', '0'))   # 形態が変わるたびに止める [s]（形が育つ様子を見せる）
 
 step_interval = 1.0 / args.fps
 
@@ -116,12 +119,59 @@ if _cam:
     except Exception as e:
         print(f'[viewer] ⚠️ カメラを設定できない（既定のまま）: {e!r}')
 
+def _say(text):
+    """ターミナルと Choreonoid のメッセージ欄の両方に出す。"""
+    print(text, flush=True)
+    _msg(text)
+
+
+def _wait(sec):
+    """画面を止めずに待つ（Qt のイベントを回し続ける）。"""
+    t_end = time.time() + sec
+    while time.time() < t_end:
+        IU.processEvent()
+        time.sleep(0.03)
+
+
+# ⭐ 何を見ているかを言葉で出すための準備（2026-10-05、デモ用）
+_rs = cfg.reward_specs or {}
+_is_reach = bool(_rs.get('use_reach', False))
+_tsrc = _rs if (_rs.get('use_target_reward', False) or _is_reach) else cfg.env_specs
+_target = np.array([_tsrc.get('target_x', 0.8), _tsrc.get('target_y', 0.0), _tsrc.get('target_z', 0.15)])
+_has_target = _is_reach or bool(_rs.get('use_target_reward', False))
+_task = 'Reach（先端を目標へ）' if _is_reach else ('Target-Pusher（箱を目標へ）' if _rs.get('use_target_reward') else 'Pusher（箱を押す）')
+
+
+def _lengths():
+    """いまのリンク長 [m]（取り付け用の球は除く）。"""
+    return [float(np.linalg.norm(b.bone_offset)) for b in env.robot.bodies[1:]
+            if getattr(b, 'bone_offset', None) is not None]
+
+
+def _fmt(ls):
+    return ' / '.join(f'{x:.2f}' for x in ls)
+
+
+if args.start_delay > 0:
+    _say(f'[デモ] {args.restore_dir}  タスク: {_task}')
+    _say(f'[デモ] {args.start_delay:.0f} 秒後に再生を始めます（録画するウィンドウを選んでください）')
+    for _k in range(int(args.start_delay), 0, -1):
+        if _k <= 5 or _k % 5 == 0:
+            _say(f'[デモ] あと {_k} 秒')
+        _wait(1.0)
+
 # ---- 再生ループ ----------------------------------------------------------
 ep = 0
 try:
     while args.episodes == 0 or ep < args.episodes:
         state = env.reset()
         step  = 0
+        design_steps = 0
+        sketch_len = _lengths()
+        _say('=' * 50)
+        _say(f'[デモ] 第 {ep + 1} 話  タスク: {_task}')
+        _say(f'[デモ] 描いた形（初期）のリンク長 [m]: {_fmt(sketch_len)}')
+        _say('[デモ] 形態変化を始めます（Leader が形を決めます）')
         exec_steps = 0
         total_reward = 0.0
         cube_start_x = None
@@ -141,6 +191,24 @@ try:
             # GUI 更新：processEvent() でシーンビューを描画
             IU.processEvent()
 
+            if info.get('stage') == 'skeleton_transform':
+                # 骨格（リンクの本数）を決める段。本研究ではスケッチのまま固定（fix_skeleton）なので形は変わらない
+                _say('[デモ] 骨格（リンクの本数）はスケッチのまま固定します')
+                if args.design_pause > 0:
+                    _wait(args.design_pause)
+            elif info.get('stage') != 'execution':
+                design_steps += 1
+                _say(f'[デモ] 形態変化 {design_steps} 回目  リンク長 [m]: {_fmt(_lengths())}')
+                if args.design_pause > 0:
+                    _wait(args.design_pause)
+            elif exec_steps == 0:
+                now = _lengths()
+                _say('[デモ] 形態変化が完了しました。実行に移ります（Follower が関節を動かします）')
+                _say('[デモ] リンク長 [m]  描いた形 → 学習後: '
+                     + '  '.join(f'{a:.2f}→{b:.2f}' for a, b in zip(sketch_len, now)))
+                if args.design_pause > 0:
+                    _wait(args.design_pause * 2)
+
             if info.get('stage') == 'execution':
                 total_reward += reward
                 exec_steps += 1
@@ -150,6 +218,14 @@ try:
                 cube_end_x = cube_pos[0]
                 # 実行フェーズのみスリープ（形態変換フェーズは速送り）
                 time.sleep(step_interval)
+                if exec_steps % 250 == 0:
+                    if _is_reach:
+                        _d = float(np.linalg.norm(np.asarray(env._arm_tip_pos) - _target)) * 1000
+                        _say(f'[デモ] 実行中 {exec_steps} step  先端と目標の距離 {_d:.0f} mm')
+                    else:
+                        _say(f'[デモ] 実行中 {exec_steps} step  箱の移動 {cube_end_x - cube_start_x:.2f} m'
+                             + (f'  目標まで {float(np.linalg.norm(np.asarray(cube_pos)[:2] - _target[:2])):.2f} m'
+                                if _has_target else ''))
 
             done = term or trunc
             step += 1
@@ -170,6 +246,9 @@ try:
         _msg('-' * 50)
         _msg(line1)
         _msg(line2)
+        _say(f'[デモ] 第 {ep} 話の終わり')
+        if args.design_pause > 0:
+            _wait(args.design_pause * 2)
 
 except KeyboardInterrupt:
     print('\n[viewer] 停止しました')

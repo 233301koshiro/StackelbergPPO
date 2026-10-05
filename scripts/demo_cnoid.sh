@@ -2,6 +2,10 @@
 # ⭐ Choreonoid の画面でデモを再生する（大きな発表用。2026-10-05）
 #
 #   bash scripts/demo_cnoid.sh <タスク> [エピソード数]
+#   ⭐ 録画用: 立ち上がってから START_DELAY 秒（既定 10）カウントダウンしてから再生する。
+#      形態が変わるたびに DESIGN_PAUSE 秒（既定 1）止める。例: START_DELAY=20 bash scripts/demo_cnoid.sh reach
+#   ⭐ ターミナルと Choreonoid のメッセージ欄に「第 N 話／形態変化 k 回目（リンク長）／実行に移ります
+#      （描いた形 → 学習後）／実行中（先端と目標の距離・箱の移動）」を出す
 #   タスク: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach
 #
 # ⭐ 腕は**元のカラフルなメッシュ**で表示する（見た目だけ。物理はカプセルのまま。
@@ -43,6 +47,7 @@ if [ "$MARK" = 1 ]; then
 fi
 env \
   CNOID_HIDE_BODIES="$HIDE" CNOID_TARGET_MARK="$TARGET" VIEWER_CAMERA="$CAM" \
+  VIEWER_START_DELAY="${START_DELAY:-10}" VIEWER_DESIGN_PAUSE="${DESIGN_PAUSE:-1}" \
   VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS \
   CNOID_VISUAL_MESHES=data/test/A1/meshes CNOID_VISUAL_GLB=data/test/A1/3D/A1.glb \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
