@@ -87,8 +87,17 @@ eps = []          # 採用した話ごとの (xpos, xmat, cube)
 for k in range(N_EP):
     state = env.reset()
     xpos, xmat, cube = [], [], []
+    init = None       # ⭐ 9-218: execution に入った瞬間（最初の step の前）の腕とパック
     for _ in range(cfg.skel_transform_nsteps + 2 + max_steps):
         in_exec = env.stage == 'execution'
+        if in_exec and init is None:
+            try:
+                _nm = [b.name for b in env.robot.bodies]
+                init = (np.array([np.asarray(env._body_xpos[n], dtype=float) for n in _nm]),
+                        np.array([np.asarray(env._body_xmat[n], dtype=float).reshape(3, 3) for n in _nm]),
+                        np.asarray(env.get_body_com('cube'), dtype=float))
+            except Exception:
+                init = False
         sv = tensorfy([state])
         if agent.obs_norm is not None:
             sv = agent.normalize_observation(sv)
@@ -120,7 +129,7 @@ for k in range(N_EP):
         if done:
             break
     if k >= SKIP:
-        eps.append((np.array(xpos), np.array(xmat), np.array(cube)))
+        eps.append((np.array(xpos), np.array(xmat), np.array(cube), init))
     print(f'[trace] 話 {k+1}/{N_EP}  step={len(xpos)}  '
           f'{"⭐ 採用" if k >= SKIP else "⚠️ 捨てる（頭の話は当てにならない。Bug 47）"}', flush=True)
 
@@ -133,7 +142,7 @@ def _score(e):
     return float(c[-1, 0] - c[0, 0]) if len(c) else 0.0
 order = sorted(range(len(eps)), key=lambda i: _score(eps[i]))
 rep = eps[order[len(order) // 2]]
-xpos, xmat, cube = rep
+xpos, xmat, cube = rep[:3]
 
 # ⭐ TRACE_OUT があればそちらへ書く（run の軌跡を上書きせずに比較したいとき。
 #   `probe_material_table_inert.py` が使う。2026-09-26）
@@ -153,7 +162,12 @@ np.savez_compressed(out,
                     ep_count=len(eps), ep_skipped=SKIP,
                     # ⭐ 採用した全話の対象の軌跡（2026-10-05、系譜 9-213）。中央値の話だけでは
                     #   「動いた話でパックがどこへ行ったか」が分からない
-                    ep_cubes=np.array([e[2] for e in eps], dtype=object))
+                    ep_cubes=np.array([e[2] for e in eps], dtype=object),
+                    # ⭐ 全話の腕の位置と姿勢（9-218）。「何がパックに当たったか」を話ごとに見る
+                    ep_xpos=np.array([e[0] for e in eps], dtype=object),
+                    ep_xmat=np.array([e[1] for e in eps], dtype=object),
+                    # ⭐ 9-218: 最初の step の前の状態。置いた瞬間にリンクとパックが重なっていないかを見る
+                    ep_init=np.array([e[3] for e in eps], dtype=object))
 
 print(f'[trace] {restore_dir} ckpt={checkpoint}')
 print(f'[trace] リンク: {names}')
