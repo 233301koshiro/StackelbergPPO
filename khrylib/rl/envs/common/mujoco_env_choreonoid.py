@@ -1391,6 +1391,15 @@ class ChoreonoidSimWorld:
                 if arm > 0:
                     jnt.setEquivalentRotorInertia(arm)
 
+            # ⭐ 腕のリンクどうしの当たり判定（自己干渉）。**`CNOID_SELF_COLLISION` を指定したときだけ**（2026-10-05、系譜 9-222）。
+            #   ⛔ 既定（学習の全 run）は無効で、185 run 中 118 run でリンクどうしがすり抜けていた（9-221）。
+            #   ⚠️ Choreonoid は**隣り合うリンクの組を既定で除外**する（`BodyCollisionLinkFilter`。関節で必ず重なるため）。
+            #     → 離れた組のすり抜けは止まるが、**子が親へ折り返す重なりは止まらない**
+            if body_key == 'robot' and os.environ.get('CNOID_SELF_COLLISION'):
+                body_item.setSelfCollisionDetectionEnabled(True)
+                if not getattr(self, '_self_col_announced', False):
+                    print('[choreonoid] ⭐ 腕の自己干渉を有効にした（隣り合うリンクは除外）', flush=True)
+                    self._self_col_announced = True
             body_item.storeInitialState()
             self.world_item.addChildItem(body_item)
             # floor_itemと同様、追加直後にチェックしないとScene上に表示されない。
