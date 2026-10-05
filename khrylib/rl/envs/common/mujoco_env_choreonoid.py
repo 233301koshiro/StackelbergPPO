@@ -408,7 +408,7 @@ def mujoco_xml_to_body(xml_str: str):
             rot_axis, rot_angle = rot_y_to_vec(diff)
             return dict(type='capsule', material=_mat, center=center.tolist(), length=length,
                         radius=radius, rot_axis=rot_axis, rot_angle=rot_angle,
-                        mass=m, Iperp=Iperp, Iaxial=Iaxial)
+                        mass=m, Iperp=Iperp, Iaxial=Iaxial, p1=p1.tolist())
 
         elif gtype == 'sphere':
             radius  = float(geom_el.get('size', '0.25'))
@@ -573,7 +573,7 @@ def mujoco_xml_to_body(xml_str: str):
         (0.90, 0.30, 0.60),  # pink
     ]
 
-    def serialize_links_to_yaml(links_list, root_name, body_name):
+    def serialize_links_to_yaml(links_list, root_name, body_name, is_robot=False):
         out = [
             'format: ChoreonoidBody',
             'format_version: 2.0',
@@ -583,7 +583,9 @@ def mujoco_xml_to_body(xml_str: str):
             'links:',
         ]
         color_idx = 0
-        for lk in links_list:
+        # ⭐ 見た目を元のメッシュにする（画面で見るときだけ。`visual_mesh.py`、2026-10-05）
+        from khrylib.rl.envs.common.visual_mesh import visual_dae_for
+        for li, lk in enumerate(links_list):
             out.append('  -')
             out.append(f'    name: "{lk["name"]}"')
             if lk['parent'] is not None:
@@ -614,10 +616,15 @@ def mujoco_xml_to_body(xml_str: str):
             #   （`StdBodyLoader.cpp` の `node->read("material", symbol)` → `link->setMaterial()`）。
             if shape and shape.get('material'):
                 out.append(f'    material: {shape["material"]}')
+            dae = None
+            if shape and is_robot and shape['type'] == 'capsule':
+                kids = [k2 for k2 in links_list if k2['parent'] == lk['name']]
+                dae = visual_dae_for(li, kids[0]['translation'] if kids else shape.get('p1'))
             if shape:
                 st = shape['type']
                 cx, cy, cz = shape['center']
                 out.append('    elements:')
+                _shape_at = len(out)          # ⭐ dae があればここから先をカプセルの当たり判定専用に包む
                 out.append('      -')
                 out.append('        type: Shape')
                 out.append(f'        translation: [ {cx:.6g}, {cy:.6g}, {cz:.6g} ]')
@@ -637,10 +644,23 @@ def mujoco_xml_to_body(xml_str: str):
                 out.append('        appearance:')
                 out.append('          material:')
                 out.append(f'            diffuseColor: [ {cr:.3g}, {cg:.3g}, {cb:.3g} ]')
+                if dae is not None:
+                    # ⭐ カプセルは当たり判定専用（Collision）、見た目は元のメッシュ（Visual）。物理は変わらない
+                    shape_lines = ['    ' + ln for ln in out[_shape_at:]]
+                    del out[_shape_at:]
+                    out += ['      -', '        type: Collision', '        elements:'] + shape_lines
+                    out += ['      -', '        type: Visual', '        elements:',
+                            '          -', '            type: Resource', f'            uri: "{dae}"']
                 # ルートリンク（土台の球）は隣接リンクに埋もれて見えにくいため、
                 # 衝突・質量に影響しない見た目専用（type: Visual）の一回り
                 # 大きい球を重ねて視認性を上げる。物理には一切影響しない。
-                if lk['name'] == root_name and lk['parent'] is None and st == 'sphere':
+                if lk['name'] == root_name and lk['parent'] is None and st == 'sphere' and is_robot \
+                        and os.environ.get('CNOID_VISUAL_MESHES'):
+                    # ⭐ メッシュ表示のときは取り付け用の球を見せない（台座のメッシュに重なる）。当たり判定は残す
+                    shape_lines = ['    ' + ln for ln in out[_shape_at:]]
+                    del out[_shape_at:]
+                    out += ['      -', '        type: Collision', '        elements:'] + shape_lines
+                elif lk['name'] == root_name and lk['parent'] is None and st == 'sphere':
                     marker_r = shape['radius'] * 1.4
                     out.append('      -')
                     out.append('        type: Visual')
@@ -675,7 +695,7 @@ def mujoco_xml_to_body(xml_str: str):
             body_name = robot_name
         else:
             body_name = child_el.get('name', f'extra_{body_idx}')
-        yaml_str = serialize_links_to_yaml(links, root_name, body_name)
+        yaml_str = serialize_links_to_yaml(links, root_name, body_name, is_robot=(body_idx == 0))
         all_body_defs.append((body_name, yaml_str))
         all_body_order.extend(body_order)
         all_armatures.update(joint_armatures)
