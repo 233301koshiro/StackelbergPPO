@@ -45,7 +45,7 @@ if [ "$MARK" = 1 ]; then
   TARGET=$(python3 scripts/demo_target.py "single_run/$RUN")
   echo "目標の印: $TARGET"
 fi
-env \
+env FONTCONFIG_FILE="$PWD/config/fontconfig_ja.conf" \
   CNOID_HIDE_BODIES="$HIDE" CNOID_TARGET_MARK="$TARGET" VIEWER_CAMERA="$CAM" \
   VIEWER_START_DELAY="${START_DELAY:-10}" VIEWER_DESIGN_PAUSE="${DESIGN_PAUSE:-1}" \
   VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS \
