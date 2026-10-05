@@ -21,7 +21,8 @@
 #
 # ⚠️ 投入後に見るもの
 #   python3 scripts/check_before_conclusion.py hockey_bank8      # ⭐ exec 到達
-#   cut -f1 single_run/hockey_bank8/log/arm_init_stage.log | sort | uniq -c   # 段の内訳（stdout は見ない。9-193）
+#   ⛔ 段の記録（log/arm_init_stage.log）は**この投入には残らない**（書き込み先の誤り。9-219 追補で修正済み、次の run から）
+#   ⭐ 代わりに best を再生して印字の「採用した段」と init_gate を数える（再生は main プロセスなので見える）
 # ⛔⛔ 30 epoch では判定できない。bank6_s2 で動き出したのは ep116 以降
 set -u
 Q=single_run/queue_hockey_bank8.log
