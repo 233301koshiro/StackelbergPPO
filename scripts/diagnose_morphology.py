@@ -250,7 +250,7 @@ def scale_advice(need):
     return _s
 
 
-def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61):
+def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61, floor_dz=None):
     """B（9-72）: 可動域を入れた平面チェーンが点 (d, dz) に届くか。
 
     零姿勢でチェーンは「上」(0, 1) を向き、関節 i は累積角 Σθ で回る
@@ -277,18 +277,25 @@ def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61):
     acc = grids[0]
     px = lengths[0] * np.sin(grids[0])
     py = lengths[0] * np.cos(grids[0])
+    lo = py.copy()                    # ⭐ 各姿勢で関節・先端の最も低い高さ（床の判定用）
     for i in range(1, n):
         acc = acc[:, None] + grids[i][None, :]
         px = px[:, None] + lengths[i] * np.sin(acc)
         py = py[:, None] + lengths[i] * np.cos(acc)
-        acc = acc.reshape(-1); px = px.reshape(-1); py = py.reshape(-1)
-    dist = np.hypot(px - d, py - dz)
-    dmin = float(dist.min())
+        lo = np.minimum(lo[:, None], py)
+        acc = acc.reshape(-1); px = px.reshape(-1); py = py.reshape(-1); lo = lo.reshape(-1)
     # 格子の隙間で届きうる余地: 1 関節あたり半刻み × リプシッツ定数 R、n 関節ぶん
     step_rad = max(float(np.deg2rad((ranges_deg[i][1] - ranges_deg[i][0]) if i < len(ranges_deg)
                                     and ranges_deg[i] else 360.0) / (steps - 1))
                    for i in range(n))
     slack = R * step_rad * n / 2.0
+    dist = np.hypot(px - d, py - dz)
+    if floor_dz is not None:
+        # ⭐⭐ 9-216: **途中の関節が床を割る姿勢は数えない**（9-214 で seed0 を落とした条件）。
+        #   ⚠️ 棄却側の確実さ（9-78）を保つため、床も**余地 slack ぶん甘く**取る
+        #     （格子点が床を僅かに割っても、隙間に床より上の姿勢がありうる）。
+        dist = np.where(lo >= floor_dz - slack, dist, np.inf)
+    dmin = float(dist.min())
     return True, dmin <= slack, dmin, slack
 
 
@@ -480,7 +487,8 @@ def shot_directions(puck, goal_x, goal_half_y, walls_y):
     return dirs
 
 
-def strikeable(lengths, ranges_deg, d_strike, puck, dirs, puck_z):
+def strikeable(lengths, ranges_deg, d_strike, puck, dirs, puck_z,
+               floor_z=None, yaw_root=False, base_z=0.0):
     """パックを `dirs` のどれかへ飛ばせる打点に届くか。
 
     打点 S = P − d_strike·û（先端は飛ばしたい向きの**反対側**に触れる）。
@@ -489,12 +497,22 @@ def strikeable(lengths, ranges_deg, d_strike, puck, dirs, puck_z):
 
     返り値: (届く向きの数, 全向き数, 1 つでも届くのに要る最小の水平距離)
     """
+    # ⭐⭐ 9-216: 2 つの前提を**別々のスイッチ**にした（効果を分けて測るため）。
+    #   `yaw_root`: 根元の関節が鉛直軸なら、根元リンクは**倒れずに肩の高さを上げるだけ**。
+    #     ⛔ 旧は平面内で倒れる関節として扱い、根元が床へ潜る姿勢まで数えていた。
+    #   `floor_z`: **途中の関節が床を割る姿勢は数えない。**
+    L, Rg, z0 = list(lengths), list(ranges_deg or []), 0.0
+    if yaw_root and len(L) > 1:
+        z0 = float(base_z) + float(L[0])
+        L, Rg = L[1:], Rg[1:]
+    fdz = None if floor_z is None else float(floor_z) - z0
     ok = 0
     need = float('inf')
     for u in dirs:
         S = np.asarray(puck[:2], dtype=float) - d_strike * np.asarray(u, dtype=float)
         d = float(np.hypot(S[0], S[1]))
-        done, reach, _dmin, _slack = planar_chain_reach(lengths, ranges_deg, d, puck_z, steps=41)
+        done, reach, _dmin, _slack = planar_chain_reach(L, Rg, d, float(puck_z) - z0, steps=41,
+                                                        floor_dz=fdz)
         if (not done) or reach:
             ok += 1
         need = min(need, d)
@@ -720,7 +738,9 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
             for y in ys:
                 puck = np.array([cpos[0], y], dtype=float)
                 dirs = shot_directions(puck, goal_x, goal_half_y, walls_y)
-                ok, tot, need = strikeable(lengths, geo.get('ranges_deg') or [],
+                # ⛔ 9-216: 旧は `geo.get('ranges_deg')` で、**そのキーは存在しない**（`parse_arm_xml` は `ranges`）。
+                #   ホッケーの打点判定は可動域を一度も読まず、全関節 ±180° として扱っていた。
+                ok, tot, need = strikeable(lengths, geo.get('ranges') or [],
                                            d_strike, puck, dirs, float(cpos[2]))
                 if ok == 0:
                     n_blocked += 1
@@ -1177,7 +1197,12 @@ def main():
     if fatal:
         print('  → 総合判定: **この形ではタスクを達成できません。** 上の指摘に沿って形を直してください。')
     else:
-        print('  → 総合判定: 幾何的な障害はありません。')
+        print('  → 総合判定: **設計図の形には**幾何的な障害はありません。')
+        # ⭐ 9-216: 第2層が「学習後の形では横から打てない」と報告していたら添える。
+        #   判定自体は変えない（第2層の乱択は断定の権限を持たない。下の第3層と同じ扱い）。
+        if any('構えが見つかりません' in m for _t, fs in groups for _k, m in fs):
+            print('  　　ただし**第2層は、学習後の形ではパックを横から打てない可能性を報告しています**。'
+                  '第2層の記述を確認してください。')
         # 第3層が未達を報告しているのに総合判定が「障害なし」だけだと矛盾して見える。
         # 判定を出す権限は第1層のみ（5.5.1「確率的な層は断定してはならない」）なので
         # 判定自体は変えず、**第3層の報告があることだけを添える**（2026-09-02）。
@@ -1194,6 +1219,42 @@ def main():
     sys.stdout.flush()
     if run:
         os._exit(0)
+
+
+def learned_strike_poses(env, n=200000, dz=0.10, dh=0.40, floor=0.02, wall_y=0.45, seed=0):
+    """⭐⭐ 9-216: **学習後の形で**、パックの脇・同じ高さに先端を置けるかを env 自身の FK で数える。
+
+    ⛔ 第1層は設計図（XML）の形を平面チェーンで判定する。学習でリンクは伸び、しかも
+      **鉛直から 28〜128° 傾いて付く**（オフセットが xz の 2 成分）ので、平面チェーンの
+      「リンクは関節の真上へまっすぐ」という仮定が崩れる（9-215・9-216）。
+    ⭐ ここでは**シミュレータと初期姿勢の探索が使う FK**（`_fk_points_batch`）をそのまま使う。
+      `probe_max_shot.py`（9-214）の構え探しの幾何部分と同じ条件。
+    ⚠️ 乱択なので「0 個」は存在しないことの証明ではない。**呼び出し側は fatal にしない。**
+
+    返り値: dict（条件ごとの通過数）。腕の FK が取れなければ None。
+    """
+    try:
+        xml = getattr(env, 'cur_xml_str', None) or env.init_xml_str
+        chain = env._parse_arm_chain(xml)
+        iq = np.asarray(env.init_qpos, dtype=float)
+        nj = len(chain)
+        cube = np.array([0.55 + iq[nj], iq[nj + 1], 0.2125])
+        gap = env._get_cube_half_size() + env._get_max_arm_radius() + 0.01
+    except Exception:
+        return None
+    rng = np.random.default_rng(seed)
+    lim = np.radians([180] + [90] * (nj - 1))
+    A = rng.uniform(-lim, lim, size=(n, nj))
+    P, Q = env._fk_points_batch(chain, A)
+    tip = Q[:, -1, :]
+    hd = np.linalg.norm(tip[:, :2] - cube[:2], axis=1)
+    c_h = np.abs(tip[:, 2] - cube[2]) < dz
+    c_d = (hd > gap) & (hd < gap + dh)
+    c_f = np.minimum(P[:, :, 2], Q[:, :, 2]).min(1) >= floor
+    c_w = np.abs(np.concatenate([P[:, :, 1], Q[:, :, 1]], 1)).max(1) <= wall_y
+    return dict(n=n, height=int(c_h.sum()), dist=int(c_d.sum()), both=int((c_h & c_d).sum()),
+                floor=int((c_h & c_d & c_f).sum()), final=int((c_h & c_d & c_f & c_w).sum()),
+                dz=dz, dh=dh)
 
 
 def _run_layers23(run, task, geo=None):
@@ -1234,6 +1295,22 @@ def _run_layers23(run, task, geo=None):
         st, _, _, _, _ = env.step(a)
 
     f2 = layer2(env.robot.bodies, task)
+    if task == 'hockey':
+        cnt = learned_strike_poses(env)
+        if cnt is None:
+            f2.append(('warn', '学習後の形で打てる構えを数えられませんでした（腕の FK が取れない）'))
+        else:
+            line = (f'乱択 {cnt["n"]} 姿勢のうち: 先端がパックの高さ（±{cnt["dz"]:.2f} m） {cnt["height"]} / '
+                    f'パックの脇 {cnt["dist"]} / 両方 {cnt["both"]} / '
+                    f'**＋全リンクが床より上 {cnt["floor"]}** / ＋壁の内側 {cnt["final"]}')
+            if cnt['final'] == 0:
+                f2.append(('warn',
+                    f'⭐⭐ **学習後の形では、パックの脇・同じ高さに先端を置ける構えが見つかりません。**\n'
+                    f'      {line}\n'
+                    f'      → **この形はパックを横から打てない可能性が高い**（9-214 の全力打撃でも構えが作れなかった型）。\n'
+                    f'      　⚠️ 乱択なので断定はしません。第1層（設計図の形）の判定とは別物です'))
+            else:
+                f2.append(('ok', f'学習後の形でも、パックの脇・同じ高さに先端を置けます（{line}）'))
 
     # 行動トレース
     trace, xs, dists = {}, [], []
