@@ -13,6 +13,10 @@
   bone_offset  (L, 3)  **最適化後**のボーン（設計図の値ではない）
   cube         (T, 3)  Pusher の対象物（無い場合は形状 (0,)）
   target       (3,)    Reach の目標
+  ep_*         採用した全話の軌跡・置いた瞬間・形（ep_bone / ep_geom）・報酬（ep_reward / ep_reward_ctrl）
+
+環境変数: TRACE_EPISODES（既定 5）・TRACE_SKIP（既定 2）・TRACE_STEPS（既定 1200）・TRACE_OUT（出力先）・
+  ⭐ TRACE_STOCHASTIC=1 で**学習中と同じ確率的な行動**で回す（9-225。既定は平均の行動＝評価と同じ）
 
 ⚠️ **最適化後の形態を使うこと。** co-design はリンク長も太さも変えるので、
 XML の設計値でメッシュを並べると**学習結果と違う絵**になる。
@@ -78,6 +82,11 @@ target = np.array([_src.get('target_x', 0.8),
 #   ⭐ **1 回の読み込みのまま N 話回し、頭の SKIP 話を捨てる。**
 N_EP = int(os.environ.get('TRACE_EPISODES', '5'))
 SKIP = int(os.environ.get('TRACE_SKIP', '2'))
+# ⭐ 2026-10-05（9-225）: 学習中と同じく**確率的な行動**で回す（既定は平均の行動＝評価と同じ）。
+#   学習中の探索がパックに触れていたかを測るため。⚠️ 設計の行動も確率的になるので形は話ごとに変わる
+STOCH = os.environ.get('TRACE_STOCHASTIC') == '1'
+if STOCH:
+    print('[trace] ⭐ 確率的な行動で回す（学習中の探索と同じ。TRACE_STOCHASTIC=1）', flush=True)
 
 names = None
 bone = None
@@ -87,6 +96,8 @@ eps = []          # 採用した話ごとの (xpos, xmat, cube)
 for k in range(N_EP):
     state = env.reset()
     xpos, xmat, cube = [], [], []
+    shape = None      # ⭐ 9-225: この話の形（ボーンと半径）
+    r_tot = r_ctrl = 0.0   # ⭐ 9-225: この話の報酬の合計と、そのうち制御コストの合計
     init = None       # ⭐ 9-218: execution に入った瞬間（最初の step の前）の腕とパック
     for _ in range(cfg.skel_transform_nsteps + 2 + max_steps):
         in_exec = env.stage == 'execution'
@@ -102,21 +113,25 @@ for k in range(N_EP):
         if agent.obs_norm is not None:
             sv = agent.normalize_observation(sv)
         with torch.no_grad():
-            action = agent.policy_net.select_action(sv, mean_action=True).numpy().astype(np.float64)
+            action = agent.policy_net.select_action(sv, mean_action=not STOCH).numpy().astype(np.float64)
         state, reward, done, _, info = env.step(action)
+        r_tot += float(reward); r_ctrl += float(info.get('reward_ctrl', 0.0))
 
         if in_exec:
+            if shape is None:
+                # 設計フェーズが終わった時点の形態を確定させる（この話の中ではここから先は変わらない）
+                # ⭐ 9-225: **話ごとに**取る。確率的な行動（TRACE_STOCHASTIC）では形が話ごとに変わるので、
+                #   ⛔ 1 話目の形を全話に使うと、当たったリンクを取り違える
+                shape = (np.array([np.asarray(getattr(b, 'bone_offset', [0, 0, 0]), dtype=float)
+                                   for b in env.robot.bodies]),
+                         # ⭐ リンク半径（カプセルの size[0]）。**貫通判定にはこれが要る**
+                         #   （`check_cube_penetration.py`。軸だけでは食い込みを過小評価する）。
+                         np.array([float(np.asarray(b.geoms[0].size, dtype=float).flatten()[0])
+                                   if getattr(b, 'geoms', None) else np.nan
+                                   for b in env.robot.bodies]))
             if names is None:
-                # 設計フェーズが終わった時点の形態を確定させる（ここから先は変わらない）
                 names = [b.name for b in env.robot.bodies]
-                bone = np.array([np.asarray(getattr(b, 'bone_offset', [0, 0, 0]), dtype=float)
-                                 for b in env.robot.bodies])
-                # ⭐ リンク半径（カプセルの size[0]）。**貫通判定にはこれが要る**
-                #   （`check_cube_penetration.py`。軸だけでは食い込みを過小評価する）。
-                geom_size = np.array([
-                    float(np.asarray(b.geoms[0].size, dtype=float).flatten()[0])
-                    if getattr(b, 'geoms', None) else np.nan
-                    for b in env.robot.bodies])
+                bone, geom_size = shape
             xpos.append([np.asarray(env._body_xpos[n], dtype=float) for n in names])
             xmat.append([np.asarray(env._body_xmat[n], dtype=float).reshape(3, 3) for n in names])
             # Pusher の対象物。⚠️ **`_body_xpos` には cube が入っていない**（腕の body だけ）。
@@ -129,7 +144,7 @@ for k in range(N_EP):
         if done:
             break
     if k >= SKIP:
-        eps.append((np.array(xpos), np.array(xmat), np.array(cube), init))
+        eps.append((np.array(xpos), np.array(xmat), np.array(cube), init, shape, (r_tot, r_ctrl)))
     print(f'[trace] 話 {k+1}/{N_EP}  step={len(xpos)}  '
           f'{"⭐ 採用" if k >= SKIP else "⚠️ 捨てる（頭の話は当てにならない。Bug 47）"}', flush=True)
 
@@ -167,7 +182,12 @@ np.savez_compressed(out,
                     ep_xpos=np.array([e[0] for e in eps], dtype=object),
                     ep_xmat=np.array([e[1] for e in eps], dtype=object),
                     # ⭐ 9-218: 最初の step の前の状態。置いた瞬間にリンクとパックが重なっていないかを見る
-                    ep_init=np.array([e[3] for e in eps], dtype=object))
+                    ep_init=np.array([e[3] for e in eps], dtype=object),
+                    # ⭐ 9-225: 話ごとの形（ボーン・半径）。確率的な行動では話ごとに違う
+                    ep_bone=np.array([e[4][0] if e[4] else None for e in eps], dtype=object),
+                    ep_geom=np.array([e[4][1] if e[4] else None for e in eps], dtype=object),
+                    # ⭐ 9-225: 話ごとの報酬の合計と制御コストの合計（どちらが効いているかを分ける）
+                    ep_reward=np.array([e[5][0] for e in eps]), ep_reward_ctrl=np.array([e[5][1] for e in eps]))
 
 print(f'[trace] {restore_dir} ckpt={checkpoint}')
 print(f'[trace] リンク: {names}')
