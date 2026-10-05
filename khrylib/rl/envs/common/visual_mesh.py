@@ -12,8 +12,8 @@
 
 変換は `scripts/render_arm_video.py`（mp4 のデモ）と同じ:
 メッシュ座標のボーン方向を +Z へ回し、**いまのボーン長 ÷ 元の長さ**で Z だけ伸縮し、リンクのボーン方向へ回す。
-⭐ メッシュは**頂点色付きの COLLADA（.dae）**で書く（Choreonoid の Assimp プラグインが読める拡張子は
-dae / blend / x / dxf だけで、頂点色を `setColors` で取り込む）。
+⭐ メッシュは **COLLADA（.dae）**で書く（Choreonoid の Assimp プラグインが読める拡張子は dae / blend / x / dxf だけ）。
+⭐ 色は**かたまりごとの材質**で付ける（頂点色だと環境光に灰色が混ざってくすむ。`_write_dae` の説明）。
 ⚠️ ファイル上は `Y_UP` と宣言して**回転させずに**通す（Assimp は上向きの軸に応じて根の変換を掛け、Choreonoid はそれをそのまま使う）。
 """
 import json
@@ -91,23 +91,57 @@ def _spec():
     return _CACHE['spec']
 
 
-def _write_dae(path, V, F, C):
+def _write_dae(path, V, F, C, k=4):
+    """メッシュを COLLADA（.dae）で書く。
+
+    ⛔ 2026-10-05: 初稿は**頂点色**で書いたが、Choreonoid のシェーダは頂点色のとき
+      **環境光の項だけ材質の既定色（灰色）で足す**（`FullLighting.frag`: `color += ambientIntensity * ambientColor`）
+      ので、どの面にも灰色が混ざって**薄くくすんだ**。
+    ⭐ 面の色を k 色のかたまり（リンクの本体色・関節のマゼンタ球など）に分け、**かたまりごとに色の材質**を付ける。
+      環境光も同じ色で足されるので、元の色のまま見える。
+    """
+    from scipy.cluster.vq import kmeans2
+    fc = C[F].mean(axis=1)
+    k = int(min(k, len(np.unique(np.round(fc, 2), axis=0))))
+    if k > 1:
+        cen, lab = kmeans2(fc, k, seed=0, minit='++')
+    else:
+        cen, lab = fc.mean(axis=0, keepdims=True), np.zeros(len(F), int)
     pos = ' '.join(f'{x:.6g}' for x in V.reshape(-1))
-    col = ' '.join(f'{x:.4g}' for x in C.reshape(-1))
-    idx = ' '.join(str(int(i)) for i in F.reshape(-1))
-    n, m = len(V), len(F)
+    n = len(V)
+    eff, mat, tri, bind = [], [], [], []
+    for i in range(len(cen)):
+        sel = F[lab == i]
+        if len(sel) == 0:
+            continue
+        # ⭐ 色味（色相・彩度）は変えず、明るさだけ 0.9 へ持ち上げる（元の GLB の色がやや暗く、画面で沈んだ）。
+        #   さらに自己発光を少し足して影の側も黒くつぶれないようにする（2026-10-05、見た目のみ）
+        import colorsys
+        hh, ss, vv = colorsys.rgb_to_hsv(*np.clip(cen[i], 0, 1))
+        r, g, b = colorsys.hsv_to_rgb(hh, ss, max(vv, 0.9))
+        er, eg, eb = 0.25 * r, 0.25 * g, 0.25 * b
+        eff.append(f'<effect id="e{i}"><profile_COMMON><technique sid="t"><phong>'
+                   f'<emission><color>{er:.4f} {eg:.4f} {eb:.4f} 1</color></emission>'
+                   f'<diffuse><color>{r:.4f} {g:.4f} {b:.4f} 1</color></diffuse>'
+                   f'<specular><color>0.15 0.15 0.15 1</color></specular><shininess><float>20</float></shininess>'
+                   f'</phong></technique></profile_COMMON></effect>')
+        mat.append(f'<material id="m{i}"><instance_effect url="#e{i}"/></material>')
+        idx = ' '.join(str(int(j)) for j in sel.reshape(-1))
+        tri.append(f'<triangles material="s{i}" count="{len(sel)}">'
+                   f'<input semantic="VERTEX" source="#g-vtx" offset="0"/><p>{idx}</p></triangles>')
+        bind.append(f'<instance_material symbol="s{i}" target="#m{i}"/>')
     path.write_text(f'''<?xml version="1.0" encoding="utf-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
 <asset><unit name="meter" meter="1"/><up_axis>Y_UP</up_axis></asset>
+<library_effects>{''.join(eff)}</library_effects>
+<library_materials>{''.join(mat)}</library_materials>
 <library_geometries><geometry id="g" name="g"><mesh>
 <source id="g-pos"><float_array id="g-pos-a" count="{3*n}">{pos}</float_array>
 <technique_common><accessor source="#g-pos-a" count="{n}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>
-<source id="g-col"><float_array id="g-col-a" count="{3*n}">{col}</float_array>
-<technique_common><accessor source="#g-col-a" count="{n}" stride="3"><param name="R" type="float"/><param name="G" type="float"/><param name="B" type="float"/></accessor></technique_common></source>
 <vertices id="g-vtx"><input semantic="POSITION" source="#g-pos"/></vertices>
-<triangles count="{m}"><input semantic="VERTEX" source="#g-vtx" offset="0"/><input semantic="COLOR" source="#g-col" offset="0" set="0"/><p>{idx}</p></triangles>
+{''.join(tri)}
 </mesh></geometry></library_geometries>
-<library_visual_scenes><visual_scene id="s"><node id="n"><instance_geometry url="#g"/></node></visual_scene></library_visual_scenes>
+<library_visual_scenes><visual_scene id="s"><node id="n"><instance_geometry url="#g"><bind_material><technique_common>{''.join(bind)}</technique_common></bind_material></instance_geometry></node></visual_scene></library_visual_scenes>
 <scene><instance_visual_scene url="#s"/></scene>
 </COLLADA>
 ''')
