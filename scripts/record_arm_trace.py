@@ -150,7 +150,10 @@ np.savez_compressed(out,
                     bone_offset=bone, geom_size=geom_size, cube=cube, target=target,
                     # ⭐ 採用した全話の要約。量を比べるときはこちらを使う（Bug 47）
                     ep_cube_dx=np.array([_score(e) for e in eps]),
-                    ep_count=len(eps), ep_skipped=SKIP)
+                    ep_count=len(eps), ep_skipped=SKIP,
+                    # ⭐ 採用した全話の対象の軌跡（2026-10-05、系譜 9-213）。中央値の話だけでは
+                    #   「動いた話でパックがどこへ行ったか」が分からない
+                    ep_cubes=np.array([e[2] for e in eps], dtype=object))
 
 print(f'[trace] {restore_dir} ckpt={checkpoint}')
 print(f'[trace] リンク: {names}')
