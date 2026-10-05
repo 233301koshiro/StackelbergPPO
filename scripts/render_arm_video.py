@@ -175,6 +175,8 @@ def main():
     ap.add_argument('--cube', action='store_true', help='対象物を描く（Pusher のとき）')
     ap.add_argument('--zoom', type=float, default=1.5, help='寄り。大きいほど腕が大きく映る')
     ap.add_argument('--tmax', type=int, default=0, help='この step までを描く（0 なら全部）')
+    ap.add_argument('--no-target', action='store_true', dest='no_target',
+                    help='目標の星を描かない（Pusher など目標の無いタスク。trace は Reach 用の既定の目標を持っているので、描くと誤解を招く）')
     ap.add_argument('--xml', default='',
                     help='環境の XML。省略時は trace のある run の .hydra から xml_name を読む。柱・壁・板と箱の寸法に使う')
     ap.add_argument('--glb', default='',
@@ -250,7 +252,7 @@ def main():
     # リンク原点だけだと先端メッシュがはみ出るので、最長ボーン 1 本ぶんだけ広げる。
     # ⚠️ **cube は画角に入れない。** Pusher の学習済み方策は cube を 15 m 吹き飛ばすので、
     # 入れると腕が豆粒になる（2026-09-04 に実際にそうなった）。cube は枠外へ出てよい。
-    pts = np.vstack([xpos[:tmax].reshape(-1, 3), target[None, :]]
+    pts = np.vstack([xpos[:tmax].reshape(-1, 3)] + ([] if args.no_target else [target[None, :]])
                     + [tr.reshape(-1, 3) for tr, _c in static_tris])   # ⭐ 柱・壁も画角に入れる
     pad = float(np.linalg.norm(bone, axis=1).max())
     lo, hi = pts.min(axis=0) - pad, pts.max(axis=0) + pad
@@ -296,7 +298,8 @@ def main():
         if all_tri:
             ax.add_collection3d(Poly3DCollection(np.concatenate(all_tri), facecolors=np.concatenate(all_fc),
                                                  edgecolor='none', zorder=1))
-        ax.scatter(*target, s=90, marker='*', color='#f59f00', depthshade=False, zorder=2)
+        if not args.no_target:
+            ax.scatter(*target, s=90, marker='*', color='#f59f00', depthshade=False, zorder=2)
         if args.cube and cube_box is None and cube.ndim == 2 and np.any(cube[t]):
             ax.scatter(*cube[t], s=70, marker='s', color='#c2255c', depthshade=False)
         ax.set_xlim(ctr[0]-rad, ctr[0]+rad); ax.set_ylim(ctr[1]-rad, ctr[1]+rad)
