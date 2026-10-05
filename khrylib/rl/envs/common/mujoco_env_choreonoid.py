@@ -585,6 +585,15 @@ def mujoco_xml_to_body(xml_str: str):
         color_idx = 0
         # ⭐ 見た目を元のメッシュにする（画面で見るときだけ。`visual_mesh.py`、2026-10-05）
         from khrylib.rl.envs.common.visual_mesh import visual_dae_for
+        # ⭐ デモ用（2026-10-05）: 見えなくする物体（物理には残す）と、目標の印（見た目だけ）。どちらも既定は無効
+        _hide = body_name in [b for b in os.environ.get('CNOID_HIDE_BODIES', '').split(',') if b]
+        _mark = os.environ.get('CNOID_TARGET_MARK')
+
+        def _collision_only(start):
+            """`out[start:]`（Shape 1 つ）を当たり判定専用（Collision）に包む。物理は変わらず、見えなくなる。"""
+            shape_lines = ['    ' + ln for ln in out[start:]]
+            del out[start:]
+            out.extend(['      -', '        type: Collision', '        elements:'] + shape_lines)
         for li, lk in enumerate(links_list):
             out.append('  -')
             out.append(f'    name: "{lk["name"]}"')
@@ -644,11 +653,11 @@ def mujoco_xml_to_body(xml_str: str):
                 out.append('        appearance:')
                 out.append('          material:')
                 out.append(f'            diffuseColor: [ {cr:.3g}, {cg:.3g}, {cb:.3g} ]')
+                if _hide:
+                    _collision_only(_shape_at)
                 if dae is not None:
                     # ⭐ カプセルは当たり判定専用（Collision）、見た目は元のメッシュ（Visual）。物理は変わらない
-                    shape_lines = ['    ' + ln for ln in out[_shape_at:]]
-                    del out[_shape_at:]
-                    out += ['      -', '        type: Collision', '        elements:'] + shape_lines
+                    _collision_only(_shape_at)
                     out += ['      -', '        type: Visual', '        elements:',
                             '          -', '            type: Resource', f'            uri: "{dae}"']
                 # ルートリンク（土台の球）は隣接リンクに埋もれて見えにくいため、
@@ -657,9 +666,7 @@ def mujoco_xml_to_body(xml_str: str):
                 if lk['name'] == root_name and lk['parent'] is None and st == 'sphere' and is_robot \
                         and os.environ.get('CNOID_VISUAL_MESHES'):
                     # ⭐ メッシュ表示のときは取り付け用の球を見せない（台座のメッシュに重なる）。当たり判定は残す
-                    shape_lines = ['    ' + ln for ln in out[_shape_at:]]
-                    del out[_shape_at:]
-                    out += ['      -', '        type: Collision', '        elements:'] + shape_lines
+                    _collision_only(_shape_at)
                 elif lk['name'] == root_name and lk['parent'] is None and st == 'sphere':
                     marker_r = shape['radius'] * 1.4
                     out.append('      -')
@@ -670,6 +677,18 @@ def mujoco_xml_to_body(xml_str: str):
                     out.append('          appearance:')
                     out.append('            material:')
                     out.append(f'              diffuseColor: [ {cr:.3g}, {cg:.3g}, {cb:.3g} ]')
+                if _mark and is_robot and lk['name'] == root_name and lk['parent'] is None:
+                    # ⭐ 目標の印（2026-10-05、デモ用）。**当たり判定も質量も無い、見た目だけの球**を
+                    #   固定されたルートリンクに付ける → 目標の位置で宙に浮いたまま動かない。
+                    #   ⚠️ 新しい body を足すとシミュレーションの状態の並びが変わりうるので避けた
+                    tx, ty, tz = (float(v) for v in _mark.split(','))
+                    rx, ry, rz = lk['translation']
+                    out += ['      -', '        type: Visual',
+                            f'        translation: [ {tx - rx:.6g}, {ty - ry:.6g}, {tz - rz:.6g} ]',
+                            '        shape:', '          geometry: { type: Sphere, radius: 0.04 }',
+                            '          appearance:', '            material:',
+                            '              diffuseColor: [ 1.0, 0.62, 0.0 ]',
+                            '              emissiveColor: [ 0.6, 0.35, 0.0 ]']
         return '\n'.join(out) + '\n'
 
     # Process each top-level worldbody child as its own independent .body file.
