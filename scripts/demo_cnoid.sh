@@ -18,7 +18,7 @@ EPS=${2:-3}
 # HIDE: 見えなくする物体（物理には残す）／MARK: 目標の印を出すか
 # CAM: 最初のカメラ（視点x,y,z,注視点x,y,z）。発表中はマウスで自由に動かせる
 case "$TASK" in
-  reach)          RUN=e2e_a1v_gearonly_reach;     HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 描いた形のまま（長さを学習しない）。⚠️ 見えない箱に触れる話がある
+  reach)          RUN=e2e_a1v_reach;              HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 形を伸ばしてタスクに合わせた（co-design の狙いどおり）。台座 1.1° で立っている
   pusher)         RUN=e2e_a1v_gearonly_pusher_s2; HIDE=;     MARK=0; CAM=1.6,-2.8,1.4,0.6,0,0.4 ;;   # 台座が立ったまま・描いた形のまま。目標は無い
   target_pusher)  RUN=e2e_a1v_actuator_tp;        HIDE=;     MARK=1; CAM=1.7,-3.4,1.7,1.0,0,0.35 ;;
   obstacle_avoid) RUN=e2e_a1v_obspen_reach;       HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 柱を避ける（目標の 210 mm 手前で止まる）
