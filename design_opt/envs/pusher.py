@@ -536,6 +536,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         #   収束した（2026-07-10 L2/TP1 再走 ep10 で実測）。50 ≈ ctrl コスト満額 + マージン。
         # init_contact_penalty <= 0: 旧挙動（棄却）。
         self._init_contact_penalty_pending = False
+        self._init_contact_link = '先端'
         _ic, _fp = self._check_initial_contact(), self._check_floor_penetration()
         if _ic or _fp:
             # ⭐⭐ **どちらの門が、何の値で発火したかを出す**（2026-10-03、系譜 9-211）。
@@ -546,7 +547,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 _c = np.asarray(self.get_body_com('cube'), dtype=float)
                 _th = (self._get_cube_half_size() + self._get_max_arm_radius() + 0.03)
                 print(f'⚠️⚠️ [init_gate] **1 step でペナルティ終了する。**'
-                      f'初期接触={_ic} / 床貫通={_fp} / '
+                      f'初期接触={_ic}（リンク {getattr(self, "_init_contact_link", "先端")}）/ 床貫通={_fp} / '
                       f'先端 ({_t[0]:.3f},{_t[1]:.3f},{_t[2]:.3f}) / '
                       f'cube ({_c[0]:.3f},{_c[1]:.3f},{_c[2]:.3f}) / '
                       f'|dx|={abs(_t[0]-_c[0]):.3f} |dy|={abs(_t[1]-_c[1]):.3f} '
@@ -1089,12 +1090,17 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         #   ⛔⛔ **stdout では見えない。**`arm_safe_init` の印字は worker の出力なので
         #     `single_run/<run>/stdout.log` に 1 行も残らない（9-193）。
         #   ⛔ 「床なしの段へ落ちた回数 0」を**証拠として読んでしまった**（実際は見えていないだけ）。
-        #   ⭐ hydra は cwd を run ディレクトリにするので、ここへ書けば run ごとに溜まる。
+        #   ⛔⛔ 2026-10-05 訂正: 初稿は「hydra が cwd を run ディレクトリにする」と仮定して相対パスに書いたが、
+        #     **cwd はプロジェクト直下のまま**で、`log/` が無いので書き込みが失敗し、`except: pass` に黙殺されていた。
+        #   ⭐ `cfg.log_dir`（その run の log/ の絶対パス）へ書く。⚠️ 再生（record_arm_trace 等）も同じ run の log/ に追記する。
         try:
-            with open(os.environ.get('ARM_INIT_STAGE_LOG', 'log/arm_init_stage.log'), 'a') as _fh:
+            _p = os.environ.get('ARM_INIT_STAGE_LOG') or os.path.join(self.cfg.log_dir, 'arm_init_stage.log')
+            with open(_p, 'a') as _fh:
                 _fh.write(f'{used}\t{" / ".join(_tried)}\n')
-        except Exception:
-            pass                       # ⚠️ 記録が取れなくても学習は止めない
+        except Exception as _e:
+            if not getattr(self, '_stage_log_warned', False):
+                print(f'⚠️ [arm_safe_init] 段の記録を書けない: {_e!r}', flush=True)   # ⭐ 黙らない
+                self._stage_log_warned = True
         if used != _stages[0][0]:
             # ⭐⭐ **緩めた段を使ったことを黙って通さない**（§5-2 ①「例外を握りつぶす」）
             print(f'⚠️⚠️ [arm_safe_init] **第1段「{_stages[0][0]}」が 0 件だったので '
