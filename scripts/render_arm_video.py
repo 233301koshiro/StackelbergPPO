@@ -87,6 +87,44 @@ def cluster_decimate(mesh, pitch, vcol=None):
     return nV, nF, nC[nF].mean(axis=1)
 
 
+def box_tris(center, half):
+    """中心と半幅から、直方体の 12 枚の三角形 (12, 3, 3) を返す。"""
+    c, h = np.asarray(center, float), np.asarray(half, float)
+    s = np.array([[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+                  [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]], float)
+    P = c + s * h
+    quads = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (2, 3, 7, 6), (1, 2, 6, 5), (0, 3, 7, 4)]
+    return np.array([[P[a], P[b], P[cc]] for a, b, cc, d in quads for (a, b, cc) in
+                     ((a, b, cc), (a, cc, d))])
+
+
+def scene_from_xml(xml_path):
+    """⭐ デモ用（2026-10-05）: XML の worldbody から**動かない箱**と**対象の箱の半幅・色**を読む。
+
+    動かない箱 = 腕（先頭の body）と `cube` 以外で、box の geom を持つ body
+    （障害物 Reach の柱、ホッケーの側壁・ゴールの壁・中央の板）。⚠️ 回転（euler/quat）付きは扱わない。
+    """
+    import xml.etree.ElementTree as ET
+    wb = ET.parse(xml_path).getroot().find('worldbody')
+    bodies = wb.findall('body')
+    static, cube = [], None
+    for k, b in enumerate(bodies):
+        bp = np.array([float(v) for v in b.get('pos', '0 0 0').split()])
+        for g in b.findall('geom'):
+            if g.get('type') != 'box':
+                continue
+            if g.get('euler') or g.get('quat'):
+                print(f'  ⚠️ {b.get("name")}: 回転付きの箱は描かない'); continue
+            half = np.array([float(v) for v in g.get('size').split()])
+            gp = np.array([float(v) for v in g.get('pos', '0 0 0').split()])
+            rgba = [float(v) for v in (g.get('rgba') or '0.5 0.5 0.5 1').split()][:3]
+            if b.get('name') == 'cube':
+                cube = (half, np.array(rgba))
+            elif k > 0:
+                static.append((b.get('name'), bp + gp, half, np.array(rgba)))
+    return static, cube
+
+
 def glb_vertex_colors(glb_path, origins):
     """⭐ 元の GLB の色を、リンクごとの STL の頂点へ移すための準備（2026-10-05、デモ用）。
 
@@ -137,6 +175,8 @@ def main():
     ap.add_argument('--cube', action='store_true', help='対象物を描く（Pusher のとき）')
     ap.add_argument('--zoom', type=float, default=1.5, help='寄り。大きいほど腕が大きく映る')
     ap.add_argument('--tmax', type=int, default=0, help='この step までを描く（0 なら全部）')
+    ap.add_argument('--xml', default='',
+                    help='環境の XML。省略時は trace のある run の .hydra から xml_name を読む。柱・壁・板と箱の寸法に使う')
     ap.add_argument('--glb', default='',
                     help='元の GLB。渡すと**元のモデルの色**で描く（無ければリンク名ごとの決め打ちの色）')
     args = ap.parse_args()
@@ -152,6 +192,20 @@ def main():
     origins = json.loads((mdir / 'joints.json').read_text())['frame_origins']
 
     colors_for = glb_vertex_colors(args.glb, origins) if args.glb else None
+    # ⭐ 動かない箱（柱・壁・板）と対象の箱の寸法を XML から読む
+    xml_path = args.xml
+    if not xml_path:
+        try:
+            import yaml
+            run_dir = pathlib.Path(args.trace).resolve().parent.parent
+            xn = yaml.safe_load((run_dir / '.hydra' / 'config.yaml').read_text()).get('xml_name')
+            xml_path = f'assets/mujoco_envs/{xn}.xml' if xn else ''
+        except Exception:
+            xml_path = ''
+    static, cube_box = scene_from_xml(xml_path) if xml_path and pathlib.Path(xml_path).exists() else ([], None)
+    if xml_path:
+        print(f'  環境 {xml_path}: 動かない箱 {len(static)} 個 {[s[0] for s in static]}')
+    static_tris = [(box_tris(c, h), col) for _n, c, h, col in static]
     mesh_names = args.link_names
     skip = L - len(mesh_names)          # 先頭の取り付け球など、メッシュを持たない body
     if skip < 0:
@@ -196,7 +250,8 @@ def main():
     # リンク原点だけだと先端メッシュがはみ出るので、最長ボーン 1 本ぶんだけ広げる。
     # ⚠️ **cube は画角に入れない。** Pusher の学習済み方策は cube を 15 m 吹き飛ばすので、
     # 入れると腕が豆粒になる（2026-09-04 に実際にそうなった）。cube は枠外へ出てよい。
-    pts = np.vstack([xpos[:tmax].reshape(-1, 3), target[None, :]])
+    pts = np.vstack([xpos[:tmax].reshape(-1, 3), target[None, :]]
+                    + [tr.reshape(-1, 3) for tr, _c in static_tris])   # ⭐ 柱・壁も画角に入れる
     pad = float(np.linalg.norm(bone, axis=1).max())
     lo, hi = pts.min(axis=0) - pad, pts.max(axis=0) + pad
     lo[2] = min(lo[2], 0.0)                      # 床は必ず入れる
@@ -211,29 +266,39 @@ def main():
     for k, t in enumerate(frames):
         fig.clf()
         ax = fig.add_subplot(111, projection='3d')
-        for i, p in enumerate(parts):
-            if p is None: continue
-            Vl, F, col = p
-            Vw = xpos[t, i] + (xmat[t, i] @ Vl.T).T
-            tri = Vw[F]
-            # 面法線と光源の内積で陰影を作る（立体感が無いと関節の動きが読めない）
+        # ⭐ 床を先に・不透明で塗り、物は必ずその上に描く（半透明の床を最後に重ねると柱の下半分がかすむ。2026-10-05）
+        ax.computed_zorder = False
+        fl = np.array([[ctr[0]-rad, ctr[1]-rad, 0], [ctr[0]+rad, ctr[1]-rad, 0],
+                       [ctr[0]+rad, ctr[1]+rad, 0], [ctr[0]-rad, ctr[1]+rad, 0]])
+        ax.add_collection3d(Poly3DCollection([fl], facecolors='#e3e5e8', edgecolor='none', zorder=0))
+        # ⭐ 腕・箱・壁を**1 つの集まり**にして奥から順に塗る（部品ごとに足すと前後関係が崩れる）
+        all_tri, all_fc = [], []
+
+        def add(tri, rgb):
             nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
             ln = np.linalg.norm(nrm, axis=1, keepdims=True)
             nrm = nrm / np.where(ln < 1e-12, 1.0, ln)
             lit = np.clip(np.abs(nrm @ LIGHT), 0.0, 1.0)
-            if isinstance(col, np.ndarray):          # 面ごとの元の色（--glb）
-                base_rgb = col
-            else:
-                base_rgb = np.array(matplotlib.colors.to_rgb(col))[None, :]
-            fc = np.clip(base_rgb * (0.45 + 0.55 * lit)[:, None], 0, 1)
-            ax.add_collection3d(Poly3DCollection(tri, facecolors=fc, edgecolor='none'))
-        ax.scatter(*target, s=90, marker='*', color='#f59f00', depthshade=False)
-        if args.cube and cube.ndim == 2 and np.any(cube[t]):
+            rgb = np.atleast_2d(rgb)
+            all_tri.append(tri)
+            all_fc.append(np.clip(rgb * (0.45 + 0.55 * lit)[:, None], 0, 1))
+        for tr, col in static_tris:
+            add(tr, col)
+        if args.cube and cube_box is not None and cube.ndim == 2 and np.any(cube[t]):
+            add(box_tris(cube[t], cube_box[0]), cube_box[1])
+        for i, p in enumerate(parts):
+            if p is None: continue
+            Vl, F, col = p
+            Vw = xpos[t, i] + (xmat[t, i] @ Vl.T).T
+            # 面法線と光源の内積で陰影を作る（立体感が無いと関節の動きが読めない）
+            add(Vw[F], col if isinstance(col, np.ndarray)       # 面ごとの元の色（--glb）
+                else np.array(matplotlib.colors.to_rgb(col))[None, :])
+        if all_tri:
+            ax.add_collection3d(Poly3DCollection(np.concatenate(all_tri), facecolors=np.concatenate(all_fc),
+                                                 edgecolor='none', zorder=1))
+        ax.scatter(*target, s=90, marker='*', color='#f59f00', depthshade=False, zorder=2)
+        if args.cube and cube_box is None and cube.ndim == 2 and np.any(cube[t]):
             ax.scatter(*cube[t], s=70, marker='s', color='#c2255c', depthshade=False)
-        # 床
-        gg, hh = np.meshgrid(np.linspace(ctr[0]-rad, ctr[0]+rad, 2),
-                             np.linspace(ctr[1]-rad, ctr[1]+rad, 2))
-        ax.plot_surface(gg, hh, np.zeros_like(gg), color='#dee2e6', alpha=0.5, zorder=0)
         ax.set_xlim(ctr[0]-rad, ctr[0]+rad); ax.set_ylim(ctr[1]-rad, ctr[1]+rad)
         ax.set_zlim(ctr[2]-rad, ctr[2]+rad)
         # zoom を上げないと matplotlib は軸の立方体を figure の中で小さく描く
