@@ -4,6 +4,7 @@
 ⭐ 絵を描き起こすのではなく、**パイプラインの関数そのもの**（`glb_to_links.py` / `mesh_to_params.py`）を
   呼んで、実際に何が起きているかを描く。手描き A1 を例にする（修論 4.5 の E2E 実走の 1 例）。
 
+  figures/pipeline_m2_pose.png  真横に描いた絵（A1）と斜めに描いた絵（A3）の 3D 化の比較（M2 の失敗例）
   figures/pipeline_m3.png   GLB の頂点 → マゼンタの頂点と関節（重心）→ 関節の高さで切ったリンク
   figures/pipeline_m4.png   リンクごとのメッシュとカプセル（長さ・太さ・はみ出し）
   figures/pipeline_m5.png   XML のカプセル模型（初期姿勢）と、関節軸の割り当て
@@ -41,6 +42,32 @@ for _f in ('Noto Sans CJK JP', 'Noto Serif CJK JP'):
         break
 COL = ['#888888', '#d94040', '#3070d0', '#30a050', '#d0a020']   # 台座・上腕・前腕・先端
 JA = {'base': '台座', 'upper_arm': '上腕', 'forearm': '前腕', 'hand': '先端'}
+
+
+def m2_pose(out):
+    """真横に描いた A1 と、斜め（3/4）に描いた A3 の 3D 化を並べる（系譜 9-23）。
+
+    ⭐ A3 は Tripo3D が斜めの線を「奥へ伸びる」と解釈し、腕が寝た（関節がほぼ同じ高さに並ぶ）。
+    """
+    from PIL import Image
+    fig, ax = plt.subplots(2, 3, figsize=(13, 8.5))
+    for row, case in enumerate(['A1', 'A3']):
+        ax[row, 0].imshow(Image.open(f'data/test/{case}/sketch/{case}_hand.webp')); ax[row, 0].axis('off')
+        ax[row, 1].imshow(Image.open(f'data/test/{case}/sketch/{case}_m1.jpeg')); ax[row, 1].axis('off')
+        mesh = G._apply_yup_zup(G._load_concat(f'data/test/{case}/3D/{case}.glb'))
+        V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
+        idx = np.random.default_rng(0).choice(len(V), min(30000, len(V)), replace=False)
+        a = ax[row, 2]
+        # 横（x-z）と奥行き（y-z）のうち、腕が長く見える方を描く
+        k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
+        a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.5)
+        a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('横 [m]'); a.set_ylabel('高さ z [m]')
+        a.set_title(f'3D（glb）を横から\n高さの広がり {np.ptp(V[:, 2]):.2f} m')
+        ax[row, 0].set_title(f'{case} 手描き（{"真横" if case == "A1" else "斜め 3/4"}）')
+        ax[row, 1].set_title('M1 の整形画像（マーカー 3 個）')
+    fig.suptitle('M2 の失敗例 — 斜めに描くと、Tripo3D が斜線を「奥へ伸びる」と読み、腕が寝る（A3。2 回とも）', fontsize=13)
+    fig.tight_layout(); fig.savefig(out, dpi=120); plt.close(fig)
+    print(f'[M2] → {out}')
 
 
 def m3(case, names, out):
@@ -193,6 +220,7 @@ def main():
                     '--output', f'{tmp}/topology.json'], check=True, stdout=subprocess.DEVNULL)
     subprocess.run([sys.executable, 'scripts/topology_to_xml.py', '--topology', f'{tmp}/topology.json',
                     '--output', f'{tmp}/model.xml', '--no-cube'], check=True, stdout=subprocess.DEVNULL)
+    m2_pose(f'{a.out_dir}/pipeline_m2_pose.png')
     m3(a.case, names, f'{a.out_dir}/pipeline_m3.png')
     m4(a.case, names, f'{a.out_dir}/pipeline_m4.png')
     m5(f'{tmp}/model.xml', names, f'{a.out_dir}/pipeline_m5.png')
