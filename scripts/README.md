@@ -97,7 +97,7 @@
 | ⭐⭐⭐ `close_loop.py` | **判定 → 助言どおりスケール → 再判定** を 1 本で回す（助教の指摘12 / 9-183）。⭐ **結合テストの連結子。**無いと「助言に従う」段で人が描き直すことになり、生成の揺れ（18 %）が混入する。⚠️ **余裕を上乗せしない**（9-30）。⛔ **学習は自動投入しない**（事前登録と GPU 競合を人が確かめる） |
 | `make_slide8_links_figure.py` | 進捗発表スライド 8「リンクに切り分けて寸法を測った」の図（→ `figures/slide8_links_split.png`） |
 | `make_slide9_m1_variance_figure.py` | 同スライド 9「M1 のばらつき」の図（→ `figures/slide9_m1_variance.png`） |
-| `render_pipeline_stages.py` | M3〜M5 の**処理の途中経過**を図にする（2026-10-07、スライド「システムフロー解説」用）。パイプラインの関数そのものを呼んで描く（→ `figures/pipeline_m3.png`・`pipeline_m4.png`・`pipeline_m5.png`）。`--case` で別の手描き |
+| `render_pipeline_stages.py` | M3〜M5 の**処理の途中経過**を図にする（2026-10-07、スライド「システムフロー解説」用）。パイプラインの関数そのものを呼んで描く（→ `figures/pipeline_m2_pose.png`（M2 の失敗例 A1 対 A3）・`pipeline_m3.png`・`pipeline_m4.png`・`pipeline_m5.png`）。`--case` で別の手描き |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
 | ⭐ **`doc_refs.py`** | **識別子の逆引き。「ここを変えたらどこも変わる」を出す。** `--hubs` で影響の広い識別子、`--undefined` で壊れ参照 |
 | `dump_thesis_outline.py` | 修論の見出しを書き出す。`--write` で 構成.md の一覧を再生成、`--check` で食い違い検査 |
