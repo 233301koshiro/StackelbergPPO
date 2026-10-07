@@ -56,6 +56,20 @@ def self_check():
         got = float(seg_seg_dist(a, b, c, d))
         assert abs(got - want) < 1e-9, (got, want)
     print('✅ 線分間距離の自己検査 5 件一致')
+    # ⭐ Bug 56: 環境側の「自分のリンクどうしの初期接触の門」（pusher.py `_self_overlaps`）が、
+    #   固着した実例を捕まえ、正常な形を捕まえないこと（軌跡があるときだけ）
+    sys.path.insert(0, os.getcwd())
+    from design_opt.envs.pusher import PusherEnv as E
+    for r, want in [('tripo_pjdp_dist_sc', True), ('tripo_pjdp_dist_sc_s2', False), ('tripo_pjp_long_sc', False)]:
+        f = f'single_run/{r}/trace/arm_trace.npz'
+        if not os.path.exists(f):
+            continue
+        d = np.load(f, allow_pickle=True)
+        x, R, b, g = d['xpos'][0], d['xmat'][0], d['bone_offset'], d['geom_size']
+        segs = [(x[l], x[l] + R[l] @ b[l]) for l in range(len(b))]
+        hit = E._self_overlaps(segs, list(g), [-1] + list(range(len(b) - 1)))
+        assert bool(hit) == want, (r, hit)
+    print('✅ 自分のリンクどうしの初期接触の門（Bug 56）: 固着した形を捕まえ、正常な形は通す')
 
 
 def measure(run):

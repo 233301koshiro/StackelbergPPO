@@ -473,6 +473,77 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                     return True
         return False
 
+    @staticmethod
+    def _seg_seg_dist(p1, q1, p2, q2):
+        """線分 p1-q1 と p2-q2 の最短距離（Ericson）。"""
+        d1, d2, r = q1 - p1, q2 - p2, p1 - p2
+        a, e, f = float(d1 @ d1), float(d2 @ d2), float(d2 @ r)
+        if a < 1e-12 and e < 1e-12:
+            return float(np.linalg.norm(r))
+        if a < 1e-12:
+            s, t = 0.0, float(np.clip(f / e, 0.0, 1.0))
+        else:
+            c = float(d1 @ r)
+            if e < 1e-12:
+                s, t = float(np.clip(-c / a, 0.0, 1.0)), 0.0
+            else:
+                b = float(d1 @ d2)
+                den = a * e - b * b
+                s = float(np.clip((b * f - c * e) / den, 0.0, 1.0)) if den > 1e-12 else 0.0
+                t = (b * s + f) / e
+                if t < 0.0:
+                    s, t = float(np.clip(-c / a, 0.0, 1.0)), 0.0
+                elif t > 1.0:
+                    s, t = float(np.clip((b - c) / a, 0.0, 1.0)), 1.0
+        return float(np.linalg.norm(p1 + d1 * s - (p2 + d2 * t)))
+
+    @classmethod
+    def _self_overlaps(cls, segs, radii, parents, tol=1e-3):
+        """隣り合わない（親子でない）リンクの組のうち、カプセルどうしが tol より深く重なるもの。
+
+        segs: [(始点, 終点), ...]、radii: 半径、parents: 親の添字（根元は -1）。
+        戻り: [(i, j, 重なり[m]), ...]
+        """
+        out = []
+        n = len(segs)
+        for i in range(n):
+            for j in range(i + 1, n):
+                if parents[j] == i or parents[i] == j:
+                    continue                      # 隣り合う組は判定しない（Choreonoid の既定と同じ）
+                ov = radii[i] + radii[j] - cls._seg_seg_dist(*segs[i], *segs[j])
+                if ov > tol:
+                    out.append((i, j, ov))
+        return out
+
+    def _check_self_contact(self):
+        """⭐ Bug 56（2026-10-07）: 実行開始時に、**腕の離れたリンクどうし**が最初から重なっていないか。
+
+        ⛔ 太さは設計変数。短いリンクの先で次のリンクを太くすると、根元の球などに**最初から食い込む形**ができる。
+          自己干渉あり（`CNOID_SELF_COLLISION=1`）ではその接触が解けず、関節が固着した（`tripo_pjdp_dist_sc`）。
+        ⭐ `init_self_contact=true` のときだけ働く（既定は無効＝既存 run は無影響）。
+          重なっていれば置いた瞬間の門（Bug 55）と同じペナルティで終える → Leader はその形を避けることを学ぶ。
+        """
+        if not self.env_specs.get('init_self_contact', False):
+            return False
+        bodies = list(self.robot.bodies)
+        segs, radii, parents = [], [], []
+        for body in bodies:
+            p = self._body_xpos.get(body.name)
+            R = self._body_xmat.get(body.name)
+            if p is None or R is None or not getattr(body, 'geoms', None):
+                return False
+            p = np.asarray(p, dtype=float)
+            q = p + np.asarray(R, dtype=float).reshape(3, 3) @ np.asarray(body.bone_offset, dtype=float)
+            segs.append((p, q))
+            radii.append(float(np.asarray(body.geoms[0].size, dtype=float).flatten()[0]))
+            parents.append(bodies.index(body.parent) if body.parent in bodies else -1)
+        hits = self._self_overlaps(segs, radii, parents)
+        if hits:
+            i, j, ov = max(hits, key=lambda h: h[2])
+            self._init_contact_link = f'自分のリンク {bodies[i].name}×{bodies[j].name}（{ov*1000:.0f} mm 重なる）'
+            return True
+        return False
+
     def _check_floor_penetration(self):
         """実行開始時にアームのいずれかの関節・先端が床（z=0）を割っているか確認。
         縦型アーム（tripo_arm_v3）用: Leader は offset の z 成分を動かせるため、
@@ -538,6 +609,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         self._init_contact_penalty_pending = False
         self._init_contact_link = '先端'
         _ic, _fp = self._check_initial_contact(), self._check_floor_penetration()
+        _ic = _ic or self._check_self_contact()      # ⭐ Bug 56: 腕の離れたリンクどうしの重なりも同じ門で
         if _ic or _fp:
             # ⭐⭐ **どちらの門が、何の値で発火したかを出す**（2026-10-03、系譜 9-211）。
             #   ⛔⛔ **出していなかったので「腕が動かない」と誤診した。**
