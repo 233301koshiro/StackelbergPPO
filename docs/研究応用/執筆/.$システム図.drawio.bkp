@@ -5,16 +5,16 @@
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
         <mxCell id="g1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" value="1. 入力・画像整形フェーズ" vertex="1">
-          <mxGeometry height="460" width="260" x="20" y="60" as="geometry" />
+          <mxGeometry height="480" width="260" x="20" y="40" as="geometry" />
         </mxCell>
         <mxCell id="g2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" value="2. 3D変換・リンク分割フェーズ" vertex="1">
-          <mxGeometry height="460" width="490" x="290" y="60" as="geometry" />
+          <mxGeometry height="480" width="490" x="290" y="40" as="geometry" />
         </mxCell>
         <mxCell id="g3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" value="3. シミュレーションモデル生成" vertex="1">
-          <mxGeometry height="460" width="220" x="800" y="60" as="geometry" />
+          <mxGeometry height="480" width="220" x="800" y="40" as="geometry" />
         </mxCell>
         <mxCell id="g4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" value="4. 評価（Stackelberg PPO）・形態診断フェーズ" vertex="1">
-          <mxGeometry height="460" width="660" x="1040" y="60" as="geometry" />
+          <mxGeometry height="480" width="660" x="1040" y="40" as="geometry" />
         </mxCell>
         <mxCell id="sk" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" value="手書きスケッチ" vertex="1">
           <mxGeometry height="60" width="110" x="23" y="127" as="geometry" />
