@@ -83,6 +83,7 @@ def measure(run):
     p1 = x + np.einsum('tlij,lj->tli', R, b)
     p1[:, 0] = p0[:, 0]                       # 根元は球として扱う（9-154）
     worst, frac, pair_w = 0.0, 0.0, None
+    far = [0.0, 0.0]                          # 離れた組だけの最大めり込み・step の割合
     pairs = [(i, j, False) for i in range(L) for j in range(i + 2, L)]
     # ⭐ 隣り合う組（根元の球は除く）も見る。⛔ ただし関節では必ず重なるので、
     #   **関節のまわり（2 本の半径の和）を両方から削ってから**重なりを見る → 子が親の上へ**折り返す**ときだけ拾う。
@@ -104,7 +105,9 @@ def measure(run):
         if depth.max() > worst:
             worst, pair_w = float(depth.max()), (str(d['body_names'][i]), str(d['body_names'][j]))
         frac = max(frac, f)
-    return worst, frac, pair_w, T
+        if not adj:
+            far = [max(far[0], float(depth.max())), max(far[1], f)]
+    return worst, frac, pair_w, T, far
 
 
 def main():
@@ -120,19 +123,21 @@ def main():
     rows = []
     for r in runs:
         try:
-            w, fr, pr, T = measure(r)
+            w, fr, pr, T, far = measure(r)
         except Exception as e:
             print(f'  ⚠️ {r}: 読めない（{e!r}）'); continue
-        rows.append((r, w, fr, pr, T, (f'`{r}`' in thesis) or (r in thesis)))
+        rows.append((r, w, fr, pr, T, (f'`{r}`' in thesis) or (r in thesis), far))
     rows.sort(key=lambda z: -z[1])
     hit = [z for z in rows if z[2] > 0]
     print(f'\n⭐ 対象 {len(rows)} run  /  すり抜けあり（めり込み > {TOL*1000:.0f} mm の step が 1 つ以上）: {len(hit)} run'
           f'  /  そのうち修論本文に名前が出る run: {sum(z[5] for z in hit)}')
-    print(f'{"run":44s} {"最大めり込み":>10s} {"step の割合":>10s}  {"組":14s} 修論')
-    for r, w, fr, pr, T, th in rows:
+    # ⭐ 離れた組を別に出す（2026-10-09、系譜 9-227）。⛔ 最悪の 1 組だけだと、隣り合う組の重なりの陰に
+    #   離れた組の 39〜45 mm が隠れ、9-223 で「離れた組 0」と読み違えた
+    print(f'{"run":44s} {"最大めり込み":>10s} {"step の割合":>10s}  {"組":14s} {"うち離れた組":>16s} 修論')
+    for r, w, fr, pr, T, th, far in rows:
         if fr == 0 and len(runs) > 3:
             continue
-        print(f'{r:44s} {w*1000:8.0f} mm {fr*100:9.1f} %  {str(pr):14s} {"★" if th else ""}')
+        print(f'{r:44s} {w*1000:8.0f} mm {fr*100:9.1f} %  {str(pr):14s} {far[0]*1000:5.0f} mm {far[1]*100:5.1f} %  {"★" if th else ""}')
 
 
 if __name__ == '__main__':
