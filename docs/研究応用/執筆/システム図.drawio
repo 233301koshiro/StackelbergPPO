@@ -1,0 +1,292 @@
+<mxfile host="Electron" modified="2026-10-09T00:00:00.000Z" agent="Mozilla/5.0" version="21.6.8" type="device">
+  <diagram id="pipeline_detailed" name="Robotics Pipeline">
+    <mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1720" pageHeight="760" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- ================= フェーズ背景（グループ） ================= -->
+        <mxCell id="g1" value="1. 入力・画像整形フェーズ" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" vertex="1" parent="1">
+          <mxGeometry x="20" y="40" width="260" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="g2" value="2. 3D変換・リンク分割フェーズ" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" vertex="1" parent="1">
+          <mxGeometry x="300" y="40" width="480" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="g3" value="3. シミュレーションモデル生成" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" vertex="1" parent="1">
+          <mxGeometry x="800" y="40" width="220" height="480" as="geometry" />
+        </mxCell>
+        <mxCell id="g4" value="4. 評価（Stackelberg PPO）・形態診断フェーズ" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#b3b3b3;" vertex="1" parent="1">
+          <mxGeometry x="1040" y="40" width="660" height="480" as="geometry" />
+        </mxCell>
+
+        <!-- ================= Phase 1: Input & M1 ================= -->
+        <mxCell id="sk" value="手書きスケッチ" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="100" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nl" value="固定プロンプト&#10;(マーカー規約)" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="220" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="M1: 画像整形&#10;(Gemini API・温度0)&#10;・設計図風に描き直す&#10;・関節にマゼンタ球" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="150" y="140" width="120" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d1" value="整形スケッチ画像" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="160" y="300" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="e_sk_m1" edge="1" parent="1" source="sk" target="m1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_nl_m1" edge="1" parent="1" source="nl" target="m1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m1_d1" edge="1" parent="1" source="m1" target="d1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================= Phase 2: M2, M3, M4 ================= -->
+        <mxCell id="m2" value="M2: 3D生成&#10;(Tripo3D API)&#10;※seed固定" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="320" y="160" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="d2" value="スケッチ3D.glb&#10;(単一メッシュ・色付き)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="325" y="300" width="110" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="M3: 関節検出・リンク分割&#10;・マゼンタの頂点を色で抽出&#10;・塊の重心＝関節&#10;・関節の高さでメッシュを切る" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="460" y="145" width="150" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d3" value="リンクごとのSTL&#10;+&#10;関節座標JSON" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="485" y="300" width="100" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" value="M4: 形態パラメータ抽出&#10;・長さ＝関節間の距離&#10;・太さ＝骨に垂直な断面&#10;・ギア比・可動域は既定値" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="625" y="145" width="145" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d4" value="topology.json" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="648" y="310" width="100" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Phase 2 Edges (Staggered Flow) -->
+        <mxCell id="e_d1_m2" edge="1" parent="1" source="d1" target="m2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="210" y="390"/><mxPoint x="285" y="390"/><mxPoint x="285" y="190"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_m2_d2" edge="1" parent="1" source="m2" target="d2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_d2_m3" edge="1" parent="1" source="d2" target="m3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="380" y="400"/><mxPoint x="450" y="400"/><mxPoint x="450" y="190"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_m3_d3" edge="1" parent="1" source="m3" target="d3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_d3_m4" edge="1" parent="1" source="d3" target="m4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="535" y="410"/><mxPoint x="617" y="410"/><mxPoint x="617" y="190"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_m4_d4" edge="1" parent="1" source="m4" target="d4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================= Phase 3: M5 ================= -->
+        <mxCell id="m5" value="M5: モデル生成&#10;・リンクをカプセルで近似&#10;・子を親の先端に取り付け&#10;・関節軸を割り当て（既定: 縦型）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="825" y="145" width="170" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="d5" value="XML (MuJoCo互換)&#10;※Choreonoid が読み込み時に変換" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="840" y="310" width="140" height="60" as="geometry" />
+        </mxCell>
+        <!-- Phase 3 Edges -->
+        <mxCell id="e_d4_m5" edge="1" parent="1" source="d4" target="m5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="698" y="400"/><mxPoint x="810" y="400"/><mxPoint x="810" y="190"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_m5_d5" edge="1" parent="1" source="m5" target="d5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ================= Phase 4: M7 第1層 → M6 → M7 第2・3層 ================= -->
+        <!-- M7 第1層（学習の前・XML の幾何だけで判定） -->
+        <mxCell id="gate" value="M7 第1層&#10;門前払い&#10;（学習前・幾何）" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1055" y="140" width="120" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="fail1" value="棄却＋倍率助言&#10;（腕を N 倍に）" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1055" y="310" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="task" value="タスク定義 / 環境&#10;(報酬関数等)" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="60" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m6" value="M6: Stackelberg PPO&#10;(形態と制御の同時最適化)&#10;方策学習＋形態の補正" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1210" y="150" width="160" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="d6" value="学習済みの方策と形&#10;(best.p)&#10;学習曲線・軌跡" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="1230" y="305" width="120" height="70" as="geometry" />
+        </mxCell>
+        <!-- M7 第2・3層（学習の後・報告のみ） -->
+        <mxCell id="m7" value="M7 第2・3層&#10;形態診断&#10;（学習後）" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1405" y="140" width="120" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="fail2" value="指摘（報告のみ）&#10;張り付き・戦略・&#10;使っていない関節" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="1400" y="305" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="pass" value="判定結果&#10;（向くか・&#10;学習後の形）" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="1570" y="150" width="110" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Phase 4 Edges -->
+        <mxCell id="e_d5_gate" edge="1" parent="1" source="d5" target="gate" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="910" y="400"/><mxPoint x="1035" y="400"/><mxPoint x="1035" y="190"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_gate_m6" edge="1" parent="1" source="gate" target="m6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl_gate_pass" value="通過" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="e_gate_m6">
+          <mxGeometry x="-0.1" relative="1" as="geometry">
+            <mxPoint y="-11" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_gate_fail1" edge="1" parent="1" source="gate" target="fail1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="lbl_gate_fail" value="棄却" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#b85450;" vertex="1" connectable="0" parent="e_gate_fail1">
+          <mxGeometry x="0.1" relative="1" as="geometry">
+            <mxPoint x="18" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_task_m6" edge="1" parent="1" source="task" target="m6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m6_d6" edge="1" parent="1" source="m6" target="d6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_d6_m7" edge="1" parent="1" source="d6" target="m7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="1290" y="400"/><mxPoint x="1388" y="400"/><mxPoint x="1388" y="190"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_m7_pass" edge="1" parent="1" source="m7" target="pass" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_m7_fail2" edge="1" parent="1" source="m7" target="fail2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;strokeWidth=2;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- 閉ループ①（自動）: 助言どおり XML を N 倍して第1層へ戻す -->
+        <mxCell id="e_fail1_d5" edge="1" parent="1" source="fail1" target="d5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#b85450;strokeWidth=2;dashed=1;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1115" y="450" />
+              <mxPoint x="910" y="450" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl_loop_auto" value="閉ループ（自動）: XML を N 倍して再判定" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#b85450;backgroundColor=#ffffff;" vertex="1" connectable="0" parent="e_fail1_d5">
+          <mxGeometry x="0.1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <!-- 閉ループ②（人手・未検証）: 利用者が描き直す -->
+        <mxCell id="e_fail1_sk" edge="1" parent="1" source="fail1" target="sk" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#999999;strokeWidth=1;dashed=1;dashPattern=1 3;">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1160" y="540" />
+              <mxPoint x="30" y="540" />
+              <mxPoint x="30" y="130" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lbl_loop_human" value="利用者が描き直す（未検証）" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];fontColor=#777777;backgroundColor=#ffffff;" vertex="1" connectable="0" parent="e_fail1_sk">
+          <mxGeometry x="-0.2" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+
+        <!-- ================= 技術スタックの注記 (最下部) ================= -->
+        <mxCell id="tech1" value="技術スタック: Gemini API (google-genai)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#666666;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="20" y="480" width="260" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="tech2" value="技術スタック: Tripo3D API, trimesh, NumPy, Python" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#666666;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="300" y="480" width="480" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="tech3" value="技術スタック: 自作スクリプト (topology_to_xml.py)" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#666666;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="800" y="480" width="220" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="tech4" value="技術スタック: Choreonoid (AISTシミュレータ), PyTorch, Stackelberg PPO" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontColor=#666666;fontStyle=2" vertex="1" parent="1">
+          <mxGeometry x="1040" y="480" width="660" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- ================= 凡例 ================= -->
+        <mxCell id="leg" value="凡例" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b3b3b3;verticalAlign=top;align=left;spacingLeft=10;spacingTop=4;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="570" width="1680" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_in" value="人が与える入力" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="600" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_proc" value="処理（工程 M1〜M6）" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="170" y="600" width="130" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_judge" value="判定（M7）" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="320" y="595" width="100" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_file" value="出力ファイル" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="440" y="600" width="110" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_mesh" value="3D形状データ" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="570" y="595" width="110" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_diag" value="診断の出力（棄却・助言・指摘）" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="700" y="600" width="170" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_end" value="最終出力" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="890" y="600" width="90" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_phase" value="フェーズ（下に技術スタック）" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fafafa;strokeColor=#b3b3b3;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="600" width="170" height="40" as="geometry" />
+        </mxCell>
+        <!-- 矢印の凡例 -->
+        <mxCell id="lg_a1" edge="1" parent="1" style="endArrow=classic;html=1;strokeWidth=2;">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="40" y="690" as="sourcePoint" />
+            <mxPoint x="110" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lg_a1t" value="データの流れ" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="120" y="675" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_a2" edge="1" parent="1" style="endArrow=classic;html=1;strokeColor=#b85450;strokeWidth=2;">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="240" y="690" as="sourcePoint" />
+            <mxPoint x="310" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lg_a2t" value="診断の出力へ" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="320" y="675" width="100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_a3" edge="1" parent="1" style="endArrow=classic;html=1;strokeColor=#b85450;strokeWidth=2;dashed=1;">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="440" y="690" as="sourcePoint" />
+            <mxPoint x="510" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lg_a3t" value="閉ループ（自動）" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="520" y="675" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_a4" edge="1" parent="1" style="endArrow=classic;html=1;strokeColor=#999999;dashed=1;dashPattern=1 3;">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="650" y="690" as="sourcePoint" />
+            <mxPoint x="720" y="690" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="lg_a4t" value="人手の経路（未検証）" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="730" y="675" width="130" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="lg_color" value="色: 黄＝人、青＝システムの処理、緑＝データ、紫・赤＝診断" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="890" y="675" width="420" height="30" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
