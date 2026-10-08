@@ -6,7 +6,9 @@
 #      形態が変わるたびに DESIGN_PAUSE 秒（既定 1）止める。例: START_DELAY=20 bash scripts/demo_cnoid.sh reach
 #   ⭐ ターミナルと Choreonoid のメッセージ欄に「第 N 話／形態変化 k 回目（リンク長）／実行に移ります
 #      （描いた形 → 学習後）／実行中（先端と目標の距離・箱の移動）」を出す
-#   タスク: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach
+#   タスク: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey
+#   ⭐ hockey（2026-10-09）: 制御コスト 0 の `hockey_bank9`（seed0、評価の動きで 3 話中 2 話ゴール。系譜 9-229）。
+#     学習と同じ壁の反射・腕ブロックを有効にする。頭の話は当てにならない（Bug 47）ので既定で 3 話流す。ゴールした話を使うこと
 #
 # ⭐ 腕は**元のカラフルなメッシュ**で表示する（見た目だけ。物理はカプセルのまま。
 #   khrylib/rl/envs/common/visual_mesh.py）。簡単なミーティングでは mp4（demo/color_*.mp4）を使う。
@@ -17,8 +19,10 @@
 #   打っていないと `Authorization required` → Qt が core dump する。下で先に確かめて案内を出す。
 # ⚠️ 学習と同時に走らせると重い（7/31 に GUI が落ちた記録がある）。発表の前に学習は止めておく。
 set -eu
-TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach}
+TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey}
 EPS=${2:-1}   # ⭐ 既定は 1 話（録画用。2026-10-05。複数回は第 2 引数で）
+# 既定は縦型 A1 のメッシュ。タスクごとに上書きする
+VMESH=data/test/A1/meshes; VGLB=data/test/A1/3D/A1.glb; EXTRA=
 # HIDE: 見えなくする物体（物理には残す）／MARK: 目標の印を出すか
 # CAM: 最初のカメラ（視点x,y,z,注視点x,y,z）。発表中はマウスで自由に動かせる
 case "$TASK" in
@@ -27,6 +31,9 @@ case "$TASK" in
   target_pusher)  RUN=e2e_a1v_actuator_tp;        HIDE=;     MARK=1; CAM=1.7,-3.4,1.7,1.0,0,0.35 ;;
   obstacle_avoid) RUN=e2e_a1v_obspen_reach;       HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 柱を避ける（目標の 210 mm 手前で止まる）
   obstacle_reach) RUN=e2e_a1v_obspen_reach_s2;    HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 目標に届く（柱の中を通る）
+  hockey)         RUN=hockey_bank9;               HIDE=;     MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2      # 星＝ゴール口の中心（1.55, 0）
+                  VMESH=data/test/hockey/meshes; VGLB=data/test/hockey/3D/hockey.glb
+                  EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"; EPS=${2:-3} ;;
   *) echo "知らないタスク: $TASK"; exit 1 ;;
 esac
 cd "$(dirname "$0")/.."
@@ -49,7 +56,7 @@ env FONTCONFIG_FILE="$PWD/config/fontconfig_ja.conf" \
   CNOID_HIDE_BODIES="$HIDE" CNOID_TARGET_MARK="$TARGET" VIEWER_CAMERA="$CAM" \
   VIEWER_START_DELAY="${START_DELAY:-10}" VIEWER_DESIGN_PAUSE="${DESIGN_PAUSE:-1}" \
   VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS \
-  CNOID_VISUAL_MESHES=data/test/A1/meshes CNOID_VISUAL_GLB=data/test/A1/3D/A1.glb \
+  CNOID_VISUAL_MESHES=$VMESH CNOID_VISUAL_GLB=$VGLB $EXTRA \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
   /choreonoid_ws/install/bin/choreonoid --python scripts/eval_cnoid_viewer.py &
 # ⭐ Ctrl+C で止まるようにする（2026-10-05）。⛔ Choreonoid は Ctrl+C（SIGINT）を受け付けず、ターミナルを握ったまま
