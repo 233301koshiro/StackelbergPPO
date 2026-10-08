@@ -17,6 +17,7 @@
 
 環境変数: TRACE_EPISODES（既定 5）・TRACE_SKIP（既定 2）・TRACE_STEPS（既定 1200）・TRACE_OUT（出力先）・
   ⭐ TRACE_STOCHASTIC=1 で**学習中と同じ確率的な行動**で回す（9-225。既定は平均の行動＝評価と同じ）
+  ⭐ TRACE_GEAR_OVERRIDE="g1,g2,…" で実行の間だけシミュレータのギア比を差し替える（観測は変えない。原因調べ用）
 
 ⚠️ **最適化後の形態を使うこと。** co-design はリンク長も太さも変えるので、
 XML の設計値でメッシュを並べると**学習結果と違う絵**になる。
@@ -85,6 +86,9 @@ SKIP = int(os.environ.get('TRACE_SKIP', '2'))
 # ⭐ 2026-10-05（9-225）: 学習中と同じく**確率的な行動**で回す（既定は平均の行動＝評価と同じ）。
 #   学習中の探索がパックに触れていたかを測るため。⚠️ 設計の行動も確率的になるので形は話ごとに変わる
 STOCH = os.environ.get('TRACE_STOCHASTIC') == '1'
+# ⭐ TRACE_GEAR_OVERRIDE="g1,g2,...": 実行の間だけシミュレータのギア比を差し替える（観測は変えない。原因調べ用）
+_go = os.environ.get('TRACE_GEAR_OVERRIDE')
+GEAR_OVR = [float(v) for v in _go.split(',')] if _go else None
 if STOCH:
     print('[trace] ⭐ 確率的な行動で回す（学習中の探索と同じ。TRACE_STOCHASTIC=1）', flush=True)
 
@@ -101,6 +105,13 @@ for k in range(N_EP):
     init = None       # ⭐ 9-218: execution に入った瞬間（最初の step の前）の腕とパック
     for _ in range(cfg.skel_transform_nsteps + 2 + max_steps):
         in_exec = env.stage == 'execution'
+        if in_exec and init is None and GEAR_OVR is not None:
+            # ⭐ 2026-10-09（崩れの原因調べ）: 実行に入った瞬間に**シミュレータのギア比だけ**を差し替える。
+            #   ⚠️ 方策が見る観測（設計パラメータ）は差し替えない＝「同じ指令を別のトルク倍率で打つ」試験
+            _am = env._world.actuators_map
+            for (_jn, _ai), _g in zip(_am.items(), GEAR_OVR):
+                _ai['gear'] = float(_g)
+            print(f'[trace] ⭐ ギア比を差し替えた: {[round(a["gear"],1) for a in _am.values()]}', flush=True)
         if in_exec and init is None:
             try:
                 _nm = [b.name for b in env.robot.bodies]
@@ -128,10 +139,14 @@ for k in range(N_EP):
                          #   （`check_cube_penetration.py`。軸だけでは食い込みを過小評価する）。
                          np.array([float(np.asarray(b.geoms[0].size, dtype=float).flatten()[0])
                                    if getattr(b, 'geoms', None) else np.nan
+                                   for b in env.robot.bodies]),
+                         # ⭐ 2026-10-09: ギア比も話ごとに（関節の無い body は nan）。形の崩れを追うため
+                         np.array([float(b.joints[0].actuator.gear)
+                                   if getattr(b, 'joints', None) and b.joints[0].actuator is not None else np.nan
                                    for b in env.robot.bodies]))
             if names is None:
                 names = [b.name for b in env.robot.bodies]
-                bone, geom_size = shape
+                bone, geom_size = shape[:2]
             xpos.append([np.asarray(env._body_xpos[n], dtype=float) for n in names])
             xmat.append([np.asarray(env._body_xmat[n], dtype=float).reshape(3, 3) for n in names])
             # Pusher の対象物。⚠️ **`_body_xpos` には cube が入っていない**（腕の body だけ）。
@@ -186,6 +201,7 @@ np.savez_compressed(out,
                     # ⭐ 9-225: 話ごとの形（ボーン・半径）。確率的な行動では話ごとに違う
                     ep_bone=np.array([e[4][0] if e[4] else None for e in eps], dtype=object),
                     ep_geom=np.array([e[4][1] if e[4] else None for e in eps], dtype=object),
+                    ep_gear=np.array([e[4][2] if e[4] else None for e in eps], dtype=object),
                     # ⭐ 9-225: 話ごとの報酬の合計と制御コストの合計（どちらが効いているかを分ける）
                     ep_reward=np.array([e[5][0] for e in eps]), ep_reward_ctrl=np.array([e[5][1] for e in eps]))
 
