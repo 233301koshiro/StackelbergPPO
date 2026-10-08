@@ -14,6 +14,13 @@
 
     python3 scripts/check_open_gaps.py
     python3 scripts/check_open_gaps.py --days 14   # 14 日以上更新の無いものだけ
+    python3 scripts/check_open_gaps.py --status    # ⭐ ④層の「⏳ / 🔄 / 稼働中 …」の行を並べる（2026-10-09）
+
+⭐⭐ `--status`（2026-10-09 追加）: 状態を書くファイル（④層）で「⏳ / 🔄 / 稼働中 / 走行中 / 待ち / 未着手」の行を並べる。
+⛔ 10-09 の棚卸しは機械判定が全部通ったのに、**状態の行が 12 日〜5 週間止まっていた**（引き継ぎの表が 09-27・
+  進捗の現在地サマリーが 09-02・反発係数 B-5 は 10-02 に解決済みなのに ⛔ のまま）。run 名の無い行は
+  `check_docs_consistency.py` の【A】に掛からない。⭐ **この一覧も判断しない。人が 1 行ずつ「本当にまだか」を見る。**
+  「旧」の見出し・「ここから下は〜の記録」の注より下は過去の記録として数えない。
 """
 import argparse
 import re
@@ -60,8 +67,33 @@ def self_check() -> int:
         ok = (got == want)
         print(f'  {"✅" if ok else "⛔"} {why:22s} 期待 {want} / 実際 {got}')
         bad += (not ok)
-    print('✅ 自己検査 5 項目一致' if not bad else f'⛔ {bad} 件 失敗')
+    # --status: 過去の記録より下を数えないこと
+    t = '| D-1 | ⏳ 待ち |\n## やること（旧）\n| B-5 | ⏳ 古い |\n'
+    got = [l for _, l in status_rows(t)]
+    ok = got == ['| D-1 | ⏳ 待ち |']
+    print(f'  {"✅" if ok else "⛔"} --status は「旧」より下を数えない  実際 {got}')
+    bad += (not ok)
+    print('✅ 自己検査 6 項目一致' if not bad else f'⛔ {bad} 件 失敗')
     return bad
+
+
+# ⭐ --status で見る④層のファイル（状態を書く場所）。⚠️ 増えたらここに足す
+STATUS_FILES = ['進捗.md', '研究応用/引き継ぎ_再起動後.md', '研究応用/方針/研究方針.md',
+                '研究応用/設計/ホッケー完遂計画_2026-10-02.md', '研究応用/設計/軸6_部品ライブラリ_2026-10-02.md']
+STATUS_PAT = re.compile(r'⏳|🔄|稼働中|走行中|投入待ち|キュー待ち|未着手|作業中')
+# ⭐ ここより下は過去の記録（状態語は当時のもの）
+HIST_PAT = re.compile(r'^#+ .*旧|ここから下は.*記録')
+
+
+def status_rows(text: str):
+    """④層のファイルから、過去の記録より上にある状態の行を返す。"""
+    rows = []
+    for i, l in enumerate(text.splitlines(), 1):
+        if HIST_PAT.search(l):
+            break
+        if STATUS_PAT.search(l) and not l.lstrip().startswith(('> ⚠️', '<!--')):
+            rows.append((i, l.strip()))
+    return rows
 
 
 def last_commit_days(p: Path):
@@ -80,11 +112,27 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--days', type=float, default=0.0,
                     help='これより長く更新されていないファイルだけ出す')
+    ap.add_argument('--status', action='store_true',
+                    help='⭐ ④層（状態を書くファイル）の「⏳ / 🔄 / 稼働中 …」の行を並べる')
     ap.add_argument('--self-check', action='store_true',
                     help='⭐ 本物の穴を見落とさないかを既知の文字列で確かめる')
     args = ap.parse_args()
     if args.self_check:
         return self_check()
+    if args.status:
+        total = 0
+        for rel in STATUS_FILES:
+            p = DOCS / rel
+            if not p.exists():
+                print(f'  ⚠️ {rel} が無い（STATUS_FILES を直す）'); continue
+            rows = status_rows(p.read_text(encoding='utf-8', errors='replace'))
+            total += len(rows)
+            d = last_commit_days(p)
+            print(f'  {rel}  （最終更新 {d:.0f} 日前・{len(rows)} 行）' if d is not None else f'  {rel}（{len(rows)} 行）')
+            for i, line in rows:
+                print(f'      L{i}: {line[:110]}')
+        print(f'\n⭐ 状態の行 {total} 行。**1 行ずつ「本当にまだか」を見る**（台帳・single_run と照らす）。')
+        return 0
 
     pat = re.compile('|'.join(re.escape(m) for m, _ in MARKS))
     hits = {}
