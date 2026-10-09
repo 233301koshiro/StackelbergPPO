@@ -21,6 +21,9 @@
 set -eu
 TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey}
 EPS=${2:-1}   # ⭐ 既定は 1 話（録画用。2026-10-05。複数回は第 2 引数で）
+# ⭐ Bug 47（2026-10-09）: 読み込み直後の 1〜2 話は当てにならないので、先に WARMUP 話（既定 2）を早送りで流してから EPS 話を見せる。
+#   ⛔ 10-09 にホッケーを頭から 3 話見て「ゴールに入らない」と見えた（9-229 のゴールは頭 2 話を捨てた 3 話で測った）。WARMUP=0 で従来どおり
+# ⭐ 9-236 以降の run は、物理の環境変数を run の launch_env.json から自動で読む（EXTRA は古い run 用）
 # 既定は縦型 A1 のメッシュ。タスクごとに上書きする
 VMESH=data/test/A1/meshes; VGLB=data/test/A1/3D/A1.glb; EXTRA=
 # HIDE: 見えなくする物体（物理には残す）／MARK: 目標の印を出すか
@@ -34,6 +37,8 @@ case "$TASK" in
   hockey)         RUN=hockey_bank9;               HIDE=;     MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2      # 星＝ゴール口の中心（1.55, 0）
                   VMESH=data/test/hockey/meshes; VGLB=data/test/hockey/3D/hockey.glb
                   EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"; EPS=${2:-3} ;;
+  # ⚠️ 2026-10-09（Bug 58・系譜 9-235）: hockey_bank9 は台座が 53° 倒れたまま学習した run。取り直し（hockey_bank9_scgc、台座固定）がそろったら差し替える。
+  #   他の縦型デモの台座: reach 1.1°・target_pusher 4.2°・obstacle_avoid 8.8°・obstacle_reach 4.0°（pusher は gearonly で 0°）
   *) echo "知らないタスク: $TASK"; exit 1 ;;
 esac
 cd "$(dirname "$0")/.."
@@ -55,7 +60,7 @@ fi
 env FONTCONFIG_FILE="$PWD/config/fontconfig_ja.conf" \
   CNOID_HIDE_BODIES="$HIDE" CNOID_TARGET_MARK="$TARGET" VIEWER_CAMERA="$CAM" \
   VIEWER_START_DELAY="${START_DELAY:-10}" VIEWER_DESIGN_PAUSE="${DESIGN_PAUSE:-1}" \
-  VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS \
+  VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS VIEWER_WARMUP="${WARMUP:-2}" \
   CNOID_VISUAL_MESHES=$VMESH CNOID_VISUAL_GLB=$VGLB $EXTRA \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
   /choreonoid_ws/install/bin/choreonoid --python scripts/eval_cnoid_viewer.py &
