@@ -1,0 +1,1268 @@
+<?xml version="1.0"?>
+<robot name="divided_robot" xmlns:xi="http://www.w3.org/2001/Xinclude" xmlns:gazebo="http://playerstage.sourceforge.net/gazebo/xmlschema/#gz" xmlns:model="http://playerstage.sourceforge.net/gazebo/xmlschema/#model" xmlns:sensor="http://playerstage.sourceforge.net/gazebo/xmlschema/#sensor" xmlns:body="http://playerstage.sourceforge.net/gazebo/xmlschema/#body" xmlns:geom="http://playerstage.sourceforge.net/gazebo/xmlschema/#geom" xmlns:joint="http://playerstage.sourceforge.net/gazebo/xmlschema/#joint" xmlns:interface="http://playerstage.sourceforge.net/gazebo/xmlschema/#interface" xmlns:rendering="http://playerstage.sourceforge.net/gazebo/xmlschema/#rendering" xmlns:renderable="http://playerstage.sourceforge.net/gazebo/xmlschema/#renderable" xmlns:controller="http://playerstage.sourceforge.net/gazebo/xmlschema/#controller" xmlns:physics="http://playerstage.sourceforge.net/gazebo/xmlschema/#physics" xmlns:xacro="http://www.ros.org/wiki/xacro">
+ <xacro:macro name="gz_trans_pos" params="joint_name">
+  <transmission name="${joint_name}_trans">
+   <type>transmission_interface/SimpleTransmission</type>
+   <joint name="${joint_name}">
+    <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+   </joint>
+   <actuator name="${joint_name}_motor">
+    <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+   </actuator>
+  </transmission>
+ </xacro:macro>
+ <xacro:macro name="gz_trans_vel" params="joint_name">
+  <transmission name="${joint_name}_trans">
+   <type>transmission_interface/SimpleTransmission</type>
+   <joint name="${joint_name}">
+    <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+   </joint>
+   <actuator name="${joint_name}_motor">
+    <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+   </actuator>
+  </transmission>
+ </xacro:macro>
+ <xacro:macro name="gz_trans_eff" params="joint_name">
+  <transmission name="${joint_name}_trans">
+   <type>transmission_interface/SimpleTransmission</type>
+   <joint name="${joint_name}">
+    <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+   </joint>
+   <actuator name="${joint_name}_motor">
+    <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+   </actuator>
+  </transmission>
+ </xacro:macro>
+ <link name="Root">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Root.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Root.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.022869" />
+   <origin xyz="1.499000000000e-13 0.000000000000e+00 2.576000000000e-03" />
+   <inertia ixx="1.78561e-05" ixy="5.7200000000000002e-19" ixz="1.173e-18" iyy="1.78561e-05" iyz="-1.392e-19" izz="3.5651300000000002e-05" />
+  </inertial>
+ </link>
+ <link name="block_2_6_266_1">
+  <visual>
+   <origin xyz="-4.000000000000e-03 -2.000000000000e-02 4.800000000000e-03" rpy="5.421010862427e-20 6.776263578013e-21 -2.117582368135e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 4.800000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__0">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 -2.000000000000e-02 4.800000000000e-03" rpy="5.421010862427e-20 6.776263578013e-21 -2.117582368135e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 4.800000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__1">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.0095109099999999992" />
+   <origin xyz="-4.000000000000e-03 -2.000000000000e-02 4.800000000000e-03" />
+   <inertia ixx="1.89914e-06" ixy="-3.4372499999999998e-28" ixz="8.7993600000000007e-28" iyy="2.75943e-07" iyz="-9.5033100000000003e-26" izz="2.0289900000000001e-06" />
+  </inertial>
+ </link>
+ <joint name="block_2_6_266_1" type="fixed">
+  <parent link="Root" />
+  <child link="block_2_6_266_1" />
+  <origin xyz="4.458239550101e-16 -3.469444834883e-22 3.200000000000e-03" rpy="1.436894039122e-15 -2.064127209961e-15 1.233546710751e-15" />
+ </joint>
+ <link name="Frame_Bottom_Socket_266_2">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Bottom_Socket_266_2.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <origin xyz="4.000000000000e-03 -8.000000000000e-03 1.500000000000e-03" rpy="3.009265538105e-36 -1.570796326795e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="3.000000000000e-03 2.400000000000e-02 3.200000000000e-02" />
+   </geometry>
+   <material name="mat__2">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Bottom_Socket_266_2.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.014395" />
+   <origin xyz="4.000000000000e-03 2.703300000000e-02 2.300000000000e-02" />
+   <inertia ixx="4.8393800000000001e-06" ixy="-7.4019999999999996e-18" ixz="-6.3384099999999998e-18" iyy="4.4579400000000004e-06" iyz="3.3470000000000002e-14" izz="2.1879799999999999e-06" />
+  </inertial>
+ </link>
+ <joint name="Frame_Bottom_Socket_266_2" type="fixed">
+  <parent link="block_2_6_266_1" />
+  <child link="Frame_Bottom_Socket_266_2" />
+  <origin xyz="-4.394394391603e-17 -3.200000000000e-02 9.600000000000e-03" rpy="-2.710500000025e-19 4.893780000000e-16 -3.141592653590e+00" />
+ </joint>
+ <link name="XL-430_266_3">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_266_3.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_266_3.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.057000000000000002" />
+   <origin xyz="1.058030000000e-02 -2.338720000000e-02 -1.852570000000e-02" />
+   <inertia ixx="1.5493800000000001e-05" ixy="1.75146e-07" ixz="-4.8111599999999999e-08" iyy="8.2528500000000001e-06" iyz="8.49244e-07" izz="1.37413e-05" />
+  </inertial>
+ </link>
+ <joint name="XL-430_266_3" type="fixed">
+  <parent link="Frame_Bottom_Socket_266_2" />
+  <child link="XL-430_266_3" />
+  <origin xyz="1.500000000000e-02 1.200000000000e-02 6.000000000000e-03" rpy="3.141592653590e+00 1.224646799147e-16 3.141592653590e+00" />
+ </joint>
+ <link name="LINK_0">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_0.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_0.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.0056950000000000004" />
+   <origin xyz="-6.586000000000e-08 -1.744500000000e-02 4.225000000000e-02" />
+   <inertia ixx="4.43252e-07" ixy="1.13002e-22" ixz="-2.3751399999999999e-19" iyy="1.57709e-06" iyz="3.42799e-22" izz="1.2683199999999999e-06" />
+  </inertial>
+ </link>
+ <joint name="LINK_0" type="revolute">
+  <parent link="XL-430_266_3" />
+  <child link="LINK_0" />
+  <origin xyz="1.100000000000e-02 -8.000000000000e-03 -3.600000000000e-02" rpy="-3.141592653590e+00 1.106284000000e-15 1.421316000000e-15" />
+  <axis xyz="0.000000000000e+00 0.000000000000e+00 1.000000000000e+00" />
+  <limit lower="-3.1415926535897931" upper="3.1415926535897931" velocity="1.7976931348623157e+308" effort="1.7976931348623157e+308" />
+ </joint>
+ <xacro:gz_trans_pos joint_name="LINK_0" />
+ <link name="XL-430_266_5">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_266_5.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_266_5.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.057000000000000002" />
+   <origin xyz="1.660960000000e-02 -1.058540000000e-02 -1.852570000000e-02" />
+   <inertia ixx="8.2527499999999999e-06" ixy="-1.7295900000000001e-07" ixz="8.4925899999999999e-07" iyy="1.5493900000000001e-05" iyz="4.7855099999999999e-08" izz="1.37413e-05" />
+  </inertial>
+ </link>
+ <joint name="XL-430_266_5" type="fixed">
+  <parent link="LINK_0" />
+  <child link="XL-430_266_5" />
+  <origin xyz="1.700000000000e-02 -1.120000000000e-02 1.020000000000e-02" rpy="-3.141592653359e+00 -1.570794912581e+00 -2.305883921073e-10" />
+ </joint>
+ <link name="LINK_1">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_1.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <origin xyz="4.603208231560e-16 5.130000000000e-02 -1.700000000000e-02" rpy="-3.140184917370e-16 -1.570796326795e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="3.200000000000e-02 1.000000000000e-03 3.200000000000e-02" />
+   </geometry>
+   <material name="mat__3">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_1.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.014395" />
+   <origin xyz="4.513220000000e-16 2.303300000000e-02 -1.900000000000e-02" />
+   <inertia ixx="4.8393800000000001e-06" ixy="-7.4021199999999996e-18" ixz="-6.3384099999999998e-18" iyy="4.4579400000000004e-06" iyz="3.3470000000000002e-14" izz="2.1879799999999999e-06" />
+  </inertial>
+ </link>
+ <joint name="LINK_1" type="revolute">
+  <parent link="XL-430_266_5" />
+  <child link="LINK_1" />
+  <origin xyz="3.199670000000e-02 -1.100970000000e-02 -3.600000000000e-02" rpy="3.141592653590e+00 -1.131246858315e-15 1.570493685189e+00" />
+  <axis xyz="0.000000000000e+00 0.000000000000e+00 1.000000000000e+00" />
+  <limit lower="-3.1415926535897931" upper="3.1415926535897931" velocity="1.7976931348623157e+308" effort="1.7976931348623157e+308" />
+ </joint>
+ <xacro:gz_trans_pos joint_name="LINK_1" />
+ <link name="block_2_4_7280_16">
+  <visual>
+   <origin xyz="4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="5.421010862432e-20 -0.000000000000e+00 5.293955920344e-23" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__4">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="5.421010862432e-20 -0.000000000000e+00 5.293955920344e-23" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__5">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="2.1482800000000001e-29" ixz="1.28881e-48" iyy="1.8396199999999999e-07" iyz="-2.6691400000000001e-26" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_16" type="fixed">
+  <parent link="LINK_1" />
+  <child link="block_2_4_7280_16" />
+  <origin xyz="-1.200000000000e-02 5.180000000000e-02 -1.300000000000e-02" rpy="-1.570796326795e+00 -1.570796326795e+00 0.000000000000e+00" />
+ </joint>
+ <link name="block_2_4_7280_18">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="5.421010862432e-20 -0.000000000000e+00 5.293955920344e-23" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__6">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="5.421010862432e-20 -0.000000000000e+00 5.293955920344e-23" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__7">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="2.1482800000000001e-29" ixz="1.28881e-48" iyy="1.8396199999999999e-07" iyz="-2.6691400000000001e-26" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_18" type="fixed">
+  <parent link="block_2_4_7280_16" />
+  <child link="block_2_4_7280_18" />
+  <origin xyz="8.000000000000e-03 2.909659817772e-16 9.600000000000e-03" rpy="2.221822649622e-16 -3.330671191458e-16 1.009586862318e-19" />
+ </joint>
+ <link name="block_2_4_7280_20">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="5.421010862432e-20 -0.000000000000e+00 5.293955920344e-23" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__8">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="5.421010862432e-20 -0.000000000000e+00 5.293955920344e-23" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__9">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="2.1482800000000001e-29" ixz="1.28881e-48" iyy="1.8396199999999999e-07" iyz="-2.6691400000000001e-26" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_20" type="fixed">
+  <parent link="block_2_4_7280_18" />
+  <child link="block_2_4_7280_20" />
+  <origin xyz="4.192260532260e-18 -1.449366546376e-16 9.600000000000e-03" rpy="2.221822649624e-16 -3.330671191458e-16 1.009586862318e-19" />
+ </joint>
+ <link name="block_2_4_7280_17">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="-5.421010862424e-20 -6.776276502714e-21 -1.588186776102e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__10">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="-5.421010862424e-20 -6.776276502714e-21 -1.588186776102e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__11">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-6.4448399999999999e-29" ixz="-5.8662499999999996e-28" iyy="1.8396199999999999e-07" iyz="2.6691400000000001e-26" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_17" type="fixed">
+  <parent link="LINK_1" />
+  <child link="block_2_4_7280_17" />
+  <origin xyz="-1.200000000000e-02 5.180000000000e-02 -2.100000000000e-02" rpy="-1.570796326795e+00 -1.570796326795e+00 0.000000000000e+00" />
+ </joint>
+ <link name="block_2_4_7280_19">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="-5.421010862426e-20 -6.776263578012e-21 -1.588186776101e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__12">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="-5.421010862426e-20 -6.776263578012e-21 -1.588186776101e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__13">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-6.4448399999999999e-29" ixz="-5.8662399999999999e-28" iyy="1.8396199999999999e-07" iyz="2.6691400000000001e-26" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_19" type="fixed">
+  <parent link="block_2_4_7280_17" />
+  <child link="block_2_4_7280_19" />
+  <origin xyz="4.235617700375e-17 -1.449383487035e-16 9.600000000000e-03" rpy="2.218570043095e-16 -3.330874479365e-16 1.003234115214e-19" />
+ </joint>
+ <link name="block_2_4_7280_21">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="-5.421010862424e-20 -6.776276502714e-21 -1.588186776102e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__14">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="-5.421010862424e-20 -6.776276502714e-21 -1.588186776102e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__15">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-6.4448399999999999e-29" ixz="-5.8662499999999996e-28" iyy="1.8396199999999999e-07" iyz="2.6691400000000001e-26" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_21" type="fixed">
+  <parent link="block_2_4_7280_19" />
+  <child link="block_2_4_7280_21" />
+  <origin xyz="-1.315477901288e-17 -1.449396192529e-16 9.600000000000e-03" rpy="2.218570043089e-16 -3.330874479365e-16 1.003233598226e-19" />
+ </joint>
+ <link name="Hinge_Long_Socket_3893_3">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Hinge_Long_Socket_3893_3.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <origin xyz="1.200000000000e-02 -1.200000000000e-02 1.500000000000e-03" rpy="-1.570796326795e+00 1.570510595585e-16 7.849545162350e-17" />
+   <geometry>
+    <box size="3.200000000000e-02 3.000000000000e-03 3.200000000000e-02" />
+   </geometry>
+   <material name="mat__16">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Hinge_Long_Socket_3893_3.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.014395" />
+   <origin xyz="1.000000000000e-02 -1.200000000000e-02 3.076700000000e-02" />
+   <inertia ixx="2.1879799999999999e-06" ixy="6.33879e-18" ixz="-3.3470000000000002e-14" iyy="4.8393800000000001e-06" iyz="-7.4019200000000001e-18" izz="4.4579400000000004e-06" />
+  </inertial>
+ </link>
+ <joint name="Hinge_Long_Socket_3893_3" type="fixed">
+  <parent link="block_2_4_7280_21" />
+  <child link="Hinge_Long_Socket_3893_3" />
+  <origin xyz="-8.000000000000e-03 2.400000000000e-02 9.600000000000e-03" rpy="5.549239117001e-16 -3.330838480465e-16 1.029702860840e-19" />
+ </joint>
+ <link name="LINK_2">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_2.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_2.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.057000000000000002" />
+   <origin xyz="4.196610000000e-04 -1.538720000000e-02 -1.747430000000e-02" />
+   <inertia ixx="1.5493800000000001e-05" ixy="-1.75146e-07" ixz="-4.8111599999999999e-08" iyy="8.2528500000000001e-06" iyz="-8.49244e-07" izz="1.37413e-05" />
+  </inertial>
+ </link>
+ <joint name="LINK_2" type="revolute">
+  <parent link="Hinge_Long_Socket_3893_3" />
+  <child link="LINK_2" />
+  <origin xyz="2.900000000000e-02 -1.200000000000e-02 5.380000000000e-02" rpy="-1.570796326795e+00 3.329878840019e-16 -1.570796326795e+00" />
+  <axis xyz="-0.000000000000e+00 -0.000000000000e+00 -1.000000000000e+00" />
+  <limit lower="-3.1415926535897931" upper="3.1415926535897931" velocity="1.7976931348623157e+308" effort="1.7976931348623157e+308" />
+ </joint>
+ <xacro:gz_trans_pos joint_name="LINK_2" />
+ <link name="Frame_Long_Socket_7280_14">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Long_Socket_7280_14.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <origin xyz="-1.250000000000e-02 -2.000000000000e-02 -1.900000000000e-02" rpy="2.355138688030e-16 1.570796326795e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="3.200000000000e-02 4.000000000000e-02 3.000000000000e-03" />
+   </geometry>
+   <material name="mat__17">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Long_Socket_7280_14.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.0056950000000000004" />
+   <origin xyz="2.844500000000e-02 -8.000000000000e-03 -1.699990000000e-02" />
+   <inertia ixx="1.57709e-06" ixy="-7.27187e-23" ixz="-5.0352499999999999e-22" iyy="1.2683199999999999e-06" iyz="2.3694699999999999e-19" izz="4.43252e-07" />
+  </inertial>
+ </link>
+ <joint name="Frame_Long_Socket_7280_14" type="fixed">
+  <parent link="LINK_2" />
+  <child link="Frame_Long_Socket_7280_14" />
+  <origin xyz="-1.100000000000e-02 -3.200000000000e-02 -3.600000000000e-02" rpy="3.141592653590e+00 1.332368799788e-15 -2.220988150337e-16" />
+ </joint>
+ <link name="block_2_4_7280_41">
+  <visual>
+   <origin xyz="4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="9.992007221618e-16 -2.646977960167e-22 -3.176373552200e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__18">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="9.992007221618e-16 -2.646977960167e-22 -3.176373552200e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__19">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-1.2889699999999999e-28" ixz="-2.2915000000000001e-29" iyy="1.8396199999999999e-07" iyz="-4.9197599999999998e-22" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_41" type="fixed">
+  <parent link="Frame_Long_Socket_7280_14" />
+  <child link="block_2_4_7280_41" />
+  <origin xyz="-1.400000000000e-02 -4.000000000000e-03 -3.100000000000e-02" rpy="-3.141592653590e+00 -1.570796326795e+00 0.000000000000e+00" />
+ </joint>
+ <link name="block_2_4_7280_39">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="0.000000000000e+00 7.940933880496e-23 3.070494433789e-21" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__20">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="0.000000000000e+00 7.940933880496e-23 3.070494433789e-21" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__21">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="1.246e-27" ixz="6.8745000000000006e-30" iyy="1.8396199999999999e-07" iyz="-3.89181e-50" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_39" type="fixed">
+  <parent link="block_2_4_7280_41" />
+  <child link="block_2_4_7280_39" />
+  <origin xyz="8.000000000000e-03 1.202591967523e-16 -9.600000000000e-03" rpy="1.776330455683e-15 4.439865041584e-16 3.330660603546e-16" />
+ </joint>
+ <link name="block_2_4_7280_38">
+  <visual>
+   <origin xyz="-4.000000000000e-03 4.000000000000e-03 -4.800000000000e-03" rpy="0.000000000000e+00 -6.661338147747e-16 4.440892098495e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__22">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 4.000000000000e-03 -4.800000000000e-03" rpy="0.000000000000e+00 -6.661338147747e-16 4.440892098495e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__23">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 4.000000000000e-03 -4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="1.80211e-22" ixz="-5.7667500000000003e-23" iyy="1.8396199999999999e-07" iyz="4.7217499999999998e-38" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_38" type="fixed">
+  <parent link="block_2_4_7280_39" />
+  <child link="block_2_4_7280_38" />
+  <origin xyz="4.305382995833e-18 5.117646012368e-17 -9.600000000000e-03" rpy="-2.084744099666e-16 7.715460923581e-16 -1.570796326795e+00" />
+ </joint>
+ <link name="block_2_4_7280_36">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__24">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__25">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="0" ixz="0" iyy="1.8396199999999999e-07" iyz="0" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_36" type="fixed">
+  <parent link="block_2_4_7280_38" />
+  <child link="block_2_4_7280_36" />
+  <origin xyz="-1.032524692374e-16 -8.000000000000e-03 -9.600000000000e-03" rpy="1.010480734367e-19 -4.441152602851e-16 1.110223024625e-16" />
+ </joint>
+ <link name="block_2_4_7280_34">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="2.220446049253e-16 -0.000000000000e+00 -2.220446049253e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__26">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="2.220446049253e-16 -0.000000000000e+00 -2.220446049253e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__27">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-9.0105499999999998e-23" ixz="-2.21416e-38" iyy="1.8396199999999999e-07" iyz="-1.09328e-22" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_34" type="fixed">
+  <parent link="block_2_4_7280_36" />
+  <child link="block_2_4_7280_34" />
+  <origin xyz="3.214913551304e-18 -9.178460999257e-19 -9.600000000000e-03" rpy="-2.219435285207e-16 2.220191822437e-16 -9.992011456791e-16" />
+ </joint>
+ <link name="block_2_4_7280_32">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="2.220446049253e-16 -0.000000000000e+00 -2.220446049253e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__28">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" rpy="2.220446049253e-16 -0.000000000000e+00 -2.220446049253e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__29">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-9.0105499999999998e-23" ixz="-2.21416e-38" iyy="1.8396199999999999e-07" iyz="-1.09328e-22" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_32" type="fixed">
+  <parent link="block_2_4_7280_34" />
+  <child link="block_2_4_7280_32" />
+  <origin xyz="-5.229623767995e-17 2.123673020720e-17 -9.600000000000e-03" rpy="-2.219435285207e-16 2.220194959776e-16 -9.992011456791e-16" />
+ </joint>
+ <link name="block_1_6_7280_29">
+  <visual>
+   <origin xyz="0.000000000000e+00 -4.000000000000e-03 -4.800000000000e-03" rpy="0.000000000000e+00 -4.412512259607e-20 -5.865703159742e-20" />
+   <geometry>
+    <box size="8.000000000000e-03 4.800000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__30">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="0.000000000000e+00 -4.000000000000e-03 -4.800000000000e-03" rpy="0.000000000000e+00 -4.412512259607e-20 -5.865703159742e-20" />
+   <geometry>
+    <box size="8.000000000000e-03 4.800000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__31">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.0047554600000000004" />
+   <origin xyz="-3.295970000000e-17 -4.000000000000e-03 -4.800000000000e-03" />
+   <inertia ixx="9.4956899999999997e-07" ixy="-5.2068999999999997e-26" ixz="4.9241300000000001e-28" iyy="6.1884300000000003e-08" iyz="-1.1632200000000001e-45" izz="9.3841000000000005e-07" />
+  </inertial>
+ </link>
+ <joint name="block_1_6_7280_29" type="fixed">
+  <parent link="block_2_4_7280_32" />
+  <child link="block_1_6_7280_29" />
+  <origin xyz="-5.229623767995e-17 -1.905881712625e-17 -9.600000000000e-03" rpy="-7.715476811471e-16 2.625531900718e-16 -1.570796326795e+00" />
+ </joint>
+ <link name="plate_2_4_7280_28">
+  <visual>
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 -1.599999999999e-03" rpy="-6.661338147744e-16 -4.440892098499e-16 -2.220446049245e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 3.200000000000e-03" />
+   </geometry>
+   <material name="mat__32">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 -1.599999999999e-03" rpy="-6.661338147744e-16 -4.440892098499e-16 -2.220446049245e-16" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 3.200000000000e-03" />
+   </geometry>
+   <material name="mat__33">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.0021135400000000001" />
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 -1.600000000000e-03" />
+   <inertia ixx="1.8215900000000001e-07" ixy="-3.0035199999999997e-23" ixz="-1.9222500000000001e-23" iyy="4.6892299999999997e-08" iyz="1.1893899999999999e-22" izz="2.2544399999999999e-07" />
+  </inertial>
+ </link>
+ <joint name="plate_2_4_7280_28" type="fixed">
+  <parent link="block_1_6_7280_29" />
+  <child link="plate_2_4_7280_28" />
+  <origin xyz="-1.876085003067e-17 -1.600000000000e-02 -9.600000000000e-03" rpy="1.299704099505e-16 -2.220208092490e-16 -1.570796326795e+00" />
+ </joint>
+ <link name="block_1_6_7280_30">
+  <visual>
+   <origin xyz="0.000000000000e+00 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="8.000000000000e-03 4.800000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__34">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="0.000000000000e+00 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="8.000000000000e-03 4.800000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__35">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.0047554600000000004" />
+   <origin xyz="0.000000000000e+00 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="9.4956899999999997e-07" ixy="0" ixz="0" iyy="6.1884300000000003e-08" iyz="0" izz="9.3841000000000005e-07" />
+  </inertial>
+ </link>
+ <joint name="block_1_6_7280_30" type="fixed">
+  <parent link="plate_2_4_7280_28" />
+  <child link="block_1_6_7280_30" />
+  <origin xyz="1.265557882193e-17 -2.400000000000e-02 6.140729453220e-16" rpy="-3.790137278874e-16 2.703858998803e-17 1.570796326795e+00" />
+ </joint>
+ <link name="Frame_Bottom_Plug_7280_27">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Bottom_Plug_7280_27.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <origin xyz="1.200000000000e-02 -3.469446951954e-18 -5.000000000000e-04" rpy="-9.420554752100e-16 1.570796326795e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.000000000000e-03 2.400000000000e-02 3.200000000000e-02" />
+   </geometry>
+   <material name="mat__36">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Bottom_Plug_7280_27.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.014395" />
+   <origin xyz="1.200000000000e-02 3.503300000000e-02 -2.100000000000e-02" />
+   <inertia ixx="4.8393800000000001e-06" ixy="7.4023599999999995e-18" ixz="-6.3425299999999999e-18" iyy="4.4579400000000004e-06" iyz="-3.3470000000000002e-14" izz="2.1879799999999999e-06" />
+  </inertial>
+ </link>
+ <joint name="Frame_Bottom_Plug_7280_27" type="fixed">
+  <parent link="plate_2_4_7280_28" />
+  <child link="Frame_Bottom_Plug_7280_27" />
+  <origin xyz="-8.000000000000e-03 -5.938589683103e-17 -3.200000000000e-03" rpy="3.790137279398e-16 -8.120855900616e-16 -1.570796326795e+00" />
+ </joint>
+ <link name="XL-430_7280_25">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_7280_25.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_7280_25.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.057000000000000002" />
+   <origin xyz="1.141970000000e-02 -1.661280000000e-02 -1.852570000000e-02" />
+   <inertia ixx="1.5493800000000001e-05" ixy="1.75146e-07" ixz="4.8111599999999999e-08" iyy="8.2528500000000001e-06" iyz="-8.49244e-07" izz="1.37413e-05" />
+  </inertial>
+ </link>
+ <joint name="XL-430_7280_25" type="fixed">
+  <parent link="Frame_Bottom_Plug_7280_27" />
+  <child link="XL-430_7280_25" />
+  <origin xyz="1.000000000000e-03 2.000000000000e-02 -4.000000000000e-03" rpy="1.443268356872e-15 9.935753993950e-16 4.807032677863e-16" />
+ </joint>
+ <link name="LINK_3">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_3.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_3.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.0056950000000000004" />
+   <origin xyz="-6.586000000000e-08 -1.744500000000e-02 4.225000000000e-02" />
+   <inertia ixx="4.43252e-07" ixy="8.4888100000000005e-29" ixz="-2.3739999999999998e-19" iyy="1.57709e-06" iyz="6.8559799999999997e-23" izz="1.2683199999999999e-06" />
+  </inertial>
+ </link>
+ <joint name="LINK_3" type="revolute">
+  <parent link="XL-430_7280_25" />
+  <child link="LINK_3" />
+  <origin xyz="1.100000000000e-02 -3.200000000000e-02 -3.600000000000e-02" rpy="-3.141592653590e+00 4.439900774752e-16 3.330688132117e-16" />
+  <axis xyz="0.000000000000e+00 0.000000000000e+00 1.000000000000e+00" />
+  <limit lower="-3.1415926535897931" upper="3.1415926535897931" velocity="1.7976931348623157e+308" effort="1.7976931348623157e+308" />
+ </joint>
+ <xacro:gz_trans_pos joint_name="LINK_3" />
+ <link name="XL-430_7280_44">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_7280_44.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_7280_44.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.057000000000000002" />
+   <origin xyz="1.660960000000e-02 -1.058540000000e-02 -1.852570000000e-02" />
+   <inertia ixx="8.2527499999999999e-06" ixy="-1.7295900000000001e-07" ixz="8.4925899999999999e-07" iyy="1.5493900000000001e-05" iyz="4.7855099999999999e-08" izz="1.37413e-05" />
+  </inertial>
+ </link>
+ <joint name="XL-430_7280_44" type="fixed">
+  <parent link="LINK_3" />
+  <child link="XL-430_7280_44" />
+  <origin xyz="1.700000000000e-02 -1.120000000000e-02 1.020000000000e-02" rpy="-3.141592653538e+00 -1.570794912581e+00 2.623080669185e-10" />
+ </joint>
+ <link name="LINK_4">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_4.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <origin xyz="-4.271750805527e-17 3.210000000000e-02 -1.700000000000e-02" rpy="1.334578589881e-15 -1.570796326795e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="3.200000000000e-02 1.000000000000e-03 3.200000000000e-02" />
+   </geometry>
+   <material name="mat__37">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_4.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.014395" />
+   <origin xyz="-3.073930000000e-17 2.303300000000e-02 -1.900000000000e-02" />
+   <inertia ixx="4.8393800000000001e-06" ixy="-7.4014900000000005e-18" ixz="-6.3372299999999997e-18" iyy="4.4579400000000004e-06" iyz="3.3470000000000002e-14" izz="2.1879799999999999e-06" />
+  </inertial>
+ </link>
+ <joint name="LINK_4" type="revolute">
+  <parent link="XL-430_7280_44" />
+  <child link="LINK_4" />
+  <origin xyz="3.199670000000e-02 -1.100970000000e-02 -3.600000000000e-02" rpy="3.141592653590e+00 2.331761001596e-16 3.141290607592e+00" />
+  <axis xyz="0.000000000000e+00 0.000000000000e+00 1.000000000000e+00" />
+  <limit lower="-3.1415926535897931" upper="3.1415926535897931" velocity="1.7976931348623157e+308" effort="1.7976931348623157e+308" />
+ </joint>
+ <xacro:gz_trans_pos joint_name="LINK_4" />
+ <link name="plate_2_10_266_23">
+  <visual>
+   <origin xyz="-4.000000000000e-03 -3.600000000000e-02 1.600000000000e-03" rpy="0.000000000000e+00 -2.118099356019e-22 -2.117582368137e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 8.000000000000e-02 3.200000000000e-03" />
+   </geometry>
+   <material name="mat__38">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 -3.600000000000e-02 1.600000000000e-03" rpy="0.000000000000e+00 -2.118099356019e-22 -2.117582368137e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 8.000000000000e-02 3.200000000000e-03" />
+   </geometry>
+   <material name="mat__39">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.0052838399999999997" />
+   <origin xyz="-4.000000000000e-03 -3.600000000000e-02 1.600000000000e-03" />
+   <inertia ixx="2.82256e-06" ixy="-5.7287499999999997e-28" ixz="-2.29206e-29" iyy="1.17231e-07" iyz="-5.8243500000000005e-50" izz="2.93077e-06" />
+  </inertial>
+ </link>
+ <joint name="plate_2_10_266_23" type="fixed">
+  <parent link="LINK_4" />
+  <child link="plate_2_10_266_23" />
+  <origin xyz="1.200000000000e-02 3.260000000000e-02 -1.300000000000e-02" rpy="-1.570796326795e+00 -1.570796326795e+00 0.000000000000e+00" />
+ </joint>
+ <link name="Frame_Bottom_Socket_7280_51">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Bottom_Socket_7280_51.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 -8.000000000000e-03 1.500000000000e-03" rpy="-7.666467083420e-20 -1.570796326795e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="3.000000000000e-03 2.400000000000e-02 3.200000000000e-02" />
+   </geometry>
+   <material name="mat__40">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_Frame_Bottom_Socket_7280_51.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.014395" />
+   <origin xyz="-4.000000000000e-03 2.703300000000e-02 2.300000000000e-02" />
+   <inertia ixx="4.8393800000000001e-06" ixy="-7.4019999999999996e-18" ixz="-6.33959e-18" iyy="4.4579400000000004e-06" iyz="3.3470000000000002e-14" izz="2.1879799999999999e-06" />
+  </inertial>
+ </link>
+ <joint name="Frame_Bottom_Socket_7280_51" type="fixed">
+  <parent link="plate_2_10_266_23" />
+  <child link="Frame_Bottom_Socket_7280_51" />
+  <origin xyz="-1.364558497498e-17 -2.333448714744e-17 3.200000000000e-03" rpy="2.219233992557e-16 5.556358257069e-16 1.107951609411e-16" />
+ </joint>
+ <link name="XL-430_7280_46">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_7280_46.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_7280_46.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.057000000000000002" />
+   <origin xyz="1.141970000000e-02 -1.661280000000e-02 -1.852570000000e-02" />
+   <inertia ixx="1.5493800000000001e-05" ixy="1.75146e-07" ixz="4.8111599999999999e-08" iyy="8.2528500000000001e-06" iyz="-8.49244e-07" izz="1.37413e-05" />
+  </inertial>
+ </link>
+ <joint name="XL-430_7280_46" type="fixed">
+  <parent link="Frame_Bottom_Socket_7280_51" />
+  <child link="XL-430_7280_46" />
+  <origin xyz="7.000000000000e-03 1.200000000000e-02 6.000000000000e-03" rpy="3.141592653590e+00 -2.106367651914e-16 -3.141592653590e+00" />
+ </joint>
+ <link name="LINK_5">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_5.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_5.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.0056950000000000004" />
+   <origin xyz="-6.586000000000e-08 1.200000000000e-02 3.944500000000e-02" />
+   <inertia ixx="4.43252e-07" ixy="-2.3739999999999998e-19" ixz="6.1465499999999995e-26" iyy="1.2683199999999999e-06" iyz="1.28695e-38" izz="1.57709e-06" />
+  </inertial>
+ </link>
+ <joint name="LINK_5" type="revolute">
+  <parent link="XL-430_7280_46" />
+  <child link="LINK_5" />
+  <origin xyz="1.100000000000e-02 -3.200000000000e-02 -3.600000000000e-02" rpy="3.141592653590e+00 -7.425489081892e-17 -1.570796326795e+00" />
+  <axis xyz="0.000000000000e+00 0.000000000000e+00 1.000000000000e+00" />
+  <limit lower="-3.1415926535897931" upper="3.1415926535897931" velocity="1.7976931348623157e+308" effort="1.7976931348623157e+308" />
+ </joint>
+ <xacro:gz_trans_pos joint_name="LINK_5" />
+ <link name="XL-430_266_27">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_266_27.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_XL-430_266_27.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.057000000000000002" />
+   <origin xyz="1.058030000000e-02 -2.338720000000e-02 -1.852570000000e-02" />
+   <inertia ixx="1.5493800000000001e-05" ixy="1.75146e-07" ixz="-4.8111599999999999e-08" iyy="8.2528500000000001e-06" iyz="8.49244e-07" izz="1.37413e-05" />
+  </inertial>
+ </link>
+ <joint name="XL-430_266_27" type="fixed">
+  <parent link="LINK_5" />
+  <child link="XL-430_266_27" />
+  <origin xyz="1.700000000000e-02 -2.000000000000e-02 1.100000000000e-02" rpy="3.141592653558e+00 -1.570776527811e+00 -1.371921554343e-12" />
+ </joint>
+ <link name="LINK_6">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_6.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_LINK_6.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.023959000000000001" />
+   <origin xyz="-3.774100000000e-02 7.046000000000e-03 -1.899900000000e-02" />
+   <inertia ixx="1.10196e-05" ixy="-6.0148700000000002e-06" ixz="-1.217e-09" iyy="2.3935599999999998e-05" iyz="8.9999999999999999e-11" izz="2.0923600000000001e-05" />
+  </inertial>
+ </link>
+ <joint name="LINK_6" type="revolute">
+  <parent link="XL-430_266_27" />
+  <child link="LINK_6" />
+  <origin xyz="1.100000000000e-02 -8.000000000000e-03 -3.600000000000e-02" rpy="-3.141592653590e+00 -8.999097419679e-16 -3.141592653590e+00" />
+  <axis xyz="0.000000000000e+00 0.000000000000e+00 1.000000000000e+00" />
+  <limit lower="-3.1415926535897931" upper="3.1415926535897931" velocity="1.7976931348623157e+308" effort="1.7976931348623157e+308" />
+ </joint>
+ <xacro:gz_trans_pos joint_name="LINK_6" />
+ <link name="USB-camera-mountor_266_26">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_USB-camera-mountor_266_26.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_USB-camera-mountor_266_26.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.001" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 -8.326670000000e-17" />
+   <inertia ixx="1.0000000000000001e-09" ixy="-2.8299000000000001e-82" ixz="0" iyy="1.0000000000000001e-09" iyz="0" izz="1.0000000000000001e-09" />
+  </inertial>
+ </link>
+ <joint name="USB-camera-mountor_266_26" type="fixed">
+  <parent link="plate_2_10_266_23" />
+  <child link="USB-camera-mountor_266_26" />
+  <origin xyz="-1.273471849986e-17 -7.200000000000e-02 3.200000000000e-03" rpy="2.220318194383e-16 3.331010004637e-16 1.108198224004e-16" />
+ </joint>
+ <link name="USB-camera-module_266_25">
+  <visual>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_USB-camera-module_266_25.dae" />
+   </geometry>
+  </visual>
+  <collision>
+   <geometry>
+    <mesh filename="file:///tmp/divided_robot_USB-camera-module_266_25.stl" />
+   </geometry>
+  </collision>
+  <inertial>
+   <mass value="0.001" />
+   <origin xyz="-1.400000000000e-02 1.400000000000e-02 0.000000000000e+00" />
+   <inertia ixx="1.0000000000000001e-09" ixy="-1.1319600000000001e-81" ixz="0" iyy="1.0000000000000001e-09" iyz="0" izz="1.0000000000000001e-09" />
+  </inertial>
+ </link>
+ <joint name="USB-camera-module_266_25" type="fixed">
+  <parent link="USB-camera-mountor_266_26" />
+  <child link="USB-camera-module_266_25" />
+  <origin xyz="1.000000000000e-02 -2.000000000000e-03 1.821200000000e-02" rpy="2.220318194387e-16 3.331012122219e-16 1.108198226072e-16" />
+ </joint>
+ <link name="block_2_4_7280_31">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__41">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__42">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="0" ixz="0" iyy="1.8396199999999999e-07" iyz="0" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_31" type="fixed">
+  <parent link="block_1_6_7280_29" />
+  <child link="block_2_4_7280_31" />
+  <origin xyz="-3.592888769126e-17 -1.600000000000e-02 3.828508745656e-16" rpy="-2.869792099697e-16 2.220208091966e-16 1.570796326795e+00" />
+ </joint>
+ <link name="block_2_4_7280_33">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__43">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__44">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="0" ixz="0" iyy="1.8396199999999999e-07" iyz="0" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_33" type="fixed">
+  <parent link="block_2_4_7280_31" />
+  <child link="block_2_4_7280_33" />
+  <origin xyz="1.926491735235e-17 -2.141355031646e-18 9.600000000000e-03" rpy="-4.439884099825e-16 2.220210312412e-16 -3.330677544205e-16" />
+ </joint>
+ <link name="block_2_4_7280_35">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__45">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__46">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="0" ixz="0" iyy="1.8396199999999999e-07" iyz="0" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_35" type="fixed">
+  <parent link="block_2_4_7280_33" />
+  <child link="block_2_4_7280_35" />
+  <origin xyz="-3.624623387891e-17 -3.876000003013e-18 9.600000000000e-03" rpy="-4.439884099825e-16 2.220210312412e-16 -3.330677544205e-16" />
+ </joint>
+ <link name="block_2_4_7280_37">
+  <visual>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__47">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" rpy="0.000000000000e+00 -0.000000000000e+00 0.000000000000e+00" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__48">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="0" ixz="0" iyy="1.8396199999999999e-07" iyz="0" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_37" type="fixed">
+  <parent link="block_2_4_7280_35" />
+  <child link="block_2_4_7280_37" />
+  <origin xyz="-8.490658263277e-18 -3.008677517330e-18 9.600000000000e-03" rpy="-4.439884099825e-16 2.220210312412e-16 -3.330677544205e-16" />
+ </joint>
+ <link name="block_2_4_7280_40">
+  <visual>
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 4.800000000000e-03" rpy="3.330669073873e-16 -2.646977960169e-22 -5.823351512375e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__49">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 4.800000000000e-03" rpy="3.330669073873e-16 -2.646977960169e-22 -5.823351512375e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__50">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-2.36311e-28" ixz="-2.2915000000000001e-29" iyy="1.8396199999999999e-07" iyz="-1.6399200000000001e-22" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_40" type="fixed">
+  <parent link="block_2_4_7280_37" />
+  <child link="block_2_4_7280_40" />
+  <origin xyz="-8.000000000000e-03 2.400000000000e-02 9.600000000000e-03" rpy="-5.630497618818e-16 4.439884099825e-16 1.570796326795e+00" />
+ </joint>
+ <link name="block_2_4_7280_42">
+  <visual>
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 4.800000000000e-03" rpy="3.330669073877e-16 -3.176373552207e-22 -2.117582368138e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__51">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </visual>
+  <collision>
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 4.800000000000e-03" rpy="3.330669073877e-16 -3.176373552207e-22 -2.117582368138e-22" />
+   <geometry>
+    <box size="1.600000000000e-02 3.200000000000e-02 9.600000000000e-03" />
+   </geometry>
+   <material name="mat__52">
+    <color rgba="0 0 0.8 1" />
+   </material>
+  </collision>
+  <inertial>
+   <mass value="0.00634061" />
+   <origin xyz="-4.000000000000e-03 -1.200000000000e-02 4.800000000000e-03" />
+   <inertia ixx="5.8976100000000004e-07" ixy="-8.5931299999999998e-29" ixz="-2.7498000000000002e-29" iyy="1.8396199999999999e-07" iyz="-1.6399200000000001e-22" izz="6.7633200000000002e-07" />
+  </inertial>
+ </link>
+ <joint name="block_2_4_7280_42" type="fixed">
+  <parent link="block_2_4_7280_40" />
+  <child link="block_2_4_7280_42" />
+  <origin xyz="-5.610762731295e-18 9.537590986083e-19 9.600000000000e-03" rpy="2.220210312166e-16 4.439884893918e-16 3.330673309040e-16" />
+ </joint>
+</robot>
+
