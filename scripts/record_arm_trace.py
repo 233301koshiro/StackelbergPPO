@@ -27,9 +27,27 @@ XML の設計値でメッシュを並べると**学習結果と違う絵**にな
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \\
       --no-window --python scripts/record_arm_trace.py
 """
-import os, sys
+import os, sys, json
 sys.path.append(os.getcwd())
 os.environ['USE_CHOREONOID'] = '1'
+
+# ⭐ 系譜 9-236: 学習時の物理の環境変数を run のフォルダから読み、同じ環境で再生する。
+#   ⛔ 以前は手で渡しており、渡し忘れて別の物理で測った（9-229 の訂正）。
+#   ⭐ 明示的に渡した値は上書きしない（違えば警告を出す）。使った値は軌跡ファイルにも残す。
+_le = os.path.join(os.environ['EVAL_RESTORE_DIR'], 'launch_env.json')
+LAUNCH_ENV = json.load(open(_le)) if os.path.exists(_le) else None
+if LAUNCH_ENV is None:
+    print('[trace] ⚠️ launch_env.json が無い（9-236 より前の run）。物理の環境変数は手で渡したものだけ', flush=True)
+else:
+    for _k, _v in LAUNCH_ENV.items():
+        if _k not in os.environ:
+            os.environ[_k] = _v
+        elif os.environ[_k] != _v:
+            print(f'[trace] ⚠️ {_k}: 学習時 {_v} ／ 再生 {os.environ[_k]}（手で渡した値を使う）', flush=True)
+    print(f'[trace] ⭐ 学習時の環境で再生: {LAUNCH_ENV}', flush=True)
+_PHYS = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_FRICTION', 'CNOID_MATERIAL_TABLE',
+         'CNOID_RESTITUTION', 'HOCKEY_WALL_RESTITUTION', 'HOCKEY_ARM_BLOCK', 'ARM_SWEEP_OFF')
+REPLAY_ENV = {k: os.environ[k] for k in _PHYS if k in os.environ}
 
 import numpy as np
 import yaml
@@ -190,7 +208,8 @@ else:
     out_dir = os.path.join(restore_dir, 'trace')
     os.makedirs(out_dir, exist_ok=True)
     out = os.path.join(out_dir, 'arm_trace.npz')
-np.savez_compressed(out,
+np.savez_compressed(out, replay_env=json.dumps(REPLAY_ENV),
+                    launch_env=json.dumps(LAUNCH_ENV) if LAUNCH_ENV is not None else '',
                     body_names=np.array(names),
                     xpos=xpos, xmat=xmat,
                     bone_offset=bone, geom_size=geom_size, cube=cube, target=target,
