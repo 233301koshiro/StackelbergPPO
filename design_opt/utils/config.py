@@ -103,6 +103,9 @@ class Config:
         # robot config
         self.robot_param_scale = cfg.get('robot_param_scale', 0.1)
         self.robot_cfg = cfg.get('robot', dict())
+        # ⭐ 系譜 9-235: `+fix_base=true` で根元の柱（台座）の形を設計変数から外す（xml_robot.Body.set_params）
+        if FLAG.get('fix_base', False):
+            self.robot_cfg = dict(self.robot_cfg, fix_base=True)
 
         self.restore_dir = FLAG.get('restore_dir', None)
         self.reset_epoch = FLAG.get('reset_epoch', False)

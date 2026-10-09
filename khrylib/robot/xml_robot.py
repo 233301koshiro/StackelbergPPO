@@ -617,13 +617,19 @@ class Body:
     def set_params(self, params, pad_zeros=False, map_params=False): 
         if map_params:
             params = self.robot.map_params(params)
+        # ⭐ 系譜 9-235: `+fix_base=true` のとき、根元の柱（親が根のボディ）の形を描いたまま固定する。
+        #   ⛔ 縦型アームで台座の骨の向きまで設計変数になっており、台座が 20〜80° 倒れて床を這う腕になっていた。
+        #   ⭐ 骨（向き・高さ）と太さは適用しない（params は消費するので次元は変わらない）。関節のギア比は従来どおり。
+        base_fixed = self.cfg.get('fix_base', False) and self.parent is not None and self.parent.parent is None
 
         if self.bone_offset is not None and 'offset' in self.param_specs:
             if self.param_specs['offset']['type'] in {'xz', 'xy'}:
                 offset = denormalize_range(params[:2], self.param_specs['offset']['lb'], self.param_specs['offset']['ub'])
                 if np.all(offset == 0.0):
                     offset[0] += 1e-8
-                if self.param_specs['offset']['type'] == 'xz':
+                if base_fixed:
+                    pass
+                elif self.param_specs['offset']['type'] == 'xz':
                     self.bone_offset[[0, 2]] = offset
                 elif self.param_specs['offset']['type'] == 'xy':
                     self.bone_offset[[0, 1]] = offset
@@ -632,7 +638,8 @@ class Body:
                 offset = denormalize_range(params[:3], self.param_specs['offset']['lb'], self.param_specs['offset']['ub'])
                 if np.all(offset == 0.0):
                     offset[0] += 1e-8
-                self.bone_offset[:] = offset
+                if not base_fixed:
+                    self.bone_offset[:] = offset
                 params = params[3:]
 
         if self.bone_offset is not None and 'bone_len' in self.param_specs:
@@ -654,7 +661,12 @@ class Body:
         for joint in self.joints:
             params = joint.set_params(params, pad_zeros)
         for geom in self.geoms:
+            keep = (np.copy(geom.size), getattr(geom, 'ext_start', None)) if base_fixed else None
             params = geom.set_params(params, pad_zeros)
+            if keep is not None:
+                geom.size = keep[0]
+                if keep[1] is not None:
+                    geom.ext_start = keep[1]
         # rebuild bone, geom, joint
         self.rebuild()
         return params
