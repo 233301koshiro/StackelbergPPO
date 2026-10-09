@@ -27,6 +27,13 @@
 #           ⛔ 固定の帯が可動より下で重ならない → 4.4.5 の到達側を訂正
 #   共通: 再生で箱が 101 m にあること（`TRACE_ENV_SPECS` は不要。学習時の設定に入っている）
 #
+# ⭐⭐ 2026-10-09 追記（系譜 9-235、ユーザー判断「台座を設計変数から外す」）: **縦型アームの 16 本に `+fix_base=true`**
+#   （軸5 の e2e_a1v 系 10・ホッケー 2・付録D の tripo_arm_v3 4。平面アームの行には付けない）。
+#   ⛔ 縦型では台座の骨の向きまで設計変数で、ほぼ全 run で台座が 20〜80° 倒れて床を這う腕になっていた（hockey_bank9 53°）。
+#   ⭐ 投入前に hockey_bank9 の best を fix_base ありで再生し、台座が 3 話とも鉛直 0°・0.1925 m・太さ 0.070 のままと確認
+#   （古い方策はパックを 0 m しか動かせない＝倒れた台座に頼っていた）。
+#   ⭐ 共通の検査を 1 つ足す（投入前）: 再生で台座の傾き 0°（`fix_base` が効いていること）
+#
 # ⭐ 事前登録した読み（**結果を見てから変えない**）— 2 seed の best の帯で判定
 #   押しの柱（9-227 と同じ）
 #     ① long ＞ mid で帯が離れる → 9-6 押し側は成立 ／ ② 重なる → 順位は主張できない ／ ③ mid ＞ long で離れる → 9-6 押し側を訂正
@@ -61,6 +68,7 @@ launch(){ local RUN=$1; shift
     hydra.run.dir=single_run/$RUN > single_run/$RUN/stdout.log 2>&1 &
   log "$RUN launched (PID $!) ⭐ 元キューとの差は CNOID_CULLING_DEPTH=1.0 のみ"; sleep 60; }
 C="num_threads=4 enable_wandb=false fix_skeleton=true +robot_param_scale=1"
+FB="+fix_base=true"   # ⭐ 系譜 9-235: 縦型アームの台座（根元の柱）を設計変数から外す
 PUSH="+reward_specs.ctrl_cost_coeff=0.2 +reward_specs.contact_weight=0 +reward_specs.init_contact_penalty=50 +env_specs.arm_safe_init=true"
 REACH8="+reward_specs.use_reach=true +reward_specs.target_x=0.8 +reward_specs.target_y=0.0 +reward_specs.target_z=0.15 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false +env_specs.cube_x_offset=100"
 REACHV3="+reward_specs.use_reach=true +reward_specs.target_x=0.72 +reward_specs.target_y=0.0 +reward_specs.target_z=0.25 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false +reward_specs.init_contact_penalty=1600 +env_specs.cube_x_offset=100"
@@ -74,11 +82,11 @@ for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
 done
 # 軸5（9-228 の起動行）
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
-  launch e2e_a1v_pusher_scgc$X      cfg=pusher_tripo_v3      xml_name=e2e_a1v      max_epoch_num=200 seed=$S $C $PUSH
-  launch e2e_a1v_rho_pusher_scgc$X  cfg=pusher_tripo_v3      xml_name=e2e_a1v_rho  max_epoch_num=200 seed=$S $C +env_specs.arm_safe_init=true
-  launch e2e_a1v_real_pusher_scgc$X cfg=pusher_tripo_v3_real xml_name=e2e_a1v_real max_epoch_num=200 seed=$S $C +env_specs.arm_safe_init=true
-  launch e2e_a1v_reach_scgc_nobox$X       cfg=pusher_tripo_v3      xml_name=e2e_a1v      max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900
-  launch e2e_a1v_real_reach_scgc_nobox$X  cfg=pusher_tripo_v3_real xml_name=e2e_a1v_real max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 +env_specs.arm_safe_init=true
+  launch e2e_a1v_pusher_scgc$X      cfg=pusher_tripo_v3      xml_name=e2e_a1v      max_epoch_num=200 seed=$S $C $PUSH $FB
+  launch e2e_a1v_rho_pusher_scgc$X  cfg=pusher_tripo_v3      xml_name=e2e_a1v_rho  max_epoch_num=200 seed=$S $C +env_specs.arm_safe_init=true $FB
+  launch e2e_a1v_real_pusher_scgc$X cfg=pusher_tripo_v3_real xml_name=e2e_a1v_real max_epoch_num=200 seed=$S $C +env_specs.arm_safe_init=true $FB
+  launch e2e_a1v_reach_scgc_nobox$X       cfg=pusher_tripo_v3      xml_name=e2e_a1v      max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 $FB
+  launch e2e_a1v_real_reach_scgc_nobox$X  cfg=pusher_tripo_v3_real xml_name=e2e_a1v_real max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 +env_specs.arm_safe_init=true $FB
   launch tripo_pjd_prox_real_scgc_nobox$X cfg=pusher_gearonly_real xml_name=tripo_arm_v2c_pj_prox_real max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900
   launch tripo_pjd_dist_real_scgc_nobox$X cfg=pusher_gearonly_real xml_name=tripo_arm_v2c_pj_dist_real max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900
 done
@@ -92,7 +100,7 @@ for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
     +env_specs.arm_init_after_noise=true +env_specs.init_contact_all_links=true \
     +reward_specs.use_target_reward=true +reward_specs.target_x=1.55 \
     +reward_specs.target_y=0.0 +reward_specs.contact_weight=0 \
-    +reward_specs.ctrl_cost_coeff=0 +reward_specs.init_contact_penalty=1.0
+    +reward_specs.ctrl_cost_coeff=0 +reward_specs.init_contact_penalty=1.0 $FB
 done
 EXTRA=""
 # 到達の取り直し 15 本（9-234。箱なし・自己干渉あり＋門＋閾値。元 run の起動行は REACH8 と同じ）
@@ -109,7 +117,7 @@ done
 launch tripo_pj_short_scgc_nobox          xml_name=tripo_arm_v2c_pj_short seed=0 $R
 # 付録D: 非平面 4 関節（1000 epoch、最後に回す）
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
-  launch tripo_v3_reach2_scgc_nobox$X      cfg=pusher_tripo_v3 xml_name=tripo_arm_v3 max_epoch_num=1000 seed=$S $C $REACHV3
-  launch tripo_arm_v3_pusher_scgc$X  cfg=pusher_tripo_v3 xml_name=tripo_arm_v3 max_epoch_num=1000 seed=$S $C
+  launch tripo_v3_reach2_scgc_nobox$X      cfg=pusher_tripo_v3 xml_name=tripo_arm_v3 max_epoch_num=1000 seed=$S $C $REACHV3 $FB
+  launch tripo_arm_v3_pusher_scgc$X  cfg=pusher_tripo_v3 xml_name=tripo_arm_v3 max_epoch_num=1000 seed=$S $C $FB
 done
 log "=== キュー終了"
