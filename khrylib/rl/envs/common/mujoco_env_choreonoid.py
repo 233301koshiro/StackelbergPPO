@@ -1040,6 +1040,18 @@ class ChoreonoidSimWorld:
         self.sim_item = AISTSimulatorItem()
         self.sim_item.setTimeStep(0.01)
 
+        # ⛔⛔ Bug 57（2026-10-09、系譜 9-227）: AIST は既定で **5 cm より深い接触を捨てる**
+        #   （`ConstraintForceSolver.cpp` の `DEFAULT_CONTACT_CULLING_DEPTH = 0.05`）。
+        #   腕は 1 tick に最大約 30 cm 動くので、1 tick で 5 cm を越えた接触は押し戻されない
+        #   （long seed0 で離れたリンクが 53〜79 mm 重なったまま）。
+        #   ⭐ 閾値は 5 cm を越えた瞬間にしか効かないので、深い接触が一度も無い run の物理は変わらない。
+        #   ⚠️ **既定では何もしない。**`CNOID_CULLING_DEPTH` を指定したときだけ設定する。
+        _cd = os.environ.get('CNOID_CULLING_DEPTH')
+        if _cd:
+            self.sim_item.setContactCullingDepth(float(_cd))
+            # ⚠️ 読み返しの関数は Python に公開されていない。効いたかは再生で既知の失敗が消えるかで見る
+            print(f'[choreonoid] ⭐ 接触を捨てる深さを {float(_cd)} m に設定した（既定 0.05、Bug 57）', flush=True)
+
         # ⭐⭐ 反発係数（2026-09-26、9-173）。
         #   ⛔⛔ **AISTSimulator は材質ごとの `restitution` を読まない。**
         #     `restitution` を消費しているのは AGXDynamics と PhysX のプラグインだけで、
