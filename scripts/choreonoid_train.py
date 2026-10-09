@@ -29,6 +29,18 @@ try:
 except (ValueError, IndexError):
     pass
 
+# ⭐ 系譜 9-236: 物理に効く環境変数を run のフォルダへ書き残す。
+#   ⛔ 環境変数は .hydra に残らず、再生で渡し忘れて別の物理で測った（9-229 の訂正）。
+#   ⭐ record_arm_trace.py がこのファイルを読んで同じ環境で再生する。
+PHYSICS_ENV = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_FRICTION', 'CNOID_MATERIAL_TABLE',
+               'CNOID_RESTITUTION', 'HOCKEY_WALL_RESTITUTION', 'HOCKEY_ARM_BLOCK', 'ARM_SWEEP_OFF')
+_rd = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('hydra.run.dir=')), None)
+if _rd:
+    import json
+    os.makedirs(_rd, exist_ok=True)
+    with open(os.path.join(_rd, 'launch_env.json'), 'w') as _f:
+        json.dump({k: os.environ[k] for k in PHYSICS_ENV if k in os.environ}, _f, ensure_ascii=False, indent=1)
+
 from design_opt.train import main
 main()
 
