@@ -70,7 +70,7 @@ class args:
     # ⭐ デモ用（2026-10-05）。既定 0 なので従来どおり
     start_delay  = float(os.environ.get('VIEWER_START_DELAY', '0'))    # 起動してから再生を始めるまで [s]（録画のウィンドウを選ぶ時間）
     design_pause = float(os.environ.get('VIEWER_DESIGN_PAUSE', '0'))   # 形態が変わるたびに止める [s]（形が育つ様子を見せる）
-    # ⭐ Bug 47（2026-10-09）: 読み込み直後の 1〜2 話は当てにならない。先に早送りで流してから見せる。既定 0 は従来どおり
+    # 頭の話を早送りで流してから見せる（既定 0）。⛔ 「読み込み直後の話は当てにならない」は誤り（系譜 9-237）。初期状態のくじが毎回同じ順に出るだけ
     warmup       = int(os.environ.get('VIEWER_WARMUP', '0'))
 
 # ⭐ 系譜 9-236: 学習時の物理の環境変数を run のフォルダから読む（record_arm_trace.py と同じ）。手で渡した値は上書きしない
@@ -185,7 +185,7 @@ try:
         design_steps = 0
         sketch_len = _lengths()
         _say('=' * 50)
-        _say(f'[デモ] 第 {ep + 1} 話  タスク: {_task}' + ('  ⏩ 読み込み直後なので早送り（当てにならない話。Bug 47）' if warm else ''))
+        _say(f'[デモ] 第 {ep + 1} 話  タスク: {_task}' + ('  ⏩ 早送り（VIEWER_WARMUP）' if warm else ''))
         _say(f'[デモ] 描いた形（初期）のリンク長 [m]: {_fmt(sketch_len)}')
         _say('[デモ] 形態変化を始めます（Leader が形を決めます）')
         exec_steps = 0
