@@ -70,6 +70,21 @@ class args:
     # ⭐ デモ用（2026-10-05）。既定 0 なので従来どおり
     start_delay  = float(os.environ.get('VIEWER_START_DELAY', '0'))    # 起動してから再生を始めるまで [s]（録画のウィンドウを選ぶ時間）
     design_pause = float(os.environ.get('VIEWER_DESIGN_PAUSE', '0'))   # 形態が変わるたびに止める [s]（形が育つ様子を見せる）
+    # ⭐ Bug 47（2026-10-09）: 読み込み直後の 1〜2 話は当てにならない。先に早送りで流してから見せる。既定 0 は従来どおり
+    warmup       = int(os.environ.get('VIEWER_WARMUP', '0'))
+
+# ⭐ 系譜 9-236: 学習時の物理の環境変数を run のフォルダから読む（record_arm_trace.py と同じ）。手で渡した値は上書きしない
+import json as _json
+_le = os.path.join(args.restore_dir, 'launch_env.json')
+if os.path.exists(_le):
+    for _k, _v in _json.load(open(_le)).items():
+        if _k not in os.environ:
+            os.environ[_k] = _v
+        elif os.environ[_k] != _v:
+            print(f'[viewer] ⚠️ {_k}: 学習時 {_v} ／ 再生 {os.environ[_k]}（手で渡した値を使う）', flush=True)
+    print(f'[viewer] ⭐ 学習時の環境で再生: {_json.load(open(_le))}', flush=True)
+else:
+    print('[viewer] ⚠️ launch_env.json が無い（9-236 より前の run）。物理の環境変数は手で渡したものだけ', flush=True)
 
 step_interval = 1.0 / args.fps
 
@@ -163,13 +178,14 @@ if args.start_delay > 0:
 # ---- 再生ループ ----------------------------------------------------------
 ep = 0
 try:
-    while args.episodes == 0 or ep < args.episodes:
+    while args.episodes == 0 or ep < args.episodes + args.warmup:
+        warm = ep < args.warmup
         state = env.reset()
         step  = 0
         design_steps = 0
         sketch_len = _lengths()
         _say('=' * 50)
-        _say(f'[デモ] 第 {ep + 1} 話  タスク: {_task}')
+        _say(f'[デモ] 第 {ep + 1} 話  タスク: {_task}' + ('  ⏩ 読み込み直後なので早送り（当てにならない話。Bug 47）' if warm else ''))
         _say(f'[デモ] 描いた形（初期）のリンク長 [m]: {_fmt(sketch_len)}')
         _say('[デモ] 形態変化を始めます（Leader が形を決めます）')
         exec_steps = 0
@@ -194,19 +210,19 @@ try:
             if info.get('stage') == 'skeleton_transform':
                 # 骨格（リンクの本数）を決める段。本研究ではスケッチのまま固定（fix_skeleton）なので形は変わらない
                 _say('[デモ] 骨格（リンクの本数）はスケッチのまま固定します')
-                if args.design_pause > 0:
+                if args.design_pause > 0 and not warm:
                     _wait(args.design_pause)
             elif info.get('stage') != 'execution':
                 design_steps += 1
                 _say(f'[デモ] 形態変化 {design_steps} 回目  リンク長 [m]: {_fmt(_lengths())}')
-                if args.design_pause > 0:
+                if args.design_pause > 0 and not warm:
                     _wait(args.design_pause)
             elif exec_steps == 0:
                 now = _lengths()
                 _say('[デモ] 形態変化が完了しました。実行に移ります（Follower が関節を動かします）')
                 _say('[デモ] リンク長 [m]  描いた形 → 学習後: '
                      + '  '.join(f'{a:.2f}→{b:.2f}' for a, b in zip(sketch_len, now)))
-                if args.design_pause > 0:
+                if args.design_pause > 0 and not warm:
                     _wait(args.design_pause * 2)
 
             if info.get('stage') == 'execution':
@@ -217,7 +233,8 @@ try:
                     cube_start_x = cube_pos[0]
                 cube_end_x = cube_pos[0]
                 # 実行フェーズのみスリープ（形態変換フェーズは速送り）
-                time.sleep(step_interval)
+                if not warm:
+                    time.sleep(step_interval)
                 if exec_steps % 250 == 0:
                     if _is_reach:
                         _d = float(np.linalg.norm(np.asarray(env._arm_tip_pos) - _target)) * 1000
@@ -247,7 +264,7 @@ try:
         _msg(line1)
         _msg(line2)
         _say(f'[デモ] 第 {ep} 話の終わり')
-        if args.design_pause > 0:
+        if args.design_pause > 0 and not warm:
             _wait(args.design_pause * 2)
 
 except KeyboardInterrupt:
