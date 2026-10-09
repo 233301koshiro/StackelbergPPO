@@ -15,7 +15,7 @@
   target       (3,)    Reach の目標
   ep_*         採用した全話の軌跡・置いた瞬間・形（ep_bone / ep_geom）・報酬（ep_reward / ep_reward_ctrl）
 
-環境変数: TRACE_EPISODES（既定 5）・TRACE_SKIP（既定 2）・TRACE_STEPS（既定 1200）・TRACE_OUT（出力先）・
+環境変数: TRACE_EPISODES（既定 5）・TRACE_SKIP（既定 0。9-237）・TRACE_STEPS（既定 1200）・TRACE_OUT（出力先）・
   ⭐ TRACE_STOCHASTIC=1 で**学習中と同じ確率的な行動**で回す（9-225。既定は平均の行動＝評価と同じ）
   ⭐ TRACE_GEAR_OVERRIDE="g1,g2,…" で実行の間だけシミュレータのギア比を差し替える（観測は変えない。原因調べ用）
 
@@ -101,13 +101,12 @@ target = np.array([_src.get('target_x', 0.8),
                    _src.get('target_y', 0.0),
                    _src.get('target_z', 0.15)])
 
-# ⭐⭐ Bug 47 / 9-142: 「読み込み直後の 1 話目」は当てにならない（9-66）。
-#   ⛔ 旧実装は 1 話しか回さず、その 1 話がまさに 1 話目だった。
-#     対照 Pusher で 1 話目 15.11 m に対し 3〜6 話は 6.54〜15.97 m（幅 144 %）。
-#   ⚠️ **軌跡を取り直しても直らない**（毎回 1 話目をやり直すだけ）。
-#   ⭐ **1 回の読み込みのまま N 話回し、頭の SKIP 話を捨てる。**
+# ⭐ Bug 47 / 9-142: 1 話だけでは判定しない（対照 Pusher で 1 話目 15.11 m に対し 6 話で 6.54〜15.97 m）。
+#   ⛔ 9-237 で訂正: 頭の話に特別な性質は無い。どの話も初期状態のくじ（関節と箱に ±0.1）で、
+#     種が run の seed に固定されているので毎回同じ順に出るだけ。⭐ **N 話すべてを使い、分布で見る。**
+#   `TRACE_SKIP` は既定 0（過去の「頭 2 話を捨てた 3 話」を再現したいときだけ 2 を渡す）
 N_EP = int(os.environ.get('TRACE_EPISODES', '5'))
-SKIP = int(os.environ.get('TRACE_SKIP', '2'))
+SKIP = int(os.environ.get('TRACE_SKIP', '0'))
 # ⭐ 2026-10-05（9-225）: 学習中と同じく**確率的な行動**で回す（既定は平均の行動＝評価と同じ）。
 #   学習中の探索がパックに触れていたかを測るため。⚠️ 設計の行動も確率的になるので形は話ごとに変わる
 STOCH = os.environ.get('TRACE_STOCHASTIC') == '1'
@@ -186,7 +185,7 @@ for k in range(N_EP):
     if k >= SKIP:
         eps.append((np.array(xpos), np.array(xmat), np.array(cube), init, shape, (r_tot, r_ctrl)))
     print(f'[trace] 話 {k+1}/{N_EP}  step={len(xpos)}  '
-          f'{"⭐ 採用" if k >= SKIP else "⚠️ 捨てる（頭の話は当てにならない。Bug 47）"}', flush=True)
+          f'{"⭐ 採用" if k >= SKIP else "捨てる（TRACE_SKIP 指定）"}', flush=True)
 
 assert eps, 'TRACE_EPISODES が TRACE_SKIP 以下です'
 
