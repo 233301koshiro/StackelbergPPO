@@ -7,7 +7,7 @@
 #   ⭐ ターミナルと Choreonoid のメッセージ欄に「第 N 話／形態変化 k 回目（リンク長）／実行に移ります
 #      （描いた形 → 学習後）／実行中（先端と目標の距離・箱の移動）」を出す
 #   タスク: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey
-#   ⭐ hockey（2026-10-09）: 制御コスト 0 の `hockey_bank9`（seed0、評価の動きで 3 話中 2 話ゴール。系譜 9-229）。
+#   ⭐ hockey（2026-10-09）: 制御コスト 0 の `hockey_bank9`（seed0、評価の動きで 3 話中 2 話ゴール（⚠️ 固定された 3 本のくじでの結果で、ゴール率ではない。系譜 9-237）。系譜 9-229）。
 #     学習と同じ壁の反射・腕ブロックを有効にする。頭の話は当てにならない（Bug 47）ので既定で 3 話流す。ゴールした話を使うこと
 #
 # ⭐ 腕は**元のカラフルなメッシュ**で表示する（見た目だけ。物理はカプセルのまま。
@@ -21,8 +21,8 @@
 set -eu
 TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey}
 EPS=${2:-1}   # ⭐ 既定は 1 話（録画用。2026-10-05。複数回は第 2 引数で）
-# ⭐ Bug 47（2026-10-09）: 読み込み直後の 1〜2 話は当てにならないので、先に WARMUP 話（既定 2）を早送りで流してから EPS 話を見せる。
-#   ⛔ 10-09 にホッケーを頭から 3 話見て「ゴールに入らない」と見えた（9-229 のゴールは頭 2 話を捨てた 3 話で測った）。WARMUP=0 で従来どおり
+# ⛔ 訂正（2026-10-09、系譜 9-237）: 「読み込み直後の 1〜2 話は当てにならない」は誤り。どの話も初期状態のくじ（関節と箱に ±0.1）で、
+#   くじの種が run の seed で固定されているので毎回同じ順に出るだけ。頭を飛ばす理由は無いので WARMUP の既定は 0（話を飛ばすときだけ指定）
 # ⭐ 9-236 以降の run は、物理の環境変数を run の launch_env.json から自動で読む（EXTRA は古い run 用）
 # 既定は縦型 A1 のメッシュ。タスクごとに上書きする
 VMESH=data/test/A1/meshes; VGLB=data/test/A1/3D/A1.glb; EXTRA=
@@ -60,7 +60,7 @@ fi
 env FONTCONFIG_FILE="$PWD/config/fontconfig_ja.conf" \
   CNOID_HIDE_BODIES="$HIDE" CNOID_TARGET_MARK="$TARGET" VIEWER_CAMERA="$CAM" \
   VIEWER_START_DELAY="${START_DELAY:-10}" VIEWER_DESIGN_PAUSE="${DESIGN_PAUSE:-1}" \
-  VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS VIEWER_WARMUP="${WARMUP:-2}" \
+  VIEWER_RESTORE_DIR=single_run/$RUN VIEWER_EPOCH=best VIEWER_FPS=25 VIEWER_EPISODES=$EPS VIEWER_WARMUP="${WARMUP:-0}" \
   CNOID_VISUAL_MESHES=$VMESH CNOID_VISUAL_GLB=$VGLB $EXTRA \
   USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
   /choreonoid_ws/install/bin/choreonoid --python scripts/eval_cnoid_viewer.py &
