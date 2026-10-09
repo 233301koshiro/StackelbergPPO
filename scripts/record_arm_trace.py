@@ -58,6 +58,13 @@ cfg = Config(FLAGS, project_path, restore_dir)
 cfg.restore_dir = restore_dir
 cfg.control_prior = False
 cfg.morph_prior = False
+# ⭐ 学習時と違う env_specs で再生する口（2026-10-09、系譜 9-234）。例: TRACE_ENV_SPECS='{"cube_x_offset": 100}'
+#   ⚠️ 学習時の設定と違う環境で再生することになるので、使ったら必ず記録に書く
+_es = os.environ.get('TRACE_ENV_SPECS')
+if _es:
+    import json
+    cfg.env_specs.update(json.loads(_es))
+    print(f'[trace] ⚠️ env_specs を上書きした: {json.loads(_es)}', flush=True)
 torch.set_default_dtype(torch.float64)
 set_global_seed(cfg.seed)
 

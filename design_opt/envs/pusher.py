@@ -220,7 +220,8 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             use_dense_target = self.cfg.reward_specs.get('use_dense_target', False)
             if use_reach:
                 # Reach タスク: arm tip を 3D 目標点に近づける。シンプルな dense 報酬。
-                # cube は不要（XML に残しても可）。reward_fwd_contact も無効化。
+                # ⛔ cube は XML に残すと物理に残る（腕が触れて動かす。深い接触は捨てられ幽霊になる。Bug 57・系譜 9-234）。
+                #   ⭐ 到達では `+env_specs.cube_x_offset=100` で毎話の開始時に x≈101 m へ退避させる。reward_fwd_contact も無効化。
                 target_z = self.cfg.reward_specs.get('target_z', 0.2)
                 target_3d = np.array([target_x, target_y, target_z])
                 reach_dist = np.linalg.norm(self._arm_tip_pos - target_3d)
