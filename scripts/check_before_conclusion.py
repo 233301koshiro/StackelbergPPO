@@ -16,6 +16,10 @@
   3. ⭐ **タスクを達成しているか**（未到達どうしを比較しない。9-113 で破った）
   4. **版が混入していないか**（9-105 で判明。audit_run_validity と同じ判定）
   5. **事前登録があるか**（キューか台帳に「読み」が書かれているか。9-101 で破った）
+  6〜7. 目視の記録・execution へ入ったか（9-155・9-211）
+  8. ⭐ **再生が学習と同じ物理の環境変数か**（launch_env.json と軌跡を照合。9-229 で破った。9-236）
+  9. ⭐ **離れたリンクどうしのめり込みが 50 mm 未満か**（Bug 57。9-232）
+  10. ⭐ **縦型アームの台座が倒れていないか**（Bug 58。9-235）
 """
 import argparse
 import re
@@ -214,10 +218,83 @@ def ck_entered_exec(r):
     return True, f'exec_R_eps が非ゼロの epoch {len(vals)-zeros}/{len(vals)}'
 
 
+def _launch_env(r):
+    p = run_dir(r) / 'launch_env.json'
+    if not p.exists():
+        return None
+    import json
+    return json.loads(p.read_text(encoding='utf-8'))
+
+
+def ck_replay_env(r):
+    """⭐ 系譜 9-236: **再生が学習と同じ物理の環境変数で行われたか**。
+
+    ⛔ 9-229 で `HOCKEY_*` を渡し忘れ、別の物理で再生して結論を書きかけた。
+    """
+    le = _launch_env(r)
+    p = run_dir(r) / 'trace' / 'arm_trace.npz'
+    if le is None:
+        return None, '⚠️ launch_env.json が無い（9-236 より前の run）。再生の環境は照合できない'
+    if not p.exists():
+        return False, '⛔ 再生していない'
+    import json
+    d = np.load(p, allow_pickle=True)
+    if 'replay_env' not in d.files:
+        return False, '⛔ 軌跡に再生の環境が記録されていない（9-236 より前の再生）。取り直すこと'
+    re_ = json.loads(str(d['replay_env']))
+    diff = {k: (le.get(k), re_.get(k)) for k in set(le) | set(re_) if le.get(k) != re_.get(k)}
+    if diff:
+        return False, f'⛔ 学習と再生で物理の環境変数が違う: {diff}'
+    return True, f'学習と同じ環境で再生（{le}）'
+
+
+def ck_far_pen(r):
+    """⭐ 系譜 9-227・9-232: **離れたリンクどうしのめり込みが 50 mm 未満か**（Bug 57 が直っているか）。"""
+    if not (run_dir(r) / 'trace' / 'arm_trace.npz').exists():
+        return False, '⛔ 再生していない'
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from check_self_penetration import measure
+    w, fr, pr, T, far = measure(r)
+    msg = f'離れた組の最大めり込み {far[0]*1000:.0f} mm（step の {far[1]*100:.1f} %）'
+    le = _launch_env(r) or {}
+    if not le.get('CNOID_SELF_COLLISION'):
+        return None, f'⚠️ 自己干渉なしで学習（または記録なし）。{msg}'
+    if far[0] >= 0.05:
+        return False, f'⛔ {msg}。5 cm を越えている＝接触が捨てられた疑い（Bug 57）'
+    return True, msg
+
+
+def ck_base(r):
+    """⭐ 系譜 9-235・Bug 58: **縦型アームの台座が倒れていないか**。"""
+    import json as _j
+    p = run_dir(r) / 'trace' / 'arm_trace.npz'
+    cfgp = run_dir(r) / '.hydra' / 'config.yaml'
+    if not p.exists() or not cfgp.exists():
+        return None, '⚠️ 軌跡か設定が無い'
+    import yaml
+    c = yaml.safe_load(cfgp.read_text(encoding='utf-8'))
+    xp = ROOT / 'assets' / 'mujoco_envs' / f"{c.get('xml_name')}.xml"
+    m = re.search(r'<body name="1"[^>]*>.*?fromto="([^"]+)"', xp.read_text(encoding='utf-8'), re.S) if xp.exists() else None
+    if not m:
+        return None, '⚠️ 台座の形を XML から読めない'
+    ft = [float(x) for x in m.group(1).split()]
+    d0 = np.array(ft[3:]) - np.array(ft[:3])
+    if abs(d0[2]) < 0.9 * np.linalg.norm(d0):
+        return True, '横型（柱の台座なし）'
+    d = np.load(p, allow_pickle=True)
+    names = [str(n) for n in d['body_names']]
+    b = np.asarray(d['ep_bone'][0] if 'ep_bone' in d.files else d['bone_offset'], float)[names.index('1')]
+    tilt = float(np.degrees(np.arccos(np.clip(b[2] / np.linalg.norm(b), -1, 1))))
+    if c.get('fix_base'):
+        return (tilt < 0.5), (f'台座 {tilt:.1f}°（fix_base あり）' if tilt < 0.5 else f'⛔ fix_base なのに台座が {tilt:.1f}° 傾いている')
+    return (None if tilt > 10 else True), (f'⚠️ 縦型で台座が {tilt:.1f}° 倒れている（Bug 58。fix_base なし）' if tilt > 10 else f'台座 {tilt:.1f}°')
+
+
 CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg),
-          ('⭐⭐ exec 到達', ck_entered_exec)]
+          ('⭐⭐ exec 到達', ck_entered_exec),
+          ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 台座', ck_base)]
 
 
 def audit(r):
