@@ -86,16 +86,13 @@ USE_CHOREONOID=1 /choreonoid_ws/install/bin/choreonoid --no-window \
 
 ```bash
 for f in docs/進捗.md docs/研究応用/引き継ぎ_再起動後.md docs/実験一覧_詳細.md \
-         docs/中間発表原稿.md docs/研究応用/論文2枚.md docs/研究応用/論文6枚.md \
          scripts/README.md; do
   printf "  %-40s %s\n" "$f" "$(grep -c '<今回のキーワード>' $f)"
 done
 ```
 
-### 3. とくに漏れやすい5箇所を明示的に見る
+### 3. とくに漏れやすい箇所を明示的に見る
 
-- **配布資料**（`中間発表原稿.md` / `論文2枚.md` / `論文6枚.md`）
-  — PDF ビルドにも `check_docs_consistency.py` にも掛からないので構造的に漏れる
 - **`scripts/README.md`** — スクリプトの挙動を変えたのに索引が古いまま
 - **同一ファイル内の別箇所** — 第4章 4.5.3 を直して 4.6 の要約を忘れた例がある
 - **凍結スナップショット**（`要旨_詳細版.md`）— 古いままでよいが、その旨の注記が要る
