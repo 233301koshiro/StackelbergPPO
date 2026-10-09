@@ -496,7 +496,7 @@ git revert <commit>         # コミット済みを打ち消す（履歴は残�
 手順（3 つとも安い）
 
 ```bash
-# ① 1 エピソード再生して軌跡を落とす（数分）
+# ① 1 エピソード再生して軌跡を落とす（数分）。⭐ 9-236 以降の run は学習時の物理の環境変数を launch_env.json から自動で読む
 EVAL_RESTORE_DIR=single_run/<run> EVAL_CHECKPOINT=best \
 USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreonoid \
     --no-window --python scripts/record_arm_trace.py

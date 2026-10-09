@@ -55,7 +55,7 @@
 | **`make_obstacle_reach_xml.py`** | 障害物のある Reach の XML を作る（9-104）。⚠️ **障害物は `<body>` に入れる**（9-98） |
 | **`gemini_api.py`** | M1 を Gemini API で回す骨組み（9-123）。⚠️ **未着手・キー待ち** |
 | ⭐ **`tripo_api.py`** | Tripo3D API で画像→3D を生成（9-115）。`--balance` / `--verify-seed`。⚠️ キーは `.env` |
-| ⭐⭐ **`check_before_conclusion.py`** | **結論を書く前に通す検査**（完走・再生・タスク達成・版・事前登録）。9-114 ⚠️⚠️ **2026-09-20 追加: ①判定対象が末尾でまだ動いていれば「打ち切り」警告（9-137）②XML に固定 body があれば「再生ごとに揺れる。1 エピソードで判定するな」警告（9-138）** |
+| ⭐⭐ **`check_before_conclusion.py`** | **結論を書く前に通す検査**（完走・再生・タスク達成・版・事前登録）。9-114 ⚠️⚠️ **2026-09-20 追加: ①判定対象が末尾でまだ動いていれば「打ち切り」警告（9-137）②XML に固定 body があれば「再生ごとに揺れる。1 エピソードで判定するな」警告（9-138）**。⭐ 2026-10-09: 再生の環境（launch_env.json と照合）・離れた組のめり込み < 50 mm・縦型の台座の傾きを追加（9-236） |
 | ⭐ **`audit_run_validity.py`** | **完走 run が正当な実験として扱えるか。**起動時刻から XML/cfg の版を逆引きし、**同じ名前で中身が違う組**を検出（9-105） |
 | ⭐⭐ **`probe_shot_choreonoid.py`** | **Choreonoid の実走で**、初期 y ごとにゴールへ入る撃ち方があるかを数える（9-103）。⚠️ **9-65 の MuJoCo 版を置き換えるもの** |
 | ⭐⭐ **`probe_wall_choreonoid.py`** | **壁が Choreonoid の実走で効くかを測る**（9-99）。⚠️ **壁を測るときは必ずこれ。** MuJoCo のプローブは壁について実走と無関係な答えを出す（9-98） |
@@ -98,6 +98,7 @@
 | `make_slide8_links_figure.py` | 進捗発表スライド 8「リンクに切り分けて寸法を測った」の図（→ `figures/slide8_links_split.png`） |
 | `make_slide9_m1_variance_figure.py` | 同スライド 9「M1 のばらつき」の図（→ `figures/slide9_m1_variance.png`） |
 | `render_pipeline_stages.py` | M3〜M5 の**処理の途中経過**を図にする（2026-10-07、スライド「システムフロー解説」用）。パイプラインの関数そのものを呼んで描く（→ `figures/pipeline_m2_pose.png`（M2 の失敗例 A1 対 A3）・`pipeline_m3.png`・`pipeline_m4.png`・`pipeline_m5.png`）。`--case` で別の手描き |
+| ⭐ `queue_postrun_replay.sh` | ⭐ **修論のための学習 45 本を、1 本終わるたびに「学習時の環境で再生 → 図 → 結論前の検査」まで済ませる**（9-236）。学習はしない。出力 `single_run/postrun_summary.log` |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
 | ⭐ **`doc_refs.py`** | **識別子の逆引き。「ここを変えたらどこも変わる」を出す。** `--hubs` で影響の広い識別子、`--undefined` で壊れ参照 |
 | `dump_thesis_outline.py` | 修論の見出しを書き出す。`--write` で 構成.md の一覧を再生成、`--check` で食い違い検査 |
