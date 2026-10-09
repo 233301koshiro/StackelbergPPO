@@ -24,7 +24,7 @@ from design_opt.utils.config import Config
 from design_opt.agents.genesis_agent import BodyGenAgent, tensorfy
 from design_opt.utils.tools import set_global_seed
 
-DISCARD = int(os.environ.get('EVAL_DISCARD', '2'))   # 頭の何話を捨てるか（9-66）
+DISCARD = int(os.environ.get('EVAL_DISCARD', '0'))   # 頭の何話を捨てるか。⛔ 9-237 で根拠が無いと分かったので既定 0
 
 rd = os.environ['EVAL_RESTORE_DIR']
 _ep = os.environ.get('EVAL_EPOCH', 'best')
@@ -76,7 +76,7 @@ for e in range(nep):
 print(f"\n[verify] {rd}  epoch={epoch}  task={'Reach' if is_reach else 'Pusher'}  {nep} エピソード")
 print(f"[verify] 各話の exec 合計報酬（= log の exec_R_eps と同じ量）:")
 for i, (tot, n) in enumerate(rows):
-    mark = "  ← 捨てる（読み込み直後は当てにならない。9-66）" if i < DISCARD else ""
+    mark = "  ← 捨てる（EVAL_DISCARD 指定）" if i < DISCARD else ""
     print(f"         ep{i+1}: {tot:10.2f}  ({n} steps){mark}")
 
 late = [t for t, _ in rows[DISCARD:]]

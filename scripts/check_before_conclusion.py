@@ -112,14 +112,15 @@ def ck_achieved(r):
     # ⭐ Bug 47 / 9-142 の対応後に作られた軌跡は、頭の話を捨てた複数話の要約を持つ。
     if 'ep_cube_dx' in d:
         dx = np.asarray(d['ep_cube_dx'], dtype=float)
-        warn = (f'  ⭐ **{len(dx)} 話（頭 {int(d["ep_skipped"])} 話を捨てた）**'
-                f'  話ごとの対象移動 [{dx.min():.2f}, {dx.max():.2f}] m ')
+        _sk = int(d["ep_skipped"])
+        warn = (f'  ⭐ **{len(dx)} 話' + (f'（頭 {_sk} 話を捨てた）**' if _sk else '（全話）**')
+                + f'  話ごとの対象移動 [{dx.min():.2f}, {dx.max():.2f}] m ')
         if len(dx) > 1 and dx.max() - dx.min() > 0.2 * max(abs(dx.mean()), 1e-9):
             warn += (f'⚠️ **話ごとの幅が {(dx.max()-dx.min())/max(abs(dx.mean()),1e-9)*100:.0f} % ある。'
                      f'単一の値で順位を付けないこと** ')
     else:
         warn = ('  ⛔ **この軌跡は Bug 47 の対応前に作られており「読み込み直後の 1 話目」である。'
-                '取り直すこと**（`record_arm_trace.py` は既定で 5 話走らせ頭 2 話を捨てる） ')
+                '取り直すこと**（`record_arm_trace.py` は既定で 5 話走らせ、全話を使う。9-237） ')
     warn += ('' if not static else
             f"  ⛔ **固定 body {static} がある。再生ごとに結果が揺れる（9-138）。"
             f"1 エピソードで判定しないこと** ")
