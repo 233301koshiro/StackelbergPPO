@@ -81,10 +81,12 @@ for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
   done
 done
 # 軸5（9-228 の起動行）
+# ⛔ 系譜 9-238（Bug 59）: 密度・実在の押しと付録D の押しは元の起動行に $PUSH が無く、報酬が既定値（制御コスト 1e-4・接近の整形 1.0）だった。
+#   ⭐ ユーザー承認（10-11）で他の押しと同じ $PUSH にそろえた。走っていた e2e_a1v_rho_pusher_scgc は ep33 で止め、_aborted_noPUSH へ退避
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
   launch e2e_a1v_pusher_scgc$X      cfg=pusher_tripo_v3      xml_name=e2e_a1v      max_epoch_num=200 seed=$S $C $PUSH $FB
-  launch e2e_a1v_rho_pusher_scgc$X  cfg=pusher_tripo_v3      xml_name=e2e_a1v_rho  max_epoch_num=200 seed=$S $C +env_specs.arm_safe_init=true $FB
-  launch e2e_a1v_real_pusher_scgc$X cfg=pusher_tripo_v3_real xml_name=e2e_a1v_real max_epoch_num=200 seed=$S $C +env_specs.arm_safe_init=true $FB
+  launch e2e_a1v_rho_pusher_scgc$X  cfg=pusher_tripo_v3      xml_name=e2e_a1v_rho  max_epoch_num=200 seed=$S $C $PUSH $FB
+  launch e2e_a1v_real_pusher_scgc$X cfg=pusher_tripo_v3_real xml_name=e2e_a1v_real max_epoch_num=200 seed=$S $C $PUSH $FB
   launch e2e_a1v_reach_scgc_nobox$X       cfg=pusher_tripo_v3      xml_name=e2e_a1v      max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 $FB
   launch e2e_a1v_real_reach_scgc_nobox$X  cfg=pusher_tripo_v3_real xml_name=e2e_a1v_real max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 +env_specs.arm_safe_init=true $FB
   launch tripo_pjd_prox_real_scgc_nobox$X cfg=pusher_gearonly_real xml_name=tripo_arm_v2c_pj_prox_real max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900
@@ -118,6 +120,6 @@ launch tripo_pj_short_scgc_nobox          xml_name=tripo_arm_v2c_pj_short seed=0
 # 付録D: 非平面 4 関節（1000 epoch、最後に回す）
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
   launch tripo_v3_reach2_scgc_nobox$X      cfg=pusher_tripo_v3 xml_name=tripo_arm_v3 max_epoch_num=1000 seed=$S $C $REACHV3 $FB
-  launch tripo_arm_v3_pusher_scgc$X  cfg=pusher_tripo_v3 xml_name=tripo_arm_v3 max_epoch_num=1000 seed=$S $C $FB
+  launch tripo_arm_v3_pusher_scgc$X  cfg=pusher_tripo_v3 xml_name=tripo_arm_v3 max_epoch_num=1000 seed=$S $C $PUSH $FB
 done
 log "=== キュー終了"
