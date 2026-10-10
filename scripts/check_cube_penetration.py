@@ -184,4 +184,5 @@ def main():
         print("✅ 軸が cube に入った run は無い")
 
 
-main()
+if __name__ == '__main__':
+    main()
