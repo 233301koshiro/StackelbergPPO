@@ -89,11 +89,12 @@ def plot(run):
     # ⭐ 極値を図に焼き込む（9-96: 動く物体すべての極値を先に出す）
     allp = np.concatenate([xp, ends], axis=1)
     zmin = float(allp[..., 2].min())
-    note = (f'{run}   step={T}   全リンクの z 最小 = {zmin*1000:.0f} mm'
-            + ('  ⛔ 床下!' if zmin < -0.001 else ''))
+    # ⚠️ 題は ASCII だけ（日本語はフォントが無く化け、「目標最小」を「隣接」と読み違えた。系譜 9-239）
+    note = (f'{run}   step={T}   link z min = {zmin*1000:.0f} mm'
+            + ('  BELOW FLOOR!' if zmin < -0.001 else ''))
     if tgt is not None:
         dd = np.linalg.norm(ends[:, -1, :] - tgt, axis=1)
-        note += f'   目標最小 {dd.min()*1000:.1f} mm'
+        note += f'   tip-target min {dd.min()*1000:.1f} mm'
     fig.suptitle(note, fontsize=11)
     axes[0].legend(fontsize=8)
     plt.tight_layout()
