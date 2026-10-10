@@ -339,6 +339,9 @@ def _overrides(r):
     for line in yaml.safe_load(p.read_text(encoding='utf-8')) or []:
         k, _, v = str(line).partition('=')
         o[k.lstrip('+~')] = v
+    # ⭐ 自分自身からの再開（restore_dir が自分のフォルダ）は条件の違いではないので外す
+    if o.get('restore_dir', '').rstrip('/').endswith('/' + r):
+        o.pop('restore_dir'); o.pop('epoch', None)
     full = {k: _norm(v) for k, v in DEFAULTS.items()}
     full.update({k: _norm(v) for k, v in o.items()})
     full['launch_env'] = str(sorted((_launch_env(r) or {}).items()))
