@@ -20,6 +20,8 @@
   8. ⭐ **再生が学習と同じ物理の環境変数か**（launch_env.json と軌跡を照合。9-229 で破った。9-236）
   9. ⭐ **離れたリンクどうしのめり込みが 50 mm 未満か**（Bug 57。9-232）
   10. ⭐ **縦型アームの台座が倒れていないか**（Bug 58。9-235）
+  11. ⭐ **比べる相手と起動行が、比べる変数以外で違わないか**（Bug 59。9-238）。組は COMPARISONS。
+      任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）
 """
 import argparse
 import re
@@ -291,11 +293,102 @@ def ck_base(r):
     return (None if tilt > 10 else True), (f'⚠️ 縦型で台座が {tilt:.1f}° 倒れている（Bug 58。fix_base なし）' if tilt > 10 else f'台座 {tilt:.1f}°')
 
 
+# ⭐ 11. 比べる相手と起動行が「比べる変数」以外で違わないか（Bug 59・系譜 9-238）。
+#   ⛔ 9-136 は XML だけ diff して「1 変数」とし、起動行の報酬の違いを見落とした。
+#   ⭐ 修論が比べる組をここに書く（名前は seed0。_s2 どうしも同じ組として見る）。
+#   各組: (名前, run の列, 違ってよいキー)。'TASK' は到達 対 押し＝報酬のキーは違って当然なので COMMON だけ比べる。
+COMPARISONS = [
+    ('押しの柱（4.3.3）', ['tripo_pjp_long_scgc', 'tripo_pjp_mid_scgc', 'tripo_pjdp_prox_scgc', 'tripo_pjdp_dist_scgc'], {'xml_name'}),
+    ('R1 形の凍結（4.1.4）', ['tripo_pjp_mid_scgc', 'tripo_pjp_mid_frozen_scgc'], {'robot_param_scale'}),
+    ('軸5 押し（4.6.3）', ['e2e_a1v_pusher_scgc', 'e2e_a1v_rho_pusher_scgc', 'e2e_a1v_real_pusher_scgc'], {'xml_name', 'cfg'}),
+    ('軸5 識別・従来（4.6.4）', ['e2e_a1v_reach_scgc_nobox', 'e2e_a1v_pusher_scgc'], 'TASK'),
+    ('軸5 識別・実在（4.6.4）', ['e2e_a1v_real_reach_scgc_nobox', 'e2e_a1v_real_pusher_scgc'], 'TASK'),
+    ('配分・実在（4.6.5）', ['tripo_pjd_prox_real_scgc_nobox', 'tripo_pjd_dist_real_scgc_nobox'], {'xml_name'}),
+    ('到達マトリクス（4.3.3.3）', ['tripo_pj_mid_scgc_nobox', 'tripo_pj_long_scgc_nobox', 'tripo_pj_short_scgc_nobox'], {'xml_name'}),
+    ('マトリクス 到達 対 押し（4.3.3.3）', ['tripo_pj_mid_scgc_nobox', 'tripo_pjp_mid_scgc'], 'TASK'),
+    ('配分・到達（4.3.3.4）', ['tripo_pjd_prox_scgc_nobox', 'tripo_pjd_dist_scgc_nobox'], {'xml_name'}),
+    ('閉ループ 1.99 倍（4.4）', ['tripo_pjr199_scgc_nobox', 'tripo_pj_short_scgc_nobox'], {'xml_name'}),
+    ('閉ループ 関節固定（4.4.5）', ['e2e_a1_reach_scgc_nobox', 'e2e_a1_fix3_reach_scgc_nobox'], {'xml_name'}),
+    ('付録D 到達 対 押し', ['tripo_v3_reach2_scgc_nobox', 'tripo_arm_v3_pusher_scgc'], 'TASK'),
+]
+# 到達 対 押しでも同じでなければならないキー
+COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
+          'env_specs.init_self_contact', 'max_epoch_num', 'num_threads', 'launch_env'}
+# 指定が無いときにコードが使う値（pusher.py）。⛔ Bug 59 は「書いていない＝既定値」が見えなかった
+DEFAULTS = {'reward_specs.ctrl_cost_coeff': '0.0001', 'reward_specs.contact_weight': '1.0',
+            'reward_specs.init_contact_penalty': '50.0', 'env_specs.arm_safe_init': 'False',
+            'fix_base': 'False', 'env_specs.init_self_contact': 'False', 'robot_param_scale': '0.1'}
+# ⭐ 承知の上で残した差（理由を必ず書く）
+ACCEPTED = {('e2e_a1v_real_reach_scgc_nobox', 'env_specs.arm_safe_init'): '9-238 ユーザー判断（元 run の起動行どおり）'}
+IGNORE = {'seed', 'hydra.run.dir', 'enable_wandb'}
+
+
+def _norm(v):
+    try:
+        return repr(float(v))
+    except ValueError:
+        return str(v).lower()
+
+
+def _overrides(r):
+    import yaml
+    p = run_dir(r) / '.hydra' / 'overrides.yaml'
+    if not p.exists():
+        return None
+    o = {}
+    for line in yaml.safe_load(p.read_text(encoding='utf-8')) or []:
+        k, _, v = str(line).partition('=')
+        o[k.lstrip('+~')] = v
+    full = {k: _norm(v) for k, v in DEFAULTS.items()}
+    full.update({k: _norm(v) for k, v in o.items()})
+    full['launch_env'] = str(sorted((_launch_env(r) or {}).items()))
+    return full
+
+
+def diff_runs(a, b, allowed):
+    """a と b の起動行で、allowed 以外に違うキーを返す。allowed='TASK' なら COMMON だけ比べる。"""
+    oa, ob = _overrides(a), _overrides(b)
+    if oa is None or ob is None:
+        return None
+    keys = COMMON if allowed == 'TASK' else (set(oa) | set(ob)) - IGNORE - set(allowed)
+    out = []
+    for k in sorted(keys):
+        va, vb = oa.get(k, '(なし)'), ob.get(k, '(なし)')
+        if va != vb and (a, k) not in ACCEPTED and (b, k) not in ACCEPTED:
+            out.append(f'{k}: {va} 対 {vb}')
+    return out
+
+
+def ck_pair(r):
+    base, s2 = (r[:-3], '_s2') if r.endswith('_s2') else (r, '')
+    msgs, bad, n = [], False, 0
+    if s2 and (run_dir(base) / 'log').exists():          # seed の対は seed 以外同じのはず
+        d = diff_runs(base, r, set())
+        if d:
+            bad = True
+            msgs.append(f'seed0 と: {"; ".join(d)}')
+    for name, runs, allowed in COMPARISONS:
+        if base not in runs:
+            continue
+        for o in runs:
+            if o == base or not (run_dir(o + s2) / 'log').exists():
+                continue
+            d = diff_runs(r, o + s2, allowed)
+            n += 1
+            if d:
+                bad = True
+                msgs.append(f'{name} の {o + s2} と: {"; ".join(d)}')
+    if bad:
+        return False, '⛔ 比べる相手と起動行が違う（Bug 59）: ' + ' ／ '.join(msgs)
+    return True, (f'比べる相手 {n} 本と、比べる変数以外は同じ' if n else '比べる相手が無い・まだ無い（COMPARISONS に無い組は見ない）')
+
+
 CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg),
           ('⭐⭐ exec 到達', ck_entered_exec),
-          ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 台座', ck_base)]
+          ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 台座', ck_base),
+          ('⭐ 比べる相手', ck_pair)]
 
 
 def audit(r):
@@ -315,7 +408,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('runs', nargs='*')
     ap.add_argument('--all', action='store_true', help='完走した run 全部')
+    ap.add_argument('--pair', nargs=2, metavar=('A', 'B'), help='2 本の起動行を比べる（xml_name・cfg 以外の差）')
     a = ap.parse_args()
+    if a.pair:
+        d = diff_runs(a.pair[0], a.pair[1], {'xml_name', 'cfg'})
+        print('\n'.join(d) if d else ('起動行が読めない' if d is None else '✅ xml_name・cfg 以外は同じ'))
+        return 1 if d else 0
     runs = a.runs
     if a.all:
         runs = sorted(d.name for d in (ROOT / 'single_run').iterdir()
