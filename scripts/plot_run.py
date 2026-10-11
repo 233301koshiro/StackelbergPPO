@@ -60,6 +60,9 @@ def plot(run):
     tgt = np.asarray(z['target'], float) if 'target' in z else None
     cube = z['cube'] if 'cube' in z else None
     ends = xp + np.einsum('tlij,lj->tli', xm, bo)
+    # ⚠️ 根（`0`、球の台座）の骨は運動学に効かない設計変数で（9-154）、線にすると床下へ伸びて見える。
+    #   描かず、z 最小にも入れない（`0` の位置そのものは入れる）。⛔ 10-11 に「BELOW FLOOR -297 mm」と誤報した
+    ends[:, 0] = xp[:, 0]
     T = len(xp)
     try:
         xml = yaml.safe_load(open(d / '.hydra' / 'config.yaml')).get('xml_name')
@@ -74,7 +77,7 @@ def plot(run):
                 ax.plot([xp[k, i, ia], ends[k, i, ia]], [xp[k, i, ib], ends[k, i, ib]],
                         color=plt.cm.viridis(k / T), lw=.8, alpha=.55)
         ax.plot(ends[:, -1, ia], ends[:, -1, ib], 'r-', lw=1.6, label='tip')
-        if cube is not None and np.abs(cube).sum() > 0:
+        if cube is not None and np.abs(cube).sum() > 0 and np.abs(cube[:, 0]).max() < 50:   # 到達で退避した箱（x≈101、9-234）は描かない
             ax.plot(cube[:, ia], cube[:, ib], 'b--', lw=1.2, label='cube')
         if tgt is not None:
             ax.plot(tgt[ia], tgt[ib], 'k*', ms=16, label='target')
