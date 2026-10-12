@@ -126,6 +126,7 @@ for k in range(N_EP):
     xpos, xmat, cube = [], [], []
     shape = None      # ⭐ 9-225: この話の形（ボーンと半径）
     r_tot = r_ctrl = 0.0   # ⭐ 9-225: この話の報酬の合計と、そのうち制御コストの合計
+    u_abs = []             # ⭐ 9-240: 実行フェーズの step ごとの |制御入力| の最大（ctrlrange ±1 を超えるか）
     init = None       # ⭐ 9-218: execution に入った瞬間（最初の step の前）の腕とパック
     for _ in range(cfg.skel_transform_nsteps + 2 + max_steps):
         in_exec = env.stage == 'execution'
@@ -149,6 +150,8 @@ for k in range(N_EP):
             sv = agent.normalize_observation(sv)
         with torch.no_grad():
             action = agent.policy_net.select_action(sv, mean_action=not STOCH).numpy().astype(np.float64)
+        if in_exec:
+            u_abs.append(float(np.abs(env.action_to_control(action[:, :env.control_action_dim])).max()))
         state, reward, done, _, info = env.step(action)
         r_tot += float(reward); r_ctrl += float(info.get('reward_ctrl', 0.0))
 
@@ -183,7 +186,7 @@ for k in range(N_EP):
         if done:
             break
     if k >= SKIP:
-        eps.append((np.array(xpos), np.array(xmat), np.array(cube), init, shape, (r_tot, r_ctrl)))
+        eps.append((np.array(xpos), np.array(xmat), np.array(cube), init, shape, (r_tot, r_ctrl), np.array(u_abs)))
     print(f'[trace] 話 {k+1}/{N_EP}  step={len(xpos)}  '
           f'{"⭐ 採用" if k >= SKIP else "捨てる（TRACE_SKIP 指定）"}', flush=True)
 
@@ -228,7 +231,9 @@ np.savez_compressed(out, replay_env=json.dumps(REPLAY_ENV),
                     ep_geom=np.array([e[4][1] if e[4] else None for e in eps], dtype=object),
                     ep_gear=np.array([e[4][2] if e[4] else None for e in eps], dtype=object),
                     # ⭐ 9-225: 話ごとの報酬の合計と制御コストの合計（どちらが効いているかを分ける）
-                    ep_reward=np.array([e[5][0] for e in eps]), ep_reward_ctrl=np.array([e[5][1] for e in eps]))
+                    ep_reward=np.array([e[5][0] for e in eps]), ep_reward_ctrl=np.array([e[5][1] for e in eps]),
+                    # ⭐ 9-240: step ごとの |制御入力| の最大。ctrlrange ±1 は Choreonoid 側で切られない
+                    ep_u_abs=np.array([e[6] for e in eps], dtype=object))
 
 print(f'[trace] {restore_dir} ckpt={checkpoint}')
 print(f'[trace] リンク: {names}')

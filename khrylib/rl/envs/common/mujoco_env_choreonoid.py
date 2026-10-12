@@ -906,6 +906,8 @@ def _set_state(sim_body_entries, qpos, qvel):
 # Choreonoid simulation world (one instance per ChoreonoidEnv)
 # ---------------------------------------------------------------------------
 
+_CTRL_CLIP = bool(os.environ.get('CNOID_CTRL_CLIP'))   # 9-240
+
 class ChoreonoidSimWorld:
     def __init__(self):
         self.world_item        = None
@@ -1493,7 +1495,13 @@ class ChoreonoidSimWorld:
         for i, (jname, ainfo) in enumerate(self.actuators_map.items()):
             j = b.joint(jname)
             if j is not None and i < len(ctrl):
-                j.u = float(ctrl[i]) * ainfo['gear']
+                u = float(ctrl[i])
+                # ⭐ 系譜 9-240: MuJoCo は ctrllimited で ctrl を ctrlrange に切るが、この変換器は切っていなかった
+                #   （トルクが gear を超えうる）。`CNOID_CTRL_CLIP=1` のときだけ切る（既定は従来どおり＝走っている学習と同じ）
+                if _CTRL_CLIP:
+                    lo, hi = ainfo.get('ctrlrange', (-1.0, 1.0))
+                    u = min(max(u, lo), hi)
+                j.u = u * ainfo['gear']
 
         for _ in range(n_frames):
             _pre = self._puck_pre_tick()

@@ -184,6 +184,13 @@ while True:
                         env_reward = nan_penalty
                     else:
                         env_reward = 0.0
+                # ⭐ 系譜 9-240: 実行フェーズで 1 step の報酬が大きすぎる話を調べるときだけ出す（既定は何もしない）
+                if (os.environ.get('DEBUG_BIG_REWARD') and info.get('stage') == 'execution'
+                        and abs(env_reward) > float(os.environ['DEBUG_BIG_REWARD'])):
+                    print(f'[worker {WORKER_ID}] BIG reward {env_reward:.1f} step={env.control_nsteps} '
+                          f'tip={np.round(env._arm_tip_pos, 3).tolist()} '
+                          f'xpos={ {b.name: np.round(env._body_xpos.get(b.name), 3).tolist() for b in env.robot.bodies} } '
+                          f'q={np.round(env.data.qpos, 2).tolist()}', flush=True)
                 reward   = env_reward
                 c_reward = info.get('reward_ctrl', 0)
                 if not np.isfinite(c_reward):
