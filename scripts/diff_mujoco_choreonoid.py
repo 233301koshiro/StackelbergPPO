@@ -127,7 +127,7 @@ def main():
         nm = [str(n) for n in z[f's{k}_names']]
         cn = [{n: z[f's{k}'][t, i] for i, n in enumerate(nm)} for t in range(z[f's{k}'].shape[0])]
         common = [n for n in mj[0] if n in cn[0] and n not in ('world',)]
-        robot = [n for n in common if n != 'cube']
+        robot = [n for n in common if n[:1].isdigit()]   # 腕の body は数字の名前（壁・板・対象を除く）
         tip = robot[-1]
         dt = np.array([np.linalg.norm(a[tip] - b[tip]) for a, b in zip(mj, cn)])
         line = f'  先端 {tip}: 最大差 {dt.max()*1000:6.0f} mm・最後 {dt[-1]*1000:6.0f} mm'
