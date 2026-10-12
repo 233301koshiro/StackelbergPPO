@@ -1,4 +1,6 @@
 #!/bin/bash
+# ⛔⛔ 系譜 9-242（Bug 60、ユーザー判断 10-12「今止めて切る設定で全部取り直す」）: 全 run に CNOID_CTRL_CLIP=1（制御入力を ctrlrange ±1 で切る＝MuJoCo と同じ）。
+#   それ以前の *_scgc は *_noclip へ退避（消していない）。事前登録の読みはそのまま（投入前に変えていない）
 # ⭐⭐ 修論の自己干渉ありの取り直し 28 本を、Bug 57 を直した設定でやり直す（系譜 9-232）
 #
 # code: ab87894 (main)
@@ -62,11 +64,11 @@ launch(){ local RUN=$1; shift
   if [ -d "single_run/$RUN/log" ]; then log "$RUN は既にある。飛ばす"; return; fi
   while [ "$(njobs)" -ge 2 ]; do sleep 180; done
   mkdir -p "single_run/$RUN"
-  nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 $EXTRA \
+  nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 CNOID_CTRL_CLIP=1 $EXTRA \
     /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/choreonoid_train.py \
     "$@" +env_specs.init_self_contact=true \
     hydra.run.dir=single_run/$RUN > single_run/$RUN/stdout.log 2>&1 &
-  log "$RUN launched (PID $!) ⭐ 元キューとの差は CNOID_CULLING_DEPTH=1.0 のみ"; sleep 60; }
+  log "$RUN launched (PID $!) ⭐ 元キューとの差は CNOID_CULLING_DEPTH=1.0 のみ（⭐ 10-12 から制御入力を ±1 で切る CNOID_CTRL_CLIP=1。Bug 60・9-242）"; sleep 60; }
 C="num_threads=4 enable_wandb=false fix_skeleton=true +robot_param_scale=1"
 FB="+fix_base=true"   # ⭐ 系譜 9-235: 縦型アームの台座（根元の柱）を設計変数から外す
 PUSH="+reward_specs.ctrl_cost_coeff=0.2 +reward_specs.contact_weight=0 +reward_specs.init_contact_penalty=50 +env_specs.arm_safe_init=true"

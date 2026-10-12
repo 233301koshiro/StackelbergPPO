@@ -906,7 +906,9 @@ def _set_state(sim_body_entries, qpos, qvel):
 # Choreonoid simulation world (one instance per ChoreonoidEnv)
 # ---------------------------------------------------------------------------
 
-_CTRL_CLIP = bool(os.environ.get('CNOID_CTRL_CLIP'))   # 9-240
+_CTRL_CLIP = bool(os.environ.get('CNOID_CTRL_CLIP'))   # 9-241・Bug 60
+if _CTRL_CLIP:
+    print('[choreonoid] ⭐ 制御入力を ctrlrange で切る（CNOID_CTRL_CLIP、Bug 60）', flush=True)
 
 class ChoreonoidSimWorld:
     def __init__(self):
