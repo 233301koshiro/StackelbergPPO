@@ -20,6 +20,7 @@
   8. ⭐ **再生が学習と同じ物理の環境変数か**（launch_env.json と軌跡を照合。9-229 で破った。9-236）
   9. ⭐ **離れたリンクどうしのめり込みが 50 mm 未満か**（Bug 57。9-232）
   10. ⭐ **縦型アームの台座が倒れていないか**（Bug 58。9-235）
+  12. ⭐ **物理的にありえない値が無いか**（`check_invariants.py`。2026-10-12）
   11. ⭐ **比べる相手と起動行が、比べる変数以外で違わないか**（Bug 59。9-238）。組は COMPARISONS。
       任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）
 """
@@ -32,6 +33,7 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'scripts'))
 
 
 def run_dir(r):
@@ -386,12 +388,25 @@ def ck_pair(r):
     return True, (f'比べる相手 {n} 本と、比べる変数以外は同じ' if n else '比べる相手が無い・まだ無い（COMPARISONS に無い組は見ない）')
 
 
+def ck_invariants(r):
+    """⭐ 12. 物理的にありえない値（`check_invariants.py`。報酬の桁・制御入力・触れる前／置いた瞬間・床・壁）。"""
+    from check_invariants import run as inv
+    res = inv(r)
+    bad = [f'{n}: {m}' for n, ok, m in res if ok is False]
+    warn = [f'{n}: {m}' for n, ok, m in res if ok is None]
+    if bad:
+        return False, ' ／ '.join(bad)
+    if warn:
+        return None, ' ／ '.join(warn)
+    return True, f'{len(res)} 項目とも成り立つ'
+
+
 CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg),
           ('⭐⭐ exec 到達', ck_entered_exec),
           ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 台座', ck_base),
-          ('⭐ 比べる相手', ck_pair)]
+          ('⭐ 比べる相手', ck_pair), ('⭐ 不変条件', ck_invariants)]
 
 
 def audit(r):

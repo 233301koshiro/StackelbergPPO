@@ -8,7 +8,7 @@
 #   ⚠️ 9-236 より前に起動した 2 本（押しの柱の long・mid seed0）にはファイルが無いので、キューの起動行と同じ値を書く。
 # ⚠️ 目視（⑤-3）は人がする。検査の「目視」が ⛔ のまま残るのは正しい状態。図は single_run/<run>/trace/view.png
 #
-# 出力: single_run/postrun_summary.log（run ごとに best・検査 10 項目の結果）
+# 出力: single_run/postrun_summary.log（run ごとに best・検査 12 項目（不変条件を含む）・反実仮想の再生・仲間うちの外れ値）
 set -u
 cd /userdir/StackelbergPPO
 OUT=single_run/postrun_summary.log
@@ -42,6 +42,10 @@ while true; do
     log "    再生 exit=$? $(grep -h '話ごとの' $D/trace_record.log | tail -1)"
     python3 scripts/plot_run.py $R >> $D/trace_record.log 2>&1
     python3 scripts/check_before_conclusion.py $R 2>/dev/null | grep -v '^合計' | tee -a $OUT > /dev/null
+    # ⭐ 2026-10-12（異常を能動的に見つける方法.md の方法 3）: 物理のつまみを 1 つずつ変えて再生し、結果の動きを並べる
+    python3 scripts/counterfactual_replay.py $R 2>/dev/null | tee -a $OUT > /dev/null
+    # ⭐ 方法 6: 比べる仲間の中で外れた run（新しく終わった run があるたびに全体を見直す）
+    { echo "    [仲間うちの外れ値]"; python3 scripts/peer_outliers.py 2>/dev/null | sed 's/^/    /'; } | tee -a $OUT > /dev/null
     touch $D/trace/.postrun_done
     left=$((left-1))
   done
