@@ -907,6 +907,8 @@ def _set_state(sim_body_entries, qpos, qvel):
 # ---------------------------------------------------------------------------
 
 _CTRL_CLIP = bool(os.environ.get('CNOID_CTRL_CLIP'))   # 9-241・Bug 60
+_HINGE_DAMP_TORQUE = bool(os.environ.get('CNOID_HINGE_DAMP_TORQUE'))   # 9-244・Bug 61
+_HINGE_DAMP_SAID = False
 if _CTRL_CLIP:
     print('[choreonoid] ⭐ 制御入力を ctrlrange で切る（CNOID_CTRL_CLIP、Bug 60）', flush=True)
 
@@ -942,6 +944,7 @@ class ChoreonoidSimWorld:
         # Pre-compute (joint_obj, decay_factor) / (body, joint_obj, lower, upper)
         # for ALL bodies (including the robot itself) to avoid per-tick API overhead.
         decay      = []
+        hinge_damp = []
         limits     = []
         vel_limits = []
         for entry_idx, (sb, _) in enumerate(entries):
@@ -951,7 +954,13 @@ class ChoreonoidSimWorld:
             for j_idx in range(eb.numJoints):
                 j = eb.joint(j_idx)
                 dq = self._joint_damping.get((body_key, j.jointName), 0.0)
-                if dq > 0:
+                # ⭐ 9-244（Bug 61）: 回転関節の減衰を「速度 × exp(−b/総質量·dt)」で掛けると、減衰の強さが腕の総質量で決まる
+                #   （軽い腕で MuJoCo の 9〜23 倍、実寸密度の腕で 0.24 倍）。`CNOID_HINGE_DAMP_TORQUE=1` のときは
+                #   MuJoCo と同じ「トルク −b·q̇」で掛ける（腕の回転関節だけ。対象のスライドは b/m のままで正しい）
+                if dq > 0 and _HINGE_DAMP_TORQUE and entry_idx == 0 and self._joint_limits.get((body_key, j.jointName)) is not None \
+                        and j.isRevoluteJoint():
+                    hinge_damp.append((j, dq))
+                elif dq > 0:
                     decay.append((j, math.exp(-dq / total_m * self._timestep)))
                 rng = self._joint_limits.get((body_key, j.jointName))
                 if rng is not None:
@@ -1006,6 +1015,11 @@ class ChoreonoidSimWorld:
                 print('[choreonoid] ⛔ 壁反射: パック（cube_slide/2）が見つからない', flush=True)
 
         self._joint_decay            = decay
+        self._hinge_damp             = hinge_damp
+        global _HINGE_DAMP_SAID
+        if hinge_damp and not _HINGE_DAMP_SAID:   # 読み込みのたびに出すとログが膨らむので 1 プロセス 1 回
+            _HINGE_DAMP_SAID = True
+            print(f'[choreonoid] ⭐ 腕の回転関節の減衰をトルク −b·q̇ で掛ける: {len(hinge_damp)} 関節（Bug 61）', flush=True)
         self._joint_limits_compiled  = limits
         self._joint_vel_limits_compiled = vel_limits
 
@@ -1492,6 +1506,7 @@ class ChoreonoidSimWorld:
             return {'qpos': [], 'qvel': [], 'body_xpos': {}, 'body_xmat': {}}
 
         # Apply ctrl to the robot body only (first entry)
+        self._base_u = {}
         robot_sb, _ = self._sim_body_entries[0]
         b = robot_sb.body()
         for i, (jname, ainfo) in enumerate(self.actuators_map.items()):
@@ -1504,8 +1519,11 @@ class ChoreonoidSimWorld:
                     lo, hi = ainfo.get('ctrlrange', (-1.0, 1.0))
                     u = min(max(u, lo), hi)
                 j.u = u * ainfo['gear']
+                self._base_u[id(j)] = j.u
 
         for _ in range(n_frames):
+            for j, b in getattr(self, '_hinge_damp', ()):
+                j.u = self._base_u.get(id(j), 0.0) - b * j.dq
             _pre = self._puck_pre_tick()
             _apre = self._arm_pre_tick() if getattr(self, '_arm_block', False) else None
             self.sim_item.tickRequest(True)
