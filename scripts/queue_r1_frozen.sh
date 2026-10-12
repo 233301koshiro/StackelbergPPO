@@ -1,4 +1,6 @@
 #!/bin/bash
+# ⛔⛔ 系譜 9-244（Bug 61、ユーザー承認 10-12）: 腕の関節の減衰を「速度 × exp(−b/総質量·dt)」から MuJoCo と同じ「トルク −b·q̇」へ（CNOID_HINGE_DAMP_TORQUE=1）。
+#   10-12 朝の 4 本は *_clip_olddamp へ退避（消していない）。事前登録の読みはそのまま
 # ⛔⛔ 系譜 9-242（Bug 60、ユーザー判断 10-12「今止めて切る設定で全部取り直す」）: 全 run に CNOID_CTRL_CLIP=1（制御入力を ctrlrange ±1 で切る＝MuJoCo と同じ）。
 #   それ以前の *_scgc は *_noclip へ退避（消していない）。事前登録の読みはそのまま（投入前に変えていない）
 # ⭐⭐ R1（形の最適化は前提として要る）を 3 軸で示し直す — 形を凍結した押し 2 本（系譜 9-233）
@@ -25,11 +27,11 @@ launch(){ local RUN=$1; shift
   if [ -d "single_run/$RUN/log" ]; then log "$RUN は既にある。飛ばす"; return; fi
   while [ "$(njobs)" -ge 2 ]; do sleep 180; done
   mkdir -p "single_run/$RUN"
-  nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 CNOID_CTRL_CLIP=1 \
+  nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 CNOID_CTRL_CLIP=1 CNOID_HINGE_DAMP_TORQUE=1 \
     /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/choreonoid_train.py \
     "$@" +env_specs.init_self_contact=true \
     hydra.run.dir=single_run/$RUN > single_run/$RUN/stdout.log 2>&1 &
-  log "$RUN launched (PID $!) ⭐ tripo_pjp_mid_scgc との差は robot_param_scale=0.0001 のみ（⭐ 10-12 から制御入力を ±1 で切る CNOID_CTRL_CLIP=1。Bug 60・9-242）"; sleep 60; }
+  log "$RUN launched (PID $!) ⭐ tripo_pjp_mid_scgc との差は robot_param_scale=0.0001 のみ（⭐ 10-12 から制御入力を ±1 で切る CNOID_CTRL_CLIP=1（Bug 60）＋腕の関節の減衰を MuJoCo と同じトルク −b·q̇ に CNOID_HINGE_DAMP_TORQUE=1（Bug 61）。9-242・9-244）"; sleep 60; }
 C="num_threads=4 enable_wandb=false fix_skeleton=true"
 PUSH="+reward_specs.ctrl_cost_coeff=0.2 +reward_specs.contact_weight=0 +reward_specs.init_contact_penalty=50 +env_specs.arm_safe_init=true"
 log "=== R1 を 3 軸で（形を凍結した押し 2 本）。9-232 のキューの投入完了を待つ"
