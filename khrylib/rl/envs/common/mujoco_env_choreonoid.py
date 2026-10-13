@@ -909,6 +909,8 @@ def _set_state(sim_body_entries, qpos, qvel):
 _CTRL_CLIP = bool(os.environ.get('CNOID_CTRL_CLIP'))   # 9-241・Bug 60
 _HINGE_DAMP_TORQUE = bool(os.environ.get('CNOID_HINGE_DAMP_TORQUE'))   # 9-244・Bug 61
 _HINGE_DAMP_SAID = False
+_JOINT_MAX_VEL = float(os.environ.get('CNOID_JOINT_MAX_VEL') or 0)   # 9-245
+_VCAP_SAID = False
 if _CTRL_CLIP:
     print('[choreonoid] ⭐ 制御入力を ctrlrange で切る（CNOID_CTRL_CLIP、Bug 60）', flush=True)
 
@@ -966,6 +968,11 @@ class ChoreonoidSimWorld:
                 if rng is not None:
                     limits.append((eb, j, rng[0], rng[1]))
                 vel = self._joint_vel_limits.get((body_key, j.jointName))
+                # ⭐ 9-245: 腕の回転関節に実在アクチュエータの定格速度で上限を掛ける（`CNOID_JOINT_MAX_VEL` [rad/s]、既定は掛けない）。
+                #   減衰を MuJoCo と同じにしたら（Bug 61）、44 g の腕に 400 N·m で最高速度が ギア÷b ＝ 最大 400 rad/s になり、
+                #   NaN・リンクの重なり・素通りが出た。トルクを ±1 で切る（Bug 60）のと同じ「実在の飽和」
+                if vel is None and _JOINT_MAX_VEL and entry_idx == 0 and j.isRevoluteJoint():
+                    vel = _JOINT_MAX_VEL
                 if vel is not None:
                     vel_limits.append((eb, j, vel))
         # ⭐ 壁反射用にパックの body と slide 関節を掴む（9-176）
@@ -1016,7 +1023,11 @@ class ChoreonoidSimWorld:
 
         self._joint_decay            = decay
         self._hinge_damp             = hinge_damp
-        global _HINGE_DAMP_SAID
+        global _HINGE_DAMP_SAID, _VCAP_SAID
+        if _JOINT_MAX_VEL and not _VCAP_SAID:
+            _VCAP_SAID = True
+            nv = sum(1 for e, j, v in vel_limits if v == _JOINT_MAX_VEL)
+            print(f'[choreonoid] ⭐ 腕の回転関節の速度を {_JOINT_MAX_VEL} rad/s で飽和させる: {nv} 関節（9-245）', flush=True)
         if hinge_damp and not _HINGE_DAMP_SAID:   # 読み込みのたびに出すとログが膨らむので 1 プロセス 1 回
             _HINGE_DAMP_SAID = True
             print(f'[choreonoid] ⭐ 腕の回転関節の減衰をトルク −b·q̇ で掛ける: {len(hinge_damp)} 関節（Bug 61）', flush=True)
