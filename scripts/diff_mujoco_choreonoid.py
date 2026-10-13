@@ -51,6 +51,13 @@ def scenarios(nu):
     ]
 
 
+def far_ok(xml):
+    """対象のスライドの範囲が 100 m 先まで許すか（ホッケーのパックは −0.35〜1.25 m で逃がせない）。"""
+    import re as _re
+    m = _re.search(r'<joint name="cube_slide"[^>]*range="([-\d.]+) ([-\d.]+)"', xml)
+    return (m is None) or float(m.group(2)) > 100
+
+
 def run_mujoco(xml, ctrl_fn, v0, name):
     import mujoco
     m = mujoco.MjModel.from_xml_string(xml)
@@ -59,7 +66,7 @@ def run_mujoco(xml, ctrl_fn, v0, name):
     tag = name.split()[0]
     if tag in Q1_INIT:
         d.qpos[m.jnt_qposadr[m.actuator_trnid[0, 0]]] = Q1_INIT[tag]
-    if tag in CUBE_FAR:
+    if tag in CUBE_FAR and far_ok(xml):
         d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += 100.0
     if tag in CUBE_SHIFT:
         d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += CUBE_SHIFT[tag]
@@ -87,7 +94,7 @@ def run_choreonoid(xml, ctrl_fn, v0, name):
     tag = name.split()[0]
     if tag in Q1_INIT:
         q0[0] = Q1_INIT[tag]
-    if tag in CUBE_FAR:
+    if tag in CUBE_FAR and far_ok(xml):
         q0[nu] += 100.0          # 対象のスライド x（ロボットの関節の後ろ）
     if tag in CUBE_SHIFT:
         q0[nu] += CUBE_SHIFT[tag]
@@ -108,7 +115,7 @@ def main_choreonoid():
     import json
     xml = open(os.path.join('assets', 'mujoco_envs', f'{XML}.xml')).read()
     nu = scen_nu(xml)
-    env = {k: os.environ[k] for k in ('CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_CULLING_DEPTH', 'CNOID_SELF_COLLISION') if k in os.environ}
+    env = {k: os.environ[k] for k in ('CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_TICK_SYNC', 'CNOID_CULLING_DEPTH', 'CNOID_SELF_COLLISION', 'HOCKEY_ARM_BLOCK', 'HOCKEY_WALL_RESTITUTION') if k in os.environ}
     out = {}
     for k, (name, fn, v0, expect) in enumerate(scenarios(nu)):
         traj, _ = run_choreonoid(xml, fn, v0, name)

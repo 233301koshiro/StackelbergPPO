@@ -913,6 +913,12 @@ _JOINT_MAX_VEL = float(os.environ.get('CNOID_JOINT_MAX_VEL') or 0)   # 9-245
 _VCAP_SAID = False
 if _CTRL_CLIP:
     print('[choreonoid] ⭐ 制御入力を ctrlrange で切る（CNOID_CTRL_CLIP、Bug 60）', flush=True)
+# ⭐ Bug 64: `tickRequest(True)` は sim スレッドが要求の旗を下ろした時点（＝step の**開始**）で戻る。
+#   ⛔ step の計算と並行して Python が状態を読み書きしていた（同じ入力で軌跡が最大 157 mm ばらつく）。
+#   ⭐ `currentFrame` は step の**最後**で増えるので、増えるまで待つ（`CNOID_TICK_SYNC`、既定は旧動作）
+_TICK_SYNC = bool(os.environ.get('CNOID_TICK_SYNC'))
+if _TICK_SYNC:
+    print('[choreonoid] ⭐ tick の完了を待ってから状態を読み書きする（CNOID_TICK_SYNC、Bug 64）', flush=True)
 
 class ChoreonoidSimWorld:
     def __init__(self):
@@ -1113,6 +1119,22 @@ class ChoreonoidSimWorld:
         # 画面表示が更新されず「見た目だけ動きが止まる」問題が起きる（2026-07-31発覚）。
         self.sim_item.setRecordingMode(SimulatorItem.REC_NONE)
         self.world_item.addChildItem(self.sim_item)
+
+    def _tick(self, after_start=False):
+        """1 tick 進めて、**計算が終わるまで**待つ（Bug 64）。
+
+        ⚠️ `startSimulation` 直後は sim スレッドが自分で 1 tick 回す（SimulatorItem.cpp の `tickRequest = true;//???`）。
+        それが終わってから要求しないと、待つべき frame の数が 1 か 2 か決まらない。
+        """
+        sim = self.sim_item
+        if _TICK_SYNC and after_start:
+            while sim.currentFrame < 1:
+                pass
+        f0 = sim.currentFrame
+        sim.tickRequest(True)
+        if _TICK_SYNC:
+            while sim.currentFrame <= f0:
+                pass
 
     def _clear_bodies(self):
         for item in list(self.body_items.values()):
@@ -1453,7 +1475,7 @@ class ChoreonoidSimWorld:
         self.sim_item.startSimulation(doReset=True)
         self.is_running = True
 
-        self.sim_item.tickRequest(True)
+        self._tick(after_start=True)
         IU.processEvent()
 
         for key, item in self.body_items.items():
@@ -1499,7 +1521,7 @@ class ChoreonoidSimWorld:
         for item in self.body_items.values():
             item.restoreInitialState(True)
         self.sim_item.startSimulation(doReset=True)
-        self.sim_item.tickRequest(True)
+        self._tick(after_start=True)
         IU.processEvent()
 
         for key, item in self.body_items.items():
@@ -1537,7 +1559,7 @@ class ChoreonoidSimWorld:
                 j.u = self._base_u.get(id(j), 0.0) - b * j.dq
             _pre = self._puck_pre_tick()
             _apre = self._arm_pre_tick() if getattr(self, '_arm_block', False) else None
-            self.sim_item.tickRequest(True)
+            self._tick()
             IU.processEvent()
             # Choreonoid AIST ignores joint_damping (all bodies) and joint_range
             # (revolute joints) once a joint has nonzero residual velocity, even
