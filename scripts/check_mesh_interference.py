@@ -125,7 +125,8 @@ def main():
             sv = agent.normalize_observation(sv)
         with torch.no_grad():
             action = agent.policy_net.select_action(sv, mean_action=True).numpy().astype(np.float64)
-        state, reward, done, _, info = env.step(action)
+        state, reward, term, trunc, info = env.step(action)
+        done = term or trunc   # 9-246（Bug 63）: 打ち切りも話の終わり
 
     topo_map = load_topology_mesh_map(TOPOLOGY_PATH)
 
