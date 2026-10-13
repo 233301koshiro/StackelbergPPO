@@ -152,7 +152,10 @@ for k in range(N_EP):
             action = agent.policy_net.select_action(sv, mean_action=not STOCH).numpy().astype(np.float64)
         if in_exec:
             u_abs.append(float(np.abs(env.action_to_control(action[:, :env.control_action_dim])).max()))
-        state, reward, done, _, info = env.step(action)
+        # ⛔ 9-246（Bug 63）: 打ち切り（truncation、max_nsteps 1000）も話の終わりにする。旧版は捨てていて、
+        #   学習では 1000 step で切れる話を 1200 step まで再生していた（最後の 200 step は方策が学習していない区間）
+        state, reward, term, trunc, info = env.step(action)
+        done = term or trunc
         r_tot += float(reward); r_ctrl += float(info.get('reward_ctrl', 0.0))
 
         if in_exec:
