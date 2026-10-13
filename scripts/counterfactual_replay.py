@@ -27,6 +27,8 @@ FLAG = 0.20      # 課題の量が 20 % 以上動いたら ⚠️
 def knobs(le):
     """学習時の環境から、反転させるつまみの列 (名前, 環境変数の上書き)。空文字＝外す。"""
     out = [('制御入力を切る↔切らない', {'CNOID_CTRL_CLIP': '' if le.get('CNOID_CTRL_CLIP') else '1'})]
+    # ⭐ Bug 64（9-247）: tick の完了を待つ↔待たない。旧い run に効くなら、結果が非決定的な物理に頼っていた
+    out.append(('tick の完了を待つ↔待たない', {'CNOID_TICK_SYNC': '' if le.get('CNOID_TICK_SYNC') else '1'}))
     if le.get('CNOID_CULLING_DEPTH'):
         out.append(('深い接触を捨てる（閾値 0.05）', {'CNOID_CULLING_DEPTH': ''}))
     if le.get('CNOID_SELF_COLLISION'):

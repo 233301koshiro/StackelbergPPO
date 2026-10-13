@@ -910,6 +910,9 @@ _CTRL_CLIP = bool(os.environ.get('CNOID_CTRL_CLIP'))   # 9-241・Bug 60
 _HINGE_DAMP_TORQUE = bool(os.environ.get('CNOID_HINGE_DAMP_TORQUE'))   # 9-244・Bug 61
 _HINGE_DAMP_SAID = False
 _JOINT_MAX_VEL = float(os.environ.get('CNOID_JOINT_MAX_VEL') or 0)   # 9-245
+# ⭐ Bug 65: 速度だけ切ると、その tick の位置は切る前の速度で進んでいる（半陰的オイラー）。実効の最高速度が
+#   上限 ＋ トルク÷慣性×Δt になり、ギア比と慣性（＝形）で変わる。STRICT では位置も上限の速さで進め直す（既定は旧動作）
+_JOINT_MAX_VEL_STRICT = bool(os.environ.get('CNOID_JOINT_MAX_VEL_STRICT'))
 _VCAP_SAID = False
 if _CTRL_CLIP:
     print('[choreonoid] ⭐ 制御入力を ctrlrange で切る（CNOID_CTRL_CLIP、Bug 60）', flush=True)
@@ -955,6 +958,7 @@ class ChoreonoidSimWorld:
         hinge_damp = []
         limits     = []
         vel_limits = []
+        vcap_strict = []
         for entry_idx, (sb, _) in enumerate(entries):
             body_key = 'robot' if entry_idx == 0 else f'extra_{entry_idx - 1}'
             eb = sb.body()
@@ -979,6 +983,8 @@ class ChoreonoidSimWorld:
                 #   NaN・リンクの重なり・素通りが出た。トルクを ±1 で切る（Bug 60）のと同じ「実在の飽和」
                 if vel is None and _JOINT_MAX_VEL and entry_idx == 0 and j.isRevoluteJoint():
                     vel = _JOINT_MAX_VEL
+                    if _JOINT_MAX_VEL_STRICT:
+                        vcap_strict.append(j)
                 if vel is not None:
                     vel_limits.append((eb, j, vel))
         # ⭐ 壁反射用にパックの body と slide 関節を掴む（9-176）
@@ -1039,6 +1045,9 @@ class ChoreonoidSimWorld:
             print(f'[choreonoid] ⭐ 腕の回転関節の減衰をトルク −b·q̇ で掛ける: {len(hinge_damp)} 関節（Bug 61）', flush=True)
         self._joint_limits_compiled  = limits
         self._joint_vel_limits_compiled = vel_limits
+        self._vcap_strict = vcap_strict
+        if vcap_strict:
+            print(f'[choreonoid] ⭐ 速度の上限で位置も進め直す: {len(vcap_strict)} 関節（CNOID_JOINT_MAX_VEL_STRICT、Bug 65）', flush=True)
 
     def _setup_world(self):
         self.world_item = WorldItem()
@@ -1559,6 +1568,7 @@ class ChoreonoidSimWorld:
                 j.u = self._base_u.get(id(j), 0.0) - b * j.dq
             _pre = self._puck_pre_tick()
             _apre = self._arm_pre_tick() if getattr(self, '_arm_block', False) else None
+            _vq = {id(j): j.q for j in self._vcap_strict} if getattr(self, '_vcap_strict', None) else None
             self._tick()
             IU.processEvent()
             # Choreonoid AIST ignores joint_damping (all bodies) and joint_range
@@ -1574,6 +1584,8 @@ class ChoreonoidSimWorld:
             for eb, j, max_vel in self._joint_vel_limits_compiled:
                 if abs(j.dq) > max_vel:
                     j.dq = math.copysign(max_vel, j.dq)
+                    if _vq is not None and id(j) in _vq:
+                        j.q = _vq[id(j)] + j.dq * self._timestep   # Bug 65: 位置も上限の速さで
                     clamped_bodies[id(eb)] = eb
             for eb, j, lower, upper in self._joint_limits_compiled:
                 if j.q > upper:

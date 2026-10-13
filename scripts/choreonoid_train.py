@@ -32,7 +32,7 @@ except (ValueError, IndexError):
 # ⭐ 系譜 9-236: 物理に効く環境変数を run のフォルダへ書き残す。
 #   ⛔ 環境変数は .hydra に残らず、再生で渡し忘れて別の物理で測った（9-229 の訂正）。
 #   ⭐ record_arm_trace.py がこのファイルを読んで同じ環境で再生する。
-PHYSICS_ENV = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_TICK_SYNC', 'CNOID_FRICTION', 'CNOID_MATERIAL_TABLE',
+PHYSICS_ENV = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_JOINT_MAX_VEL_STRICT', 'CNOID_TICK_SYNC', 'CNOID_FRICTION', 'CNOID_MATERIAL_TABLE',
                'CNOID_RESTITUTION', 'HOCKEY_WALL_RESTITUTION', 'HOCKEY_ARM_BLOCK', 'ARM_SWEEP_OFF')
 _rd = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('hydra.run.dir=')), None)
 if _rd:
