@@ -262,6 +262,17 @@ return _get_state_dict(sim_body)
 
 `tickRequest(True)` が C++ 物理計算の本体。`IU.processEvent()` は Qt イベントループを一回転させるためのもので、GUI モード時に 3D ビューを再描画させる役割もある。
 
+⛔ **`tickRequest(True)` は計算の完了を待たない**（Bug 64、系譜 9-247）。sim スレッドが要求の旗を下ろした時点＝step の**開始**で戻る。⭐ `CNOID_TICK_SYNC=1` で `_tick()` が `currentFrame`（step の最後で増える）を待つ。待たないと下の Python 側の処理が計算中の状態を読み書きし、物理が非決定的になる。
+
+上の擬似コードは骨格だけ。実際は Python 側で毎 tick 次を足している（Choreonoid が扱わないので env が代わりにやる。物理の値は [シミュレーションの値の変更表.md](../研究応用/設計/シミュレーションの値の変更表.md)）。
+
+| いつ | 何を | 環境変数 |
+|---|---|---|
+| step の頭 | 制御入力を ctrlrange（±1）で切る | `CNOID_CTRL_CLIP`（Bug 60） |
+| tick の前 | 腕の関節の減衰をトルク −b·q̇ で足す | `CNOID_HINGE_DAMP_TORQUE`（Bug 61） |
+| tick の後 | 関節の速度の上限・可動域で止める（Choreonoid は可動域を守らない） | `CNOID_JOINT_MAX_VEL`（9-245） |
+| tick の後 | パックの壁の反射・腕の壁ブロック（ホッケー） | `HOCKEY_WALL_RESTITUTION`・`HOCKEY_ARM_BLOCK`（腕のブロックは反射とセットでないと働かない） |
+
 ---
 
 ## 状態の読み取り（`_get_state_dict()`）
