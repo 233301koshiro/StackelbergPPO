@@ -32,7 +32,7 @@ TOL = 0.02        # 一致とみなす位置の差 [m]
 # ⭐ 自由運動の台本は対象を x+100 m へ逃がす（XML の初期姿勢では先端が箱に 11 cm めり込んでいた＝台本の欠陥。
 #   MuJoCo は押し出し、Choreonoid は深い接触を捨てて幽霊にした＝Bug 57 を偶然再現した）。
 #   接触の台本は根元の関節を −1.2 rad にして、横から振って当てる。
-CUBE_FAR = {'S1', 'S2', 'S3', 'S4', 'S6'}
+CUBE_FAR = {'S1', 'S2', 'S3', 'S4', 'S6', 'S7'}
 Q1_INIT = {'S5': -1.2}
 
 
@@ -44,6 +44,7 @@ def scenarios(nu):
         ('S3 入力 0 で惰行（初速 2 rad/s）', lambda t: np.zeros(nu), 2.0, 'same'),
         ('S4 可動域の端まで押し続ける 1.0', lambda t: np.full(nu, 1.0) if t < STEPS else np.zeros(nu), 0.0, 'same'),
         ('S6 入力 0 で惰行（初速 0.3 rad/s、可動域に当たらない）', lambda t: np.zeros(nu), 0.3, 'same'),
+        ('S7 全力で正負を切り替える（10 step ごと、関節ごとに逆向き）', lambda t: np.array([1.0 if (t // 10 + k) % 2 == 0 else -1.0 for k in range(nu)]), 0.0, 'same'),
         ('S5 振って対象に当てる（接触）', lambda t: np.array([1.0] + [0.0] * (nu - 1)) * (1 if t < 40 else -1), 0.0, 'contact'),
     ]
 
@@ -101,7 +102,7 @@ def main_choreonoid():
     import json
     xml = open(os.path.join('assets', 'mujoco_envs', f'{XML}.xml')).read()
     nu = scen_nu(xml)
-    env = {k: os.environ[k] for k in ('CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_CULLING_DEPTH', 'CNOID_SELF_COLLISION') if k in os.environ}
+    env = {k: os.environ[k] for k in ('CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_CULLING_DEPTH', 'CNOID_SELF_COLLISION') if k in os.environ}
     out = {}
     for k, (name, fn, v0, expect) in enumerate(scenarios(nu)):
         traj, _ = run_choreonoid(xml, fn, v0, name)
