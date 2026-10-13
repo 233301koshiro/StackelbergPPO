@@ -115,7 +115,7 @@ def main_choreonoid():
     import json
     xml = open(os.path.join('assets', 'mujoco_envs', f'{XML}.xml')).read()
     nu = scen_nu(xml)
-    env = {k: os.environ[k] for k in ('CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_TICK_SYNC', 'CNOID_CULLING_DEPTH', 'CNOID_SELF_COLLISION', 'HOCKEY_ARM_BLOCK', 'HOCKEY_WALL_RESTITUTION') if k in os.environ}
+    env = {k: os.environ[k] for k in ('CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_JOINT_MAX_VEL_STRICT', 'CNOID_TICK_SYNC', 'CNOID_CULLING_DEPTH', 'CNOID_SELF_COLLISION', 'HOCKEY_ARM_BLOCK', 'HOCKEY_WALL_RESTITUTION') if k in os.environ}
     out = {}
     for k, (name, fn, v0, expect) in enumerate(scenarios(nu)):
         traj, _ = run_choreonoid(xml, fn, v0, name)
