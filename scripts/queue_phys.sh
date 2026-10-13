@@ -11,6 +11,7 @@
 #   - トルク: ±1 で切る（CNOID_CTRL_CLIP、Bug 60）× ギア比の範囲 縦型 25〜150・平面 20〜150 N·m（上限は UR5e、cfg の *_real）
 #   - 速度: 3.1416 rad/s で飽和（UR5e の関節 1〜3 の定格 180°/s、CNOID_JOINT_MAX_VEL、9-245）
 #   - 減衰: トルク −b·q̇、b = 1（CNOID_HINGE_DAMP_TORQUE、Bug 61。⚠️ b の値には根拠が無い＝原論文のまま。修論 5.3 に書く）
+#   - tick の完了を待ってから状態を読み書きする（CNOID_TICK_SYNC、Bug 64・9-247）。⛔ 10-13 12:40 までの 2 本（long・mid）は待たずに走っていたので止め、*_nosync へ改名して取り直す
 #   - 接触: 自己干渉あり（隣り合わない組）・深い接触を捨てない（閾値 1.0）・初期形態の門
 #   - リンク長の探索幅（縦型）: 設計長の 0.5〜2.93 倍（cfg の pusher_tripo_v3_reallen、9-150）。⭐ 10-13 にユーザー判断で ±0.5 m から直した
 #     （±0.5 m では 18 本中 16 本でリンクが反転していた＝9-150。上限 2.93 は e2e_a1v で導いた値を縦型に共通で使う）
@@ -41,7 +42,7 @@ Q=single_run/queue_phys.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a $Q; }
 njobs(){ ps -eo args | grep -c "[c]horeonoid_train.py"; }
 EXTRA=""
-PHYS="CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 CNOID_CTRL_CLIP=1 CNOID_HINGE_DAMP_TORQUE=1 CNOID_JOINT_MAX_VEL=3.1416"
+PHYS="CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 CNOID_CTRL_CLIP=1 CNOID_HINGE_DAMP_TORQUE=1 CNOID_JOINT_MAX_VEL=3.1416 CNOID_TICK_SYNC=1"
 launch(){ local RUN=$1; shift
   if [ -d "single_run/$RUN/log" ]; then log "$RUN は既にある。飛ばす"; return; fi
   while [ "$(njobs)" -ge 2 ]; do sleep 180; done
