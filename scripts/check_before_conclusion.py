@@ -312,6 +312,10 @@ COMPARISONS = [
     ('閉ループ 1.99 倍（4.4）', ['tripo_pjr199_phys', 'tripo_pj_short_phys'], {'xml_name'}),
     ('閉ループ 関節固定（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'], {'xml_name'}),
     ('付録D 到達 対 押し', ['tripo_v3_reach2_phys', 'tripo_arm_v3_pusher_phys'], 'TASK'),
+    ('マトリクス 押し（4.3.3.3）', ['tripo_pjp_short_phys', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys'], {'xml_name'}),
+    ('閉ループ 2.11 倍 押し（4.4.4）', ['tripo_pjr211p_phys', 'tripo_pjp_short_phys'], {'xml_name'}),
+    ('閉ループ 関節固定 押し（4.4.5）', ['e2e_a1_pusher_phys', 'e2e_a1_fix3_pusher_phys'], {'xml_name'}),
+    ('関節固定 到達 対 押し（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',

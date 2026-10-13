@@ -12,12 +12,14 @@
 #   - 速度: 3.1416 rad/s で飽和（UR5e の関節 1〜3 の定格 180°/s、CNOID_JOINT_MAX_VEL、9-245）
 #   - 減衰: トルク −b·q̇、b = 1（CNOID_HINGE_DAMP_TORQUE、Bug 61。⚠️ b の値には根拠が無い＝原論文のまま。修論 5.3 に書く）
 #   - 接触: 自己干渉あり（隣り合わない組）・深い接触を捨てない（閾値 1.0）・初期形態の門
-#   ⚠️ 根拠が無いまま残る値: 減衰 b = 1・可動域・制御コスト 0.2・リンク長の探索幅（縦型 ±0.5 m）・接触の摩擦（Choreonoid 既定）
+#   - リンク長の探索幅（縦型）: 設計長の 0.5〜2.93 倍（cfg の pusher_tripo_v3_reallen、9-150）。⭐ 10-13 にユーザー判断で ±0.5 m から直した
+#     （±0.5 m では 18 本中 16 本でリンクが反転していた＝9-150。上限 2.93 は e2e_a1v で導いた値を縦型に共通で使う）
+#   ⚠️ 根拠が無いまま残る値: 減衰 b = 1・可動域・制御コスト 0.2・接触の摩擦（Choreonoid 既定）
 #
 # ⭐ armature の確かめ（ユーザー判断 10-13「1 個だけ実在の値から出してみて、全く方向性が変わったら 1 のままでやろう」）:
 #   押しの柱 long・mid（seed0）を armature 1 でも回す（*_phys_arm1、XML の armature だけが違う）。
 #
-# ⭐ 事前登録した読み（**結果を見てから変えない**）— 2 seed の best の帯で判定（9-227・9-228・9-230・9-234 の読みを引き継ぐ）
+# ⭐ 事前登録した読み（**結果を見てから変えない**。⑯〜⑱ は 10-13 に、結果の前に足した）— 2 seed の best の帯で判定（9-227・9-228・9-230・9-234 の読みを引き継ぐ）
 #   押しの柱: ① long ＞ mid で帯が離れる → 9-6 押し側は成立 ／ ② 重なる → 順位は主張できない ／ ③ mid ＞ long → 9-6 押し側を訂正
 #             ④ prox と dist の帯が重なる → 9-17 の読みは変わらない ／ ⑤ 離れる → 押しでも配分で区別できる
 #   到達マトリクス: ① 中間 ＞ 長腕 ＞ 短腕 ② 配分 prox ＞ dist（4.3.3.4。⚠️ 平面の台座の球に dist が当たると機序が違う＝9-241）
@@ -27,6 +29,8 @@
 #   付録D: ⑦ 先端リンクの太さが到達は下限付近・押しは上限付近 → 分岐は成立。⚠️ 旧い物理では「太い＝重い＝減衰が弱い」得があった（Bug 61）
 #   ホッケー（9-237 で 20 話に書き直した）: ⑧ どちらかの seed で隙間 ≥ 10 cm のパックがゴール ／ ⑨ ゴールは無いが 0.1 m 以上動く ／ ⑩ 動かない
 #   R1: ⑪ 形を凍結した帯が tripo_pjp_mid_phys の帯より下で重ならない → R1 は成立 ／ ⑫ 重なる → 主張しない ／ ⑬ 上 → 原因を調べる
+#   閉ループ（10-13 追加）: ⑯ 押しの短い腕（0.5 倍）は対象を 0.1 m 以上動かさない（届かない）／⑰ 2.11 倍は対象を 0.1 m 以上動かす
+#             ⑱ 押しで関節 3 を固定した帯が可動の帯より下（向き。重なってもよい＝4.4.5 の主張は向きだけ）→ 押し側は成立 ／ 上 → 4.4.5 の押し側を訂正
 #   armature: ⑭ long 対 mid（seed0）の best の上下と「押せるか」が armature 0.64 と 1 で同じ → 0.64 で続ける
 #             ⑮ 上下が入れ替わるか、片方だけ押せない → **armature 1 で全部やり直す**（ユーザー判断）
 #   共通: 離れた組のめり込み < 50 mm・根元側の関節の振れ > 10°・best の形で門が発火しない・不変条件（check_invariants.py）
@@ -67,13 +71,13 @@ for A in "pjp_long tripo_arm_v2c_pj_long" "pjp_mid tripo_arm_v2c_pj_mid" "pjdp_p
 done
 # R2: 縦型 e2e_a1v の到達 対 押し
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
-  launch e2e_a1v_pusher_phys$X cfg=pusher_tripo_v3_real xml_name=e2e_a1v_phys max_epoch_num=200 seed=$S $C $PUSH $FB
-  launch e2e_a1v_reach_phys$X  cfg=pusher_tripo_v3_real xml_name=e2e_a1v_phys max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 $FB
+  launch e2e_a1v_pusher_phys$X cfg=pusher_tripo_v3_reallen xml_name=e2e_a1v_phys max_epoch_num=200 seed=$S $C $PUSH $FB
+  launch e2e_a1v_reach_phys$X  cfg=pusher_tripo_v3_reallen xml_name=e2e_a1v_phys max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 $FB
 done
 # ホッケー（9-230 の起動行。物理と cfg だけ実在）
 EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
-  launch hockey_bank9_phys$X cfg=pusher_tripo_v3_real xml_name=e2e_hockey_easy_phys num_threads=4 max_epoch_num=200 \
+  launch hockey_bank9_phys$X cfg=pusher_tripo_v3_reallen xml_name=e2e_hockey_easy_phys num_threads=4 max_epoch_num=200 \
     enable_wandb=false fix_skeleton=true seed=$S +robot_param_scale=1 \
     +env_specs.cube_y_noise=0.25 +env_specs.arm_safe_init=true \
     +env_specs.arm_init_clear_y=0.45 +env_specs.arm_init_pitch_search=true \
@@ -99,9 +103,17 @@ launch tripo_pj_short_phys         xml_name=tripo_arm_v2c_pj_short_phys  seed=0 
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
   launch tripo_pjp_mid_frozen_phys$X cfg=pusher_gearonly_real xml_name=tripo_arm_v2c_pj_mid_phys max_epoch_num=200 seed=$S num_threads=4 enable_wandb=false fix_skeleton=true +robot_param_scale=0.0001 $PUSH
 done
+# ⭐ 10-13 追加（ユーザー判断「提案どおり」、9-246）: 修論の本筋で取り直しに抜けていた 6 本
+#   4.3.3.3 マトリクスの押し・短い腕／4.4.4 表 4.19 の 2.11 倍の押し／4.4.5 関節固定の押し（この節の中心）
+launch tripo_pjp_short_phys  xml_name=tripo_arm_v2c_pj_short_phys  seed=0 $P
+launch tripo_pjr211p_phys    xml_name=tripo_arm_v2c_pj_rec211_phys seed=0 $P
+for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
+  launch e2e_a1_pusher_phys$X       xml_name=e2e_a1_phys      seed=$S $P
+  launch e2e_a1_fix3_pusher_phys$X  xml_name=e2e_a1_fix3_phys seed=$S $P
+done
 # 付録D: 非平面 4 関節（1000 epoch、最後に回す）
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
-  launch tripo_v3_reach2_phys$X   cfg=pusher_tripo_v3_real xml_name=tripo_arm_v3_phys max_epoch_num=1000 seed=$S $C $REACHV3 $FB
-  launch tripo_arm_v3_pusher_phys$X cfg=pusher_tripo_v3_real xml_name=tripo_arm_v3_phys max_epoch_num=1000 seed=$S $C $PUSH $FB
+  launch tripo_v3_reach2_phys$X   cfg=pusher_tripo_v3_reallen xml_name=tripo_arm_v3_phys max_epoch_num=1000 seed=$S $C $REACHV3 $FB
+  launch tripo_arm_v3_pusher_phys$X cfg=pusher_tripo_v3_reallen xml_name=tripo_arm_v3_phys max_epoch_num=1000 seed=$S $C $PUSH $FB
 done
 log "=== キュー終了"
