@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""リンク密度に**根拠**を与えた XML を作る（実験系譜 9-125・9-126）。
+"""リンク密度に**根拠**を与えた XML を作る（実験系譜 9-125・9-126）。⭐ 9-246 で armature（腕＝実在の回転子、対象＝0）も付けられるようにした。
 
 ⛔ **何が問題だったか**: リンク密度 5.0 kg/m³ は原論文（**移動ロボット**）からの引き継ぎで、
 **本研究の設定には根拠が無い**（9-124 の弱点②）。腕全体が 45〜108 g にしかならず、
@@ -72,6 +72,11 @@ def main() -> int:
     ap.add_argument('--name', help='出力 XML 名。既定は <base>_rho')
     ap.add_argument('--material', default='aluminum', choices=sorted(MATERIALS))
     ap.add_argument('--wall', type=float, default=0.002, help='肉厚 [m]。既定 2 mm')
+    ap.add_argument('--armature', type=float, default=None,
+                    help='腕の関節の回転子の慣性（関節側）[kg·m²]。⭐ 9-246: UR5e の関節 1〜3 の回転子 6.40e-5（モーター側）× 減速比 100² ＝ 0.64')
+    ap.add_argument('--object-armature-zero', action='store_true',
+                    help='対象（cube）のスライド関節の armature を 0 にする。⛔ 既定（default の joint）が対象にも掛かり、'
+                         '箱 2.7 kg が実効 3.7 kg・パック 0.03 kg が 1.03 kg になっていた（9-246）。対象に回転子は無い')
     ap.add_argument('--solref', default=None,
                     help='接触の solref（例 "0.02 0.4"）。⭐ 既定のままだと反発係数 0.135 で'
                          '実物（0.2〜0.5）を下回る（9-128）')
@@ -102,6 +107,17 @@ def main() -> int:
             out_txt = out_txt.replace(f'density="{eff:.1f}"',
                                       f'density="{eff:.1f}" solref="{a.solref}"', 1)
 
+    if a.armature is not None:
+        m = re.search(r'(<default>.*?<joint[^>]*?armature=")([\d.eE+-]+)(")', out_txt, re.S)
+        if not m:
+            raise SystemExit('⛔ default の joint の armature が見つからない')
+        out_txt = out_txt[:m.start(2)] + f'{a.armature:g}' + out_txt[m.end(2):]
+    if a.object_armature_zero:
+        n0 = len(re.findall(r'<joint name="cube_slide2?"', out_txt))
+        out_txt = re.sub(r'(<joint name="cube_slide2?")', r'\1 armature="0"', out_txt)
+        if n0 == 0:
+            raise SystemExit('⛔ 対象のスライド関節（cube_slide）が見つからない')
+
     name = a.name or f'{a.base}_rho'
     dst = ENVS / f'{name}.xml'
     dst.write_text(out_txt, encoding='utf-8')
@@ -113,6 +129,10 @@ def main() -> int:
     print(f'  ⭐ 実効密度 {old.group(1)} → **{eff:.1f} kg/m³**')
     if a.solref:
         print(f'  ⭐ solref  既定 → **{a.solref}**（9-128）')
+    if a.armature is not None:
+        print(f'  ⭐ 腕の関節の armature → **{a.armature:g} kg·m²**（9-246）')
+    if a.object_armature_zero:
+        print('  ⭐ 対象のスライド関節の armature → **0**（9-246）')
     print(f'  ⚠️ 元の {a.base}.xml は変更していない（条件を足す形。9-105 の版の混入を避ける）')
     return 0
 

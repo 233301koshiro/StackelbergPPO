@@ -1,5 +1,5 @@
 #!/bin/bash
-# ⭐ ホッケーの取り直し（hockey_bank9_scgc / _s2）のゴール率を 20 話で測る（系譜 9-237）。学習はしない。
+# ⭐ ホッケーの取り直し（hockey_bank9_phys / _s2）のゴール率を 20 話で測る（系譜 9-237）。学習はしない。
 #
 # ⛔ 9-229 の「3 話中 2 話ゴール」は、種が固定された初期状態のくじの 3〜5 本目でしかなかった（ゴール率ではない）。
 # ⭐ 判定の方法を結果を見る前に書き直す（9-230 の読みの「5 話・頭 2 話を捨てる」を置き換える）:
@@ -13,7 +13,7 @@ cd /userdir/StackelbergPPO
 OUT=single_run/hockey_goal_rate.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a $OUT; }
 log "=== ホッケーの取り直しのゴール率（20 話）。完走を待つ"
-for R in hockey_bank9_scgc hockey_bank9_scgc_s2; do
+for R in hockey_bank9_phys hockey_bank9_phys_s2; do
   until grep -q "training done" single_run/$R/log/log_train.txt 2>/dev/null; do sleep 600; done
   mkdir -p single_run/$R/trace
   EVAL_RESTORE_DIR=single_run/$R EVAL_CHECKPOINT=best TRACE_EPISODES=20 TRACE_OUT=single_run/$R/trace/arm_trace_20.npz \
