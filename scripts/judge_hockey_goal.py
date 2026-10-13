@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ホッケーの取り直しを、事前登録した読みで機械判定する（系譜 9-230・9-237・9-238）。学習も再生もしない。
 
-    python3 scripts/judge_hockey_goal.py                        # hockey_bank9_scgc / _s2 の trace/arm_trace_20.npz
+    python3 scripts/judge_hockey_goal.py                        # hockey_bank9_phys / _s2 の trace/arm_trace_20.npz
     python3 scripts/judge_hockey_goal.py hockey_bank9:arm_trace.npz   # 既知の結果で確かめる（9-229: seed0 は 3 話中 2 話ゴール）
 
 話ごとに出すもの:
@@ -77,7 +77,7 @@ def judge(run, fname):
 
 
 def main():
-    args = sys.argv[1:] or ['hockey_bank9_scgc:arm_trace_20.npz', 'hockey_bank9_scgc_s2:arm_trace_20.npz']
+    args = sys.argv[1:] or ['hockey_bank9_phys:arm_trace_20.npz', 'hockey_bank9_phys_s2:arm_trace_20.npz']
     clean_goal = clean_move = False
     judged = 0
     for a in args:

@@ -300,18 +300,18 @@ def ck_base(r):
 #   ⭐ 修論が比べる組をここに書く（名前は seed0。_s2 どうしも同じ組として見る）。
 #   各組: (名前, run の列, 違ってよいキー)。'TASK' は到達 対 押し＝報酬のキーは違って当然なので COMMON だけ比べる。
 COMPARISONS = [
-    ('押しの柱（4.3.3）', ['tripo_pjp_long_scgc', 'tripo_pjp_mid_scgc', 'tripo_pjdp_prox_scgc', 'tripo_pjdp_dist_scgc'], {'xml_name'}),
-    ('R1 形の凍結（4.1.4）', ['tripo_pjp_mid_scgc', 'tripo_pjp_mid_frozen_scgc'], {'robot_param_scale'}),
-    ('軸5 押し（4.6.3）', ['e2e_a1v_pusher_scgc', 'e2e_a1v_rho_pusher_scgc', 'e2e_a1v_real_pusher_scgc'], {'xml_name', 'cfg'}),
-    ('軸5 識別・従来（4.6.4）', ['e2e_a1v_reach_scgc_nobox', 'e2e_a1v_pusher_scgc'], 'TASK'),
-    ('軸5 識別・実在（4.6.4）', ['e2e_a1v_real_reach_scgc_nobox', 'e2e_a1v_real_pusher_scgc'], 'TASK'),
-    ('配分・実在（4.6.5）', ['tripo_pjd_prox_real_scgc_nobox', 'tripo_pjd_dist_real_scgc_nobox'], {'xml_name'}),
-    ('到達マトリクス（4.3.3.3）', ['tripo_pj_mid_scgc_nobox', 'tripo_pj_long_scgc_nobox', 'tripo_pj_short_scgc_nobox'], {'xml_name'}),
-    ('マトリクス 到達 対 押し（4.3.3.3）', ['tripo_pj_mid_scgc_nobox', 'tripo_pjp_mid_scgc'], 'TASK'),
-    ('配分・到達（4.3.3.4）', ['tripo_pjd_prox_scgc_nobox', 'tripo_pjd_dist_scgc_nobox'], {'xml_name'}),
-    ('閉ループ 1.99 倍（4.4）', ['tripo_pjr199_scgc_nobox', 'tripo_pj_short_scgc_nobox'], {'xml_name'}),
-    ('閉ループ 関節固定（4.4.5）', ['e2e_a1_reach_scgc_nobox', 'e2e_a1_fix3_reach_scgc_nobox'], {'xml_name'}),
-    ('付録D 到達 対 押し', ['tripo_v3_reach2_scgc_nobox', 'tripo_arm_v3_pusher_scgc'], 'TASK'),
+    # ⭐ 9-246: 実在の物理で全部やり直した *_phys（それ以前の *_scgc は 9-232〜9-245）
+    ('押しの柱（4.3.3）', ['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys'], {'xml_name'}),
+    ('armature 0.64 対 1（long）', ['tripo_pjp_long_phys', 'tripo_pjp_long_phys_arm1'], {'xml_name'}),
+    ('armature 0.64 対 1（mid）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_arm1'], {'xml_name'}),
+    ('R1 形の凍結（4.1.4）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys'], {'robot_param_scale'}),
+    ('R2 縦型の到達 対 押し', ['e2e_a1v_reach_phys', 'e2e_a1v_pusher_phys'], 'TASK'),
+    ('到達マトリクス（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys'], {'xml_name'}),
+    ('マトリクス 到達 対 押し（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pjp_mid_phys'], 'TASK'),
+    ('配分・到達（4.3.3.4）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys'], {'xml_name'}),
+    ('閉ループ 1.99 倍（4.4）', ['tripo_pjr199_phys', 'tripo_pj_short_phys'], {'xml_name'}),
+    ('閉ループ 関節固定（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'], {'xml_name'}),
+    ('付録D 到達 対 押し', ['tripo_v3_reach2_phys', 'tripo_arm_v3_pusher_phys'], 'TASK'),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
@@ -321,7 +321,7 @@ DEFAULTS = {'reward_specs.ctrl_cost_coeff': '0.0001', 'reward_specs.contact_weig
             'reward_specs.init_contact_penalty': '50.0', 'env_specs.arm_safe_init': 'False',
             'fix_base': 'False', 'env_specs.init_self_contact': 'False', 'robot_param_scale': '0.1'}
 # ⭐ 承知の上で残した差（理由を必ず書く）
-ACCEPTED = {('e2e_a1v_real_reach_scgc_nobox', 'env_specs.arm_safe_init'): '9-238 ユーザー判断（元 run の起動行どおり）'}
+ACCEPTED = {}   # 9-238 の実在の到達の arm_safe_init は *_phys では無くなった（全部の到達がそろう）
 IGNORE = {'seed', 'hydra.run.dir', 'enable_wandb'}
 
 

@@ -34,6 +34,8 @@ TOL = 0.02        # 一致とみなす位置の差 [m]
 #   接触の台本は根元の関節を −1.2 rad にして、横から振って当てる。
 CUBE_FAR = {'S1', 'S2', 'S3', 'S4', 'S6', 'S7'}
 Q1_INIT = {'S5': -1.2}
+# ⭐ 接触の台本は対象を x 0.6 m へ寄せる（元の 1.0 m では伸びきった先端が 5 cm かすめるだけで、結果が姿勢の差に敏感すぎた。9-246）
+CUBE_SHIFT = {'S5': -0.4}
 
 
 def scenarios(nu):
@@ -59,6 +61,8 @@ def run_mujoco(xml, ctrl_fn, v0, name):
         d.qpos[m.jnt_qposadr[m.actuator_trnid[0, 0]]] = Q1_INIT[tag]
     if tag in CUBE_FAR:
         d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += 100.0
+    if tag in CUBE_SHIFT:
+        d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += CUBE_SHIFT[tag]
     mujoco.mj_forward(m, d)
     d.qvel[robot_dofs] = v0
     names = [m.body(i).name for i in range(m.nbody)]
@@ -85,6 +89,8 @@ def run_choreonoid(xml, ctrl_fn, v0, name):
         q0[0] = Q1_INIT[tag]
     if tag in CUBE_FAR:
         q0[nu] += 100.0          # 対象のスライド x（ロボットの関節の後ろ）
+    if tag in CUBE_SHIFT:
+        q0[nu] += CUBE_SHIFT[tag]
     w.set_state_cmd(q0.tolist(), v.tolist())
     traj = []
     for t in range(STEPS):
