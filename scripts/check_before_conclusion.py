@@ -302,8 +302,8 @@ def ck_base(r):
 COMPARISONS = [
     # ⭐ 9-246: 実在の物理で全部やり直した *_phys（それ以前の *_scgc は 9-232〜9-245）
     ('押しの柱（4.3.3）', ['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys'], {'xml_name'}),
-    ('armature 0.64 対 1（long）', ['tripo_pjp_long_phys', 'tripo_pjp_long_phys_arm1'], {'xml_name'}),
-    ('armature 0.64 対 1（mid）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_arm1'], {'xml_name'}),
+    ('armature 1.71 対 1（long）', ['tripo_pjp_long_phys', 'tripo_pjp_long_phys_arm1'], {'xml_name'}),
+    ('armature 1.71 対 1（mid）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_arm1'], {'xml_name'}),
     ('R1 形の凍結（4.1.4）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys'], {'robot_param_scale'}),
     ('R2 縦型の到達 対 押し', ['e2e_a1v_reach_phys', 'e2e_a1v_pusher_phys'], 'TASK'),
     ('到達マトリクス（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys'], {'xml_name'}),
