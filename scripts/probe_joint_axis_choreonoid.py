@@ -100,5 +100,5 @@ def main():
     print('⚠️ これが XML の axis と一致していれば、軸は Choreonoid まで届いている。')
 
 
-# ⚠️ sys.exit(main()) にしない。Choreonoid は sys.exit(0) を受け付けず exit 137 になる（Bug 43）
+# ⚠️ sys.exit(main()) にしない。Choreonoid は sys.exit(0) を受け付けない（Bug 43）。⛔ exit 137 は自分で終わらない Choreonoid を timeout が殺したもの（9-257）。終わらせるなら os._exit(0)
 main()
