@@ -15,7 +15,7 @@
 ⛔ **すり抜けが再現できなければプローブが壁を見ていない。**
 
 ⚠️ **出力はファイルへリダイレクトすること**（Bug 43。パイプだと timeout 時に 1 行も残らない）。
-⚠️ **Choreonoid は起動だけで約 105 秒**かかるので timeout は 1200 秒以上。
+⚠️ **Choreonoid は起動だけで約 105 秒**（⛔ 2026-10-14 の実測では 2 秒。Bug 43）かかるので timeout は 1200 秒以上。
 
 起動:
   XML=e2e_hockey_easy USE_CHOREONOID=1 OMP_NUM_THREADS=1 \

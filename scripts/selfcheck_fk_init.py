@@ -20,7 +20,7 @@ sys.path.insert(0, '.')
 class _FK:
     """pusher.PusherEnv から FK の 3 メソッドだけを借りる薄い殻。
 
-    ⭐ env を作らずに検算できるようにしてある（Choreonoid の起動 105 秒を避ける）。
+    ⭐ env を作らずに検算できるようにしてある（Choreonoid の起動 105 秒（⛔ 2026-10-14 の実測では 2 秒。Bug 43）を避ける）。
     """
     from design_opt.envs.pusher import PusherEnv as _P
     _parse_arm_chain = _P._parse_arm_chain

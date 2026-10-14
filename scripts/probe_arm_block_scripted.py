@@ -39,7 +39,7 @@ if self._wall_e <= 0:
 ⭐ **したがって `HOCKEY_WALL_RESTITUTION` を必ず一緒に指定する。**
 ⚠️ **腕ブロックだけを有効にした run があれば、ブロックは一切働いていない。**
 
-⚠️ Bug 43: **パイプへ繋がず必ずファイルへ。**Choreonoid は起動だけで約 105 秒。
+⚠️ Bug 43: **パイプへ繋がず必ずファイルへ。**Choreonoid は起動だけで約 105 秒（⛔ 2026-10-14 の実測では 2 秒。Bug 43）。
 """
 import os
 import sys
