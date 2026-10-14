@@ -5,6 +5,7 @@
 結果がどうであれ必ず成り立つはずの量だけを見る（順位や良し悪しは見ない）。
 
     python3 scripts/check_invariants.py <run> [<run> ...]
+    python3 scripts/check_invariants.py --trace <npz> <run>     # 途中の epoch の軌跡（watch_midrun.sh）
 
 | 項目 | 破ったときの過去の例 |
 |---|---|
@@ -156,9 +157,10 @@ def _walls(d, xml):
     return True, f'壁の内側（パック |y| ≤ {py:.2f}・腕 ≤ {ty:.2f}、内面 {inner:.2f}）'
 
 
-def run(r):
+def run(r, trace=None):
+    """trace: 軌跡の場所（既定は run の trace/arm_trace.npz）。途中の epoch の見張り（watch_midrun.sh）が渡す。"""
     out = [('報酬の桁',) + _log_reward(r)]
-    p = ROOT / 'single_run' / r / 'trace' / 'arm_trace.npz'
+    p = Path(trace) if trace else ROOT / 'single_run' / r / 'trace' / 'arm_trace.npz'
     if not p.exists():
         return out + [('軌跡', None, '⚠️ 軌跡が無い')]
     d = np.load(p, allow_pickle=True)
@@ -175,9 +177,13 @@ def run(r):
 
 
 def main():
-    for r in sys.argv[1:]:
+    # `--trace <npz>` は直後の run 1 本にだけ効く（途中の epoch の軌跡を見るとき）
+    args, trace = sys.argv[1:], None
+    if args[:1] == ['--trace']:
+        trace, args = args[1], args[2:]
+    for r in args:
         print(f'=== {r}')
-        for name, ok, msg in run(r):
+        for name, ok, msg in run(r, trace):
             print(f"  {'✅' if ok else ('⚠️' if ok is None else '⛔')} {name:<6} {msg}")
 
 
