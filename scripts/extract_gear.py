@@ -78,6 +78,18 @@ def extract(run_dir, ckpt):
     return gears, sizes, lens
 
 
+def bounds(run_dir):
+    """⭐ 9-249: ギア比と太さの探索範囲を**その run の cfg から読む**（diagnose_morphology.py の第2層と同じ。9-72）。
+    ⛔ 直書きの 20〜400 のままだと、実在の cfg（上限 150）で上限に張り付いた run を境界と数えない。cfg が無ければ直書きの値。"""
+    name = (yaml.safe_load(open(f'{run_dir}/.hydra/config.yaml')) or {}).get('cfg')
+    f = os.path.join(PROJECT, 'design_opt', 'cfg', f'{name}.yml')
+    rob = ((yaml.safe_load(open(f)) or {}).get('robot') or {}) if os.path.exists(f) else {}
+    g = (rob.get('actuator_params') or {}).get('gear') or {}
+    s = (rob.get('geom_params') or {}).get('size') or {}
+    return (float(g.get('lb', GEAR_LB)), float(g.get('ub', GEAR_UB)),
+            float(s.get('lb', SIZE_LB)), float(s.get('ub', SIZE_UB)))
+
+
 def at_bound(v, lo, hi):
     span = hi - lo
     return abs(v - lo) <= span * TOL or abs(v - hi) <= span * TOL
@@ -96,13 +108,14 @@ def main():
     for r, lab in zip(runs, labels):
         rp = r if os.path.isabs(r) else os.path.join(PROJECT, r)
         gears, sizes, lens = extract(rp, ckpt)
-        gb = sum(at_bound(g, GEAR_LB, GEAR_UB) for g in gears)
-        sb = sum(at_bound(s, SIZE_LB, SIZE_UB) for s in sizes)
+        glb, gub, slb, sub = bounds(rp)
+        gb = sum(at_bound(g, glb, gub) for g in gears)
+        sb = sum(at_bound(s, slb, sub) for s in sizes)
         print(f'\n  {lab}')
         print(f'    gear      : {", ".join(f"{g:7.1f}" for g in gears)}   境界 {gb}/{len(gears)}'
-              f'   （探索範囲 [{GEAR_LB:.0f}, {GEAR_UB:.0f}]）')
+              f'   （探索範囲 [{glb:.0f}, {gub:.0f}]）')
         print(f'    太さ      : {", ".join(f"{s:7.3f}" for s in sizes)}   境界 {sb}/{len(sizes)}'
-              f'   （探索範囲 [{SIZE_LB}, {SIZE_UB}]）')
+              f'   （探索範囲 [{slb}, {sub}]）')
         print(f'    リンク長  : {", ".join(f"{l:7.3f}" for l in lens)}   合計 {sum(lens):.3f} m')
     print()
     os._exit(0)

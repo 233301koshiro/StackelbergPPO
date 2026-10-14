@@ -58,6 +58,15 @@ def far_ok(xml):
     return (m is None) or float(m.group(2)) > 100
 
 
+def shift_ok(xml, shift):
+    """ずらした対象がスライドの範囲の内側に収まるか（9-249）。
+    ⛔ ホッケーのパックは範囲 −0.35〜1.25 m で、−0.4 ずらすと範囲の外に出る。MuJoCo は範囲の拘束で押し戻して
+    パックが打ち出され（腕に触れずに 0.6 m 動く）、Choreonoid は動かさない＝台本の欠陥で差が出ていた。"""
+    import re as _re
+    m = _re.search(r'<joint name="cube_slide"[^>]*range="([-\d.]+) ([-\d.]+)"', xml)
+    return (m is None) or float(m.group(1)) <= shift <= float(m.group(2))
+
+
 def run_mujoco(xml, ctrl_fn, v0, name):
     import mujoco
     m = mujoco.MjModel.from_xml_string(xml)
@@ -68,7 +77,7 @@ def run_mujoco(xml, ctrl_fn, v0, name):
         d.qpos[m.jnt_qposadr[m.actuator_trnid[0, 0]]] = Q1_INIT[tag]
     if tag in CUBE_FAR and far_ok(xml):
         d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += 100.0
-    if tag in CUBE_SHIFT:
+    if tag in CUBE_SHIFT and shift_ok(xml, CUBE_SHIFT[tag]):
         d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += CUBE_SHIFT[tag]
     mujoco.mj_forward(m, d)
     d.qvel[robot_dofs] = v0
@@ -96,7 +105,7 @@ def run_choreonoid(xml, ctrl_fn, v0, name):
         q0[0] = Q1_INIT[tag]
     if tag in CUBE_FAR and far_ok(xml):
         q0[nu] += 100.0          # 対象のスライド x（ロボットの関節の後ろ）
-    if tag in CUBE_SHIFT:
+    if tag in CUBE_SHIFT and shift_ok(xml, CUBE_SHIFT[tag]):
         q0[nu] += CUBE_SHIFT[tag]
     w.set_state_cmd(q0.tolist(), v.tolist())
     traj = []
@@ -149,6 +158,14 @@ def main():
             mc = max(np.linalg.norm(t['cube'][:2] - mj[0]['cube'][:2]) for t in mj)
             cc = max(np.linalg.norm(t['cube'][:2] - cn[0]['cube'][:2]) for t in cn)
             line += f'  ／ 対象の移動 MuJoCo {mc:.3f} m・Choreonoid {cc:.3f} m'
+        if expect == 'contact' and 'cube' in common and shift_ok(xml, CUBE_SHIFT.get(name.split()[0], 0.0)) is False:
+            print(f"➖ {name}（⚠️ 対象をずらすと範囲の外に出るので、ずらさずに回した）", flush=True)
+        # ⭐ 9-249: 接触の台本で腕がどちらでも動かないなら、何も比べていない（縦に立った腕は根元を回しても動かない）
+        moved_mj = max(np.linalg.norm(t[tip] - mj[0][tip]) for t in mj)
+        moved_cn = max(np.linalg.norm(t[tip] - cn[0][tip]) for t in cn)
+        if expect == 'contact' and max(moved_mj, moved_cn) < 0.001:
+            print(f"➖ {name}（比べられない: 腕の先端がどちらでも動かない。縦に立った腕は根元の鉛直軸を回しても動かない）\n{line}", flush=True)
+            continue
         if expect == 'same':
             ok = dt.max() < TOL
         else:
