@@ -10,6 +10,7 @@
 #   - 回転子の慣性（armature）: UR5e の関節 1〜3 の実測 6.40e-5 kg·m²（モーター側）× 減速比 100² ＝ 0.64（腕の関節）・0（対象のスライド。回転子は無い）
 #   - トルク: ±1 で切る（CNOID_CTRL_CLIP、Bug 60）× ギア比の範囲 縦型 25〜150・平面 20〜150 N·m（上限は UR5e、cfg の *_real）
 #   - 速度: 3.1416 rad/s で飽和（UR5e の関節 1〜3 の定格 180°/s、CNOID_JOINT_MAX_VEL、9-245）
+#     ⭐ 位置も上限の速さで進め直す（CNOID_JOINT_MAX_VEL_STRICT、Bug 65・9-248）。⛔ 10-14 9 時までの 6 本は速度だけ切っていた（実効 6〜57 % 超）ので止め、*_nostrict へ改名して取り直す
 #   - 減衰: トルク −b·q̇、b = 1（CNOID_HINGE_DAMP_TORQUE、Bug 61。⚠️ b の値には根拠が無い＝原論文のまま。修論 5.3 に書く）
 #   - tick の完了を待ってから状態を読み書きする（CNOID_TICK_SYNC、Bug 64・9-247）。⛔ 10-13 12:40 までの 2 本（long・mid）は待たずに走っていたので止め、*_nosync へ改名して取り直す
 #   - 接触: 自己干渉あり（隣り合わない組）・深い接触を捨てない（閾値 1.0）・初期形態の門
@@ -42,7 +43,7 @@ Q=single_run/queue_phys.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a $Q; }
 njobs(){ ps -eo args | grep -c "[c]horeonoid_train.py"; }
 EXTRA=""
-PHYS="CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 CNOID_CTRL_CLIP=1 CNOID_HINGE_DAMP_TORQUE=1 CNOID_JOINT_MAX_VEL=3.1416 CNOID_TICK_SYNC=1"
+PHYS="CNOID_SELF_COLLISION=1 CNOID_CULLING_DEPTH=1.0 CNOID_CTRL_CLIP=1 CNOID_HINGE_DAMP_TORQUE=1 CNOID_JOINT_MAX_VEL=3.1416 CNOID_JOINT_MAX_VEL_STRICT=1 CNOID_TICK_SYNC=1"
 launch(){ local RUN=$1; shift
   if [ -d "single_run/$RUN/log" ]; then log "$RUN は既にある。飛ばす"; return; fi
   while [ "$(njobs)" -ge 2 ]; do sleep 180; done
