@@ -74,6 +74,8 @@ def main():
             continue
         here.update(files)
     pats = [(r'`([\w./-]+\.(?:py|sh))`', None),
+            # ⭐ コマンドの中の `python3 scripts/xxx.py` も拾う（2026-10-14: 実在しない check_visual_log.py が 3 週間素通りした）
+            (r'scripts/([\w.-]+\.(?:py|sh))', None),
             (r'assets/mujoco_envs/([\w-]+\.xml)', None),
             (r'design_opt/cfg/([\w-]+\.yml)', None)]
     bad = {}
