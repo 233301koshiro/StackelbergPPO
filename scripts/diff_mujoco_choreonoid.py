@@ -50,7 +50,7 @@ def scenarios(nu):
         ('S2 範囲外の入力 3.0（MuJoCo は ±1 に切る）', lambda t: np.full(nu, 3.0), 0.0, 'same'),
         ('S3 入力 0 で惰行（初速 2 rad/s）', lambda t: np.zeros(nu), 2.0, 'same'),
         ('S4 可動域の端まで押し続ける 1.0', lambda t: np.full(nu, 1.0) if t < STEPS else np.zeros(nu), 0.0, 'same'),
-        ('S6 入力 0 で惰行（初速 0.3 rad/s、可動域に当たらない）', lambda t: np.zeros(nu), 0.3, 'same'),
+        ('S6 入力 0 で惰行（初速 0.3 rad/s、可動域に当たらない。⚠️ 縦型は真上に立った腕の鉛直軸で先端が動かず比較にならない、9-253）', lambda t: np.zeros(nu), 0.3, 'same'),
         ('S7 全力で正負を切り替える（10 step ごと、関節ごとに逆向き）', lambda t: np.array([1.0 if (t // 10 + k) % 2 == 0 else -1.0 for k in range(nu)]), 0.0, 'same'),
         ('S5 振って対象に当てる（接触）', lambda t: np.array([1.0] + [0.0] * (nu - 1)) * (1 if t < 40 else -1), 0.0, 'contact'),
         ('S8 腕を前へ倒して上から対象に当てる（縦型の接触）', lambda t: np.array([0.0, 1.0] + [0.0] * (nu - 2)), 0.0, 'contact'),
