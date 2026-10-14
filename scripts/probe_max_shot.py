@@ -16,7 +16,7 @@
     timeout -k 30 2400 /choreonoid_ws/install/bin/choreonoid --no-window \\
     --python scripts/probe_max_shot.py > out.txt 2>&1
 
-⚠️ Bug 43: **パイプへ繋がず必ずファイルへ。**起動だけで約 105 秒。
+⚠️ Bug 43: **パイプへ繋がず必ずファイルへ。**起動だけで約 105 秒（⛔ 2026-10-14 の実測では 2 秒。Bug 43）。
 """
 import itertools
 import os

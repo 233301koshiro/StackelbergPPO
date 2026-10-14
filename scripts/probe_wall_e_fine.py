@@ -22,7 +22,7 @@
     HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_WALL_DEBUG=1 \\
     /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/probe_wall_e_fine.py
 
-⚠️ Bug 43: **パイプへ繋がず必ずファイルへリダイレクト。**Choreonoid は起動だけで約 105 秒。
+⚠️ Bug 43: **パイプへ繋がず必ずファイルへリダイレクト。**Choreonoid は起動だけで約 105 秒（⛔ 2026-10-14 の実測では 2 秒。Bug 43）。
 """
 import os
 import sys
