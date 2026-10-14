@@ -36,6 +36,11 @@ CUBE_FAR = {'S1', 'S2', 'S3', 'S4', 'S6', 'S7'}
 Q1_INIT = {'S5': -1.2}
 # ⭐ 接触の台本は対象を x 0.6 m へ寄せる（元の 1.0 m では伸びきった先端が 5 cm かすめるだけで、結果が姿勢の差に敏感すぎた。9-246）
 CUBE_SHIFT = {'S5': -0.4}
+# ⭐ 9-250: 縦型の接触の台本 S8。根元が鉛直軸の腕は S5（根元を回す）では動かないので、2 番目の関節（水平軸）を
+#   +1 で押し続けて腕を +x へ倒し、上から対象に当てる。⭐ 期待（回す前に決めた）: 両方の物理で対象が動く（> 0.01 m）。
+#   ⚠️ 対象は**最初のリンクの真下**（中心 x ＝ 最初のリンクの長さ）へ寄せる（`s8_shift`）。⛔ 最初は S5 と同じ −0.4 m にしたが、
+#   Choreonoid では可動域の端（硬い止め）で腕が L 字に止まり、ホッケー・tripo_arm_v3 で対象に一度も触れなかった（接触を比べていない）。
+#   平面の腕（2 番目の関節も鉛直軸）では比べない
 
 
 def scenarios(nu):
@@ -48,6 +53,7 @@ def scenarios(nu):
         ('S6 入力 0 で惰行（初速 0.3 rad/s、可動域に当たらない）', lambda t: np.zeros(nu), 0.3, 'same'),
         ('S7 全力で正負を切り替える（10 step ごと、関節ごとに逆向き）', lambda t: np.array([1.0 if (t // 10 + k) % 2 == 0 else -1.0 for k in range(nu)]), 0.0, 'same'),
         ('S5 振って対象に当てる（接触）', lambda t: np.array([1.0] + [0.0] * (nu - 1)) * (1 if t < 40 else -1), 0.0, 'contact'),
+        ('S8 腕を前へ倒して上から対象に当てる（縦型の接触）', lambda t: np.array([0.0, 1.0] + [0.0] * (nu - 2)), 0.0, 'contact'),
     ]
 
 
@@ -56,6 +62,25 @@ def far_ok(xml):
     import re as _re
     m = _re.search(r'<joint name="cube_slide"[^>]*range="([-\d.]+) ([-\d.]+)"', xml)
     return (m is None) or float(m.group(2)) > 100
+
+
+def is_vertical(xml):
+    """2 番目の関節（`11_joint`）が水平軸か＝縦型の腕か（9-250。S8 は縦型でだけ比べる）。"""
+    import re as _re
+    m = _re.search(r'<joint name="11_joint"[^>]*axis="([-\d.]+) ([-\d.]+) ([-\d.]+)"', xml)
+    return bool(m) and abs(float(m.group(3))) < 0.5
+
+
+def s8_shift(xml):
+    """S8: 対象の中心を最初のリンクの長さ（body 111 の位置）へ寄せる量。"""
+    import re as _re
+    l1 = _re.search(r'<body name="111" pos="[-\d.]+ [-\d.]+ ([-\d.]+)"', xml)
+    c0 = _re.search(r'<body name="cube" pos="([-\d.]+) ', xml)
+    return (float(l1.group(1)) - float(c0.group(1))) if (l1 and c0) else 0.0
+
+
+def shift_of(tag, xml):
+    return s8_shift(xml) if tag == 'S8' else CUBE_SHIFT.get(tag, 0.0)
 
 
 def shift_ok(xml, shift):
@@ -77,8 +102,8 @@ def run_mujoco(xml, ctrl_fn, v0, name):
         d.qpos[m.jnt_qposadr[m.actuator_trnid[0, 0]]] = Q1_INIT[tag]
     if tag in CUBE_FAR and far_ok(xml):
         d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += 100.0
-    if tag in CUBE_SHIFT and shift_ok(xml, CUBE_SHIFT[tag]):
-        d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += CUBE_SHIFT[tag]
+    if shift_of(tag, xml) and shift_ok(xml, shift_of(tag, xml)):
+        d.qpos[m.jnt_qposadr[m.joint('cube_slide').id]] += shift_of(tag, xml)
     mujoco.mj_forward(m, d)
     d.qvel[robot_dofs] = v0
     names = [m.body(i).name for i in range(m.nbody)]
@@ -105,8 +130,8 @@ def run_choreonoid(xml, ctrl_fn, v0, name):
         q0[0] = Q1_INIT[tag]
     if tag in CUBE_FAR and far_ok(xml):
         q0[nu] += 100.0          # 対象のスライド x（ロボットの関節の後ろ）
-    if tag in CUBE_SHIFT and shift_ok(xml, CUBE_SHIFT[tag]):
-        q0[nu] += CUBE_SHIFT[tag]
+    if shift_of(tag, xml) and shift_ok(xml, shift_of(tag, xml)):
+        q0[nu] += shift_of(tag, xml)
     w.set_state_cmd(q0.tolist(), v.tolist())
     traj = []
     for t in range(STEPS):
@@ -158,7 +183,10 @@ def main():
             mc = max(np.linalg.norm(t['cube'][:2] - mj[0]['cube'][:2]) for t in mj)
             cc = max(np.linalg.norm(t['cube'][:2] - cn[0]['cube'][:2]) for t in cn)
             line += f'  ／ 対象の移動 MuJoCo {mc:.3f} m・Choreonoid {cc:.3f} m'
-        if expect == 'contact' and 'cube' in common and shift_ok(xml, CUBE_SHIFT.get(name.split()[0], 0.0)) is False:
+        if name.startswith('S8') and not is_vertical(xml):
+            print(f"➖ {name}（縦型用。この腕は 2 番目の関節も鉛直軸）", flush=True)
+            continue
+        if expect == 'contact' and 'cube' in common and shift_ok(xml, shift_of(name.split()[0], xml)) is False:
             print(f"➖ {name}（⚠️ 対象をずらすと範囲の外に出るので、ずらさずに回した）", flush=True)
         # ⭐ 9-249: 接触の台本で腕がどちらでも動かないなら、何も比べていない（縦に立った腕は根元を回しても動かない）
         moved_mj = max(np.linalg.norm(t[tip] - mj[0][tip]) for t in mj)
