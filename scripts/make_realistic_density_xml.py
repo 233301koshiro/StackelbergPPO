@@ -73,7 +73,7 @@ def main() -> int:
     ap.add_argument('--material', default='aluminum', choices=sorted(MATERIALS))
     ap.add_argument('--wall', type=float, default=0.002, help='肉厚 [m]。既定 2 mm')
     ap.add_argument('--armature', type=float, default=None,
-                    help='腕の関節の回転子の慣性（関節側）[kg·m²]。⭐ 9-246: UR5e の関節 1〜3 の回転子 6.40e-5（モーター側）× 減速比 100² ＝ 0.64')
+                    help='腕の関節の回転子の慣性（関節側）[kg·m²]。⭐ 9-251: UR5e の関節 1〜3 の（モーター 6.40e-5 ＋ 減速機 10.7e-5）（モーター側）× 減速比 100² ＝ 1.71。⛔ 9-246 の 0.64 は減速機の分を落としていた')
     ap.add_argument('--object-armature-zero', action='store_true',
                     help='対象（cube）のスライド関節の armature を 0 にする。⛔ 既定（default の joint）が対象にも掛かり、'
                          '箱 2.7 kg が実効 3.7 kg・パック 0.03 kg が 1.03 kg になっていた（9-246）。対象に回転子は無い')
