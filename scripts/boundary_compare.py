@@ -15,6 +15,27 @@ compare_morphology.py と同様 os._exit(0) で確実に終了する（choreonoi
 import os, sys, pickle
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault('USE_CHOREONOID', '1')
+
+# ⭐ 9-249: 学習時の物理の環境変数を run のフォルダから読む（record_arm_trace.py と同じ。9-236）。手で渡した値は上書きしない。
+#   ⚠️ env モジュールは import 時に 1 度だけ読むので、design_opt を import する前に置く。run ごとには切り替えられないので、run どうしで違えば止める
+import json as _json
+_les = {}
+for _r in [r for r in os.environ.get('BC_RUNS', '').split(':') if r.strip()]:
+    _p = os.path.join(_r if os.path.isabs(_r) else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), _r), 'launch_env.json')
+    _les[_r] = _json.load(open(_p)) if os.path.exists(_p) else None
+if len({_json.dumps(_v, sort_keys=True) for _v in _les.values()}) > 1:
+    print(f'[boundary] ⛔ run どうしで学習時の物理が違う（1 プロセスでは 1 つの物理にしか揃えられない）。分けて回す: {_les}', flush=True)
+    os._exit(1)
+_le = next(iter(_les.values()), None)
+if _le is None:
+    print('[boundary] ⚠️ launch_env.json が無い（9-236 より前の run）。物理の環境変数は手で渡したものだけ', flush=True)
+else:
+    for _k, _v in _le.items():
+        if _k not in os.environ:
+            os.environ[_k] = _v
+        elif os.environ[_k] != _v:
+            print(f'[boundary] ⚠️ {_k}: 学習時 {_v} ／ 今回 {os.environ[_k]}（手で渡した値を使う）', flush=True)
+    print(f'[boundary] ⭐ 学習時の環境で回す: {_le}', flush=True)
 import numpy as np
 import torch
 import yaml

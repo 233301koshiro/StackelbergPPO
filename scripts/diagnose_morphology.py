@@ -1152,11 +1152,20 @@ def main():
         #   旧実装は `cfgd.get('robot')` を見ており**常に空＝常に凍結モード**になっていた。
         #   長さを最適化する縦型の run でも凍結として判定していた（Bug 40）。
         #   正は `design_opt/cfg/<cfg>.yml`（探索範囲の写しは c2499fa で削除済み）。
-        bp = {}
+        bp, rob = {}, {}
         cfg_file = os.path.join(os.getcwd(), 'design_opt', 'cfg', f'{cfgd.get("cfg")}.yml')
         if os.path.exists(cfg_file):
-            bp = ((yaml.safe_load(open(cfg_file)) or {}).get('robot') or {}).get('body_params') or {}
+            rob = (yaml.safe_load(open(cfg_file)) or {}).get('robot') or {}
+            bp = rob.get('body_params') or {}
         length_frozen = not bool(bp)
+        # ⭐ 9-249: 第2層の「範囲の端に張り付く」判定も、ギア比と太さの範囲を**その run の cfg から読む**（9-72 と同じ考え）。
+        #   ⛔ 直書きの 20〜400 のままだと、実在の cfg（上限 150）で上限に張り付いた run を「範囲の内側」と判定していた
+        global GEAR_LB, GEAR_UB, SIZE_LB, SIZE_UB
+        _g = (rob.get('actuator_params') or {}).get('gear') or {}
+        _s = (rob.get('geom_params') or {}).get('size') or {}
+        GEAR_LB, GEAR_UB = float(_g.get('lb', GEAR_LB)), float(_g.get('ub', GEAR_UB))
+        SIZE_LB, SIZE_UB = float(_s.get('lb', SIZE_LB)), float(_s.get('ub', SIZE_UB))
+        print(f'[diagnose] 探索範囲（{os.path.basename(cfg_file)}）: ギア比 {GEAR_LB:g}〜{GEAR_UB:g}・太さ {SIZE_LB:g}〜{SIZE_UB:g} m', flush=True)
         # ⭐ 9-72: 探索幅はスクリプトに直書きせず**その run の cfg から読む**。
         #   直書きだと cfg を変えても判定器が追随せず、また食い違いが生まれる。
         if args.offset_half is None:
@@ -1190,7 +1199,7 @@ def main():
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
 
     if run:
-        groups += _run_layers23(run, args.task, geo)
+        groups += _run_layers23(run, args.task, geo, args.target)
 
     report(f'{args.xml} / タスク={args.task}', groups)
     print()
@@ -1257,8 +1266,28 @@ def learned_strike_poses(env, n=200000, dz=0.10, dh=0.40, floor=0.02, wall_y=0.4
                 dz=dz, dh=dh)
 
 
-def _run_layers23(run, task, geo=None):
-    """Choreonoid 上でのみ動く第2・3層。import 時点で Choreonoid が要るため関数内で読み込む。"""
+def _run_layers23(run, task, geo=None, target=None):
+    """Choreonoid 上でのみ動く第2・3層。import 時点で Choreonoid が要るため関数内で読み込む。
+
+    target: 第3層が到達の距離を測る目標（main が reward_specs から決めた値）。
+    """
+    # ⭐ 9-249: 学習時の物理の環境変数を run のフォルダから読む（record_arm_trace.py と同じ。9-236）。
+    #   ⛔ 読まずに回すと、実在の物理で学習した方策を別の物理で動かし、関節の使用率が 40/33/12 % → 67/68/16 % に変わった。
+    #   ⚠️ env モジュールは import 時に環境変数を読むので、下の import より前に置く。手で渡した値は上書きしない
+    import json
+    _le = os.path.join(run, 'launch_env.json')
+    if 'khrylib.rl.envs.common.mujoco_env_choreonoid' in sys.modules:
+        print('[diagnose] ⛔ env モジュールが先に読み込まれており、学習時の環境を反映できません', flush=True)
+    if os.path.exists(_le):
+        _env = json.load(open(_le))
+        for _k, _v in _env.items():
+            if _k not in os.environ:
+                os.environ[_k] = _v
+            elif os.environ[_k] != _v:
+                print(f'[diagnose] ⚠️ {_k}: 学習時 {_v} ／ 診断 {os.environ[_k]}（手で渡した値を使う）', flush=True)
+        print(f'[diagnose] ⭐ 学習時の環境で第2・3層を回す: {_env}', flush=True)
+    else:
+        print('[diagnose] ⚠️ launch_env.json が無い（9-236 より前の run）。物理の環境変数は手で渡したものだけ', flush=True)
     import yaml
     import torch
     from omegaconf import OmegaConf
@@ -1316,16 +1345,18 @@ def _run_layers23(run, task, geo=None):
     trace, xs, dists = {}, [], []
     n_j = len((geo or {}).get('axes') or [])   # 腕の関節数（qpos の先頭がこの順に並ぶ）
     qhist = []
-    target = np.array([cfg.env_specs.get('target_x', 0.8),
-                       cfg.env_specs.get('target_y', 0.0),
-                       cfg.env_specs.get('target_z', 0.15)])
+    # ⭐ 9-249: 目標は main が reward_specs から決めた値（⛔ 以前は env_specs を読み、常に既定 (0.8, 0, 0.15) だった。9-215）
+    target = np.array(target if target is not None else [0.8, 0.0, 0.15], dtype=float)
+    print(f'[diagnose] 第3層の到達の目標: {target.tolist()}', flush=True)
     for _ in range(1100):
         sv = tensorfy([st])
         if ag.obs_norm is not None:
             sv = ag.normalize_observation(sv)
         with torch.no_grad():
             a = ag.policy_net.select_action(sv, mean_action=True).numpy().astype(np.float64)
-        st, _, done, _, _ = env.step(a)
+        # ⭐ 9-249: 打ち切り（1000 step）でも終える。学習と同じ終わり方（Bug 63 と同じ型の残り）
+        st, _, term, trunc, _ = env.step(a)
+        done = term or trunc
         try:                         # 関節角の履歴（第3層の使用率判定に使う）
             qhist.append(np.array(env.data.qpos[:n_j], dtype=float))
         except Exception:
@@ -1339,6 +1370,7 @@ def _run_layers23(run, task, geo=None):
             dists.append(float(np.linalg.norm(p + R @ np.asarray(b.bone_offset, float) - target)))
         if done:
             break
+    print(f'[diagnose] 第3層の行動: {len(xs) or len(dists)} step（打ち切り {cfg.done_condition.get("max_nsteps", 1000)}）', flush=True)
     if xs:
         v = [abs(xs[i+1]-xs[i]) / 0.01 for i in range(len(xs)-1)]
         trace['cube_x'] = xs
