@@ -6,6 +6,7 @@
 ⛔ **どの検査にも引っかからなかった。図にして初めて分かった。**
 
     python3 scripts/plot_run.py <run> [<run> ...]        # → single_run/<run>/trace/view.png
+    python3 scripts/plot_run.py --trace <npz> <run>     # 途中の epoch の軌跡 → <npz>.png
     python3 scripts/plot_run.py --all                    # 軌跡のある run 全部
 """
 import sys
@@ -50,9 +51,10 @@ def statics(xml_name):
     return out
 
 
-def plot(run):
+def plot(run, trace=None, out=None):
+    """trace / out: 途中の epoch の軌跡（watch_midrun.sh の trace_mid/ep<N>.npz）を描くとき。既定は trace/arm_trace.npz → trace/view.png"""
     d = ROOT / 'single_run' / run
-    p = d / 'trace' / 'arm_trace.npz'
+    p = Path(trace) if trace else d / 'trace' / 'arm_trace.npz'
     if not p.exists():
         print(f'⛔ {run}: 軌跡なし'); return None
     z = np.load(p, allow_pickle=True)
@@ -101,7 +103,7 @@ def plot(run):
     fig.suptitle(note, fontsize=11)
     axes[0].legend(fontsize=8)
     plt.tight_layout()
-    out = d / 'trace' / 'view.png'
+    out = Path(out) if out else d / 'trace' / 'view.png'
     plt.savefig(out, dpi=100); plt.close()
     print(f'⭐ {run:<28} z最小 {zmin*1000:7.1f} mm' + ('  ⛔ **床下**' if zmin < -0.001 else '') + f'  → {out}')
     return out
@@ -109,6 +111,8 @@ def plot(run):
 
 def main():
     args = sys.argv[1:]
+    if args[:1] == ['--trace']:     # --trace <npz> <run> → <npz>.png
+        plot(args[2], args[1], args[1].replace('.npz', '.png')); return
     if args == ['--all'] or not args:
         runs = sorted(p.parent.parent.name for p in (ROOT / 'single_run').glob('*/trace/arm_trace.npz'))
     else:
