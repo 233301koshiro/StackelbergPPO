@@ -87,7 +87,10 @@ def ck_seen(r):
     if not log.exists():
         return None, '（目視記録.md が無い）'
     txt = log.read_text(encoding='utf-8')
-    if f'`{r}`' not in txt:
+    # ⛔ 2026-10-16（系譜 9-259）: 本文のどこかに `run` があれば通していたので、改名した run の行の注記
+    #   「（旧 `tripo_pjp_long_phys`）」で、見ていない 4 本が「見た」になっていた。⭐ 行の最初の `…` だけを run 名とみなす
+    seen = {m.group(1) for line in txt.splitlines() for m in [re.match(r'^\|[^`|]*`([^`]+)`', line)] if m}
+    if r not in seen:
         hint = ''
         if r.rsplit('_', 1)[0] in txt or r.split('_')[0] in txt:
             hint = ('  ⚠️ **似た名前はある。略記（`_s2` 等）で書いていないか確認すること** — '
