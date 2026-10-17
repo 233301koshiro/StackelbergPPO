@@ -922,6 +922,9 @@ if _CTRL_CLIP:
 _TICK_SYNC = bool(os.environ.get('CNOID_TICK_SYNC'))
 if _TICK_SYNC:
     print('[choreonoid] ⭐ tick の完了を待ってから状態を読み書きする（CNOID_TICK_SYNC、Bug 64）', flush=True)
+# ⭐ Bug 68（系譜 9-262）: 物理の刻みだけを K 分割する（制御の間隔 timestep×frame_skip は変えない）。
+#   公式の推奨は刻み 1 ms 程度（choreonoid.org「シミュレーションプロジェクトの作成」）、XML は 10 ms。既定 1＝従来どおり
+_SUBSTEPS = max(1, int(os.environ.get('CNOID_SUBSTEPS') or 1))
 
 class ChoreonoidSimWorld:
     def __init__(self):
@@ -1393,6 +1396,9 @@ class ChoreonoidSimWorld:
                         timestep: float, joint_armatures: dict) -> dict:
         """body_defs = [(name, yaml_str), ...] を Choreonoid にロードする共通処理。"""
         self.actuators_map = actuators_map
+        if _SUBSTEPS > 1:
+            print(f'[choreonoid] ⭐ 物理の刻み {timestep} s を {_SUBSTEPS} 分割 → {timestep / _SUBSTEPS:g} s（CNOID_SUBSTEPS、Bug 68）', flush=True)
+            timestep = timestep / _SUBSTEPS
         self._timestep = timestep
         self.sim_item.setTimeStep(timestep)
         self._joint_damping    = {}
@@ -1563,7 +1569,7 @@ class ChoreonoidSimWorld:
                 j.u = u * ainfo['gear']
                 self._base_u[id(j)] = j.u
 
-        for _ in range(n_frames):
+        for _ in range(n_frames * _SUBSTEPS):
             for j, b in getattr(self, '_hinge_damp', ()):
                 j.u = self._base_u.get(id(j), 0.0) - b * j.dq
             _pre = self._puck_pre_tick()

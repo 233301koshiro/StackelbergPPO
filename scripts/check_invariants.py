@@ -15,6 +15,7 @@
 | 床（可動リンクの下面が床より 10 mm 以上下の step が 1 % を超える） | 9-154 |
 | 壁（ホッケー: パック・腕の先端が側壁の内面を越える） | Bug 39・9-93 |
 | 有限（軌跡の位置に NaN・inf が無い。NaN は比較が偽になり、床・壁の検査を黙って素通りする） | Bug 68（hockey_bank9_phys） |
+| 置いた瞬間に静的な箱（板・壁）に重ならない | Bug 69（初期姿勢の探索が板を見ず、重なった話が発散した） |
 
 `check_before_conclusion.py` の「不変条件」が `run(r)` を呼ぶ。返り値は (ok, 文) の列で、ok は True／None（⚠️）／False（⛔）。
 """
@@ -132,6 +133,28 @@ def _finite(d):
     return True, f'全 {len(d["ep_xpos"])} 話で位置は有限'
 
 
+def _spawn_static(d, xml):
+    t = ET.parse(ROOT / 'assets' / 'mujoco_envs' / f'{xml}.xml')
+    boxes = [(np.array(b.get('pos').split(), float), np.array(b.find('geom').get('size').split(), float), b.get('name'))
+             for b in t.findall('worldbody/body') if b.find('joint') is None and b.find('geom') is not None
+             and b.find('geom').get('type') == 'box']
+    if not boxes:
+        return True, '静的な箱なし'
+    over = []
+    for e in range(len(d['ep_init'])):
+        if d['ep_init'][e] is None or d['ep_init'][e] is False:
+            continue
+        ix, im, _ = (np.asarray(a, float) for a in d['ep_init'][e])
+        _, _, bo, rad = _caps(d, e)
+        bo[0] = 0
+        g, nm = min((gap(ix, im, bo, rad, c, h), n) for c, h, n in boxes)
+        if g < -0.005:
+            over.append((e + 1, nm, round(g * 1000)))
+    if over:
+        return False, f'⛔ 置いた瞬間に腕が静的な箱に重なる話 {len(over)}/{len(d["ep_init"])}: (話, 箱, 隙間 mm) {over[:3]}（Bug 69）'
+    return True, f'置いた瞬間に静的な箱（{len(boxes)} 個）と重ならない'
+
+
 def _floor(d):
     names = [str(n) for n in d['body_names']]
     worst, frac = 0.0, 0.0
@@ -182,6 +205,7 @@ def run(r, trace=None):
         return out + [('軌跡', None, '⚠️ 古い形式の軌跡（話ごとの記録が無い）')]
     xml = yaml.safe_load(open(ROOT / 'single_run' / r / '.hydra' / 'config.yaml'))['xml_name']
     for name, fn in (('有限', lambda: _finite(d)), ('制御入力', lambda: _ctrl(r, d)), ('触れる前', lambda: _touch(d, xml)),
+                     ('置いた瞬間の箱', lambda: _spawn_static(d, xml)),
                      ('床', lambda: _floor(d)), ('壁', lambda: _walls(d, xml))):
         try:
             out.append((name,) + fn())
