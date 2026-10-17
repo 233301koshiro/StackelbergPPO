@@ -923,15 +923,16 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 break
             cap = node.find('geom[@type="capsule"]')
             if cap is None or 'fromto' not in cap.attrib:
-                bone = np.zeros(3)
+                bone, rad = np.zeros(3), 0.0
             else:
                 ft = np.array([float(v) for v in cap.attrib['fromto'].split()])
                 bone = ft[3:] - ft[:3]
+                rad = float(cap.attrib.get('size', '0').split()[0])   # ⭐ いまの形態の半径（9-263）
             chain.append(dict(
                 name=node.attrib.get('name', '?'),
                 offset=np.array([float(v) for v in node.attrib.get('pos', '0 0 0').split()]),
                 axis=np.array([float(v) for v in jt.attrib.get('axis', '0 0 1').split()]),
-                bone=bone))
+                bone=bone, rad=rad))
             node = first_hinge_child(node)
         if not chain:
             raise RuntimeError('_parse_arm_chain: 連鎖が空')
@@ -987,6 +988,39 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         t = np.clip(t, 0.0, 1.0)
         proj = A3 + ab * t[..., None]
         return np.linalg.norm(proj - c[None, None], axis=2)
+
+    @staticmethod
+    def _seg_box_gap_batch(A3, B3, c, h, it=24):
+        """⭐ 線分（まとめて）と軸平行の箱（中心 `c`・半辺 `h`）の最短距離。戻りは (N,J)。
+
+        ⭐ 点と凸集合の距離は線分の上で凸なので、黄金分割で解く（0.618^24 ≈ 1e-5 × リンク長）。
+        ⚠️ 判定器（`judge_hockey_goal.py`）は 21 点の標本で測るので、こちらより小さくは出ない。
+        """
+        ab = B3 - A3
+        f = lambda t: np.linalg.norm(np.maximum(np.abs(A3 + ab * t[..., None] - c) - h, 0), axis=-1)
+        lo, hi = np.zeros(A3.shape[:2]), np.ones(A3.shape[:2])
+        g = (np.sqrt(5) - 1) / 2
+        for _ in range(it):
+            m1, m2 = hi - g * (hi - lo), lo + g * (hi - lo)
+            left = f(m1) <= f(m2)
+            hi, lo = np.where(left, m2, hi), np.where(left, lo, m1)
+        return np.minimum(np.minimum(f(lo), f(np.zeros_like(lo))), f(np.ones_like(lo)))
+
+    @staticmethod
+    def _static_boxes(xml):
+        """⭐ worldbody 直下の、関節を持たない box の body（板・壁）。[(中心, 半辺, 名前), ...]"""
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml if isinstance(xml, str) else xml.decode())
+        out = []
+        for b in root.findall('worldbody/body'):
+            g = b.find('geom')
+            if b.find('joint') is not None or g is None or g.get('type') != 'box':
+                continue
+            if b.get('quat') or b.get('euler') or g.get('quat') or g.get('euler'):
+                raise RuntimeError(f'_static_boxes: {b.get("name")} が回っている（軸平行しか扱わない）')
+            out.append((np.array(b.get('pos', '0 0 0').split(), float) + np.array(g.get('pos', '0 0 0').split(), float),
+                        np.array(g.get('size').split(), float), b.get('name')))
+        return out
 
     def _fk_points(self, chain, angles):
         """FK。各リンクの始点と終点をワールド座標で返す (N+1, 3) ではなく区間の list。
@@ -1053,6 +1087,26 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         chain = self._parse_arm_chain(xml)
         need = (self._get_cube_half_size() + self._get_max_arm_radius()
                 + self.env_specs.get('arm_init_margin', 0.03))
+        # ⭐⭐ 9-263（Bug 69）: `arm_init_box_gap` なら、**判定器と同じ「リンクの表面と箱の表面」で測る。**
+        #   ⛔ 従来は「線分とパックの中心 ≥ 半辺 + 最大半径 + 離隔」で、箱の角の分（最大 半辺×(√3−1)）だけ
+        #     実際の隙間が離隔より狭くなる（離隔 30 mm で隙間 17 mm、9-262 ⑤）。
+        #     ⚠️ 最大半径の控え（`_get_max_arm_radius`）は台座の球 0.1 を含むので、リンクより小さくはならない（9-263 で実測）
+        #   ⭐ 板・壁（静的な箱）にも重ねない（Bug 69: 板に重ねて置いた話で AIST が NaN になる）。
+        #   ⚠️ 既定では無効。既存 run・稼働中のキューは無影響
+        _exact = bool(self.env_specs.get('arm_init_box_gap', False))
+        if _exact:
+            _src = xml if isinstance(xml, str) else xml.decode()
+            _cg = re.search(r'<body\s+name="cube".*?<geom[^>]*size="([^"]+)"', _src, re.S)
+            cube_h = np.array(_cg.group(1).split(), float)
+            margin = float(self.env_specs.get('arm_init_margin', 0.03))
+            boxes = self._static_boxes(_src)
+            rads = np.array([lk['rad'] for lk in chain])
+            STATIC_CLEAR = float(self.env_specs.get('arm_init_static_clear', 0.005))
+            if getattr(self, '_box_gap_logged', None) != key:      # ⭐ 形態ごとに 1 回、何に対して測ったかを出す
+                self._box_gap_logged = key
+                print(f'[arm_init] ⭐ 箱の表面で測る: パック 半辺 {cube_h.tolist()} / 隙間 ≥ {margin} m / '
+                      f'静的な箱 {[n for _, _, n in boxes]} から ≥ {STATIC_CLEAR} m / リンクの半径 {rads.round(4).tolist()} '
+                      f'（旧方式の最大半径の控え {self._get_max_arm_radius():.4f}）', flush=True)
 
         mm = re.search(r'<body\s+name="cube"\s+pos="([-\d.eE]+)\s+([-\d.eE]+)\s+([-\d.eE]+)', 
                        xml if isinstance(xml, str) else xml.decode())
@@ -1105,7 +1159,16 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             ok = np.abs(np.concatenate([Pp[:, :, 1], Qq[:, :, 1]], 1)).max(1) <= clear_y
             if floor is not None:
                 ok &= np.minimum(Pp[:, :, 2], Qq[:, :, 2]).min(1) >= floor
-            ok &= self._seg_point_dist_batch(Pp, Qq, cube).min(1) >= need
+            if _exact:
+                idx = np.nonzero(ok)[0]          # ⭐ 安い条件を通った角だけ測る（速さ）
+                if len(idx):
+                    P_, Q_ = Pp[idx], Qq[idx]
+                    good = (self._seg_box_gap_batch(P_, Q_, cube, cube_h) - rads).min(1) >= margin
+                    for _c, _h, _ in boxes:
+                        good &= (self._seg_box_gap_batch(P_, Q_, _c, _h) - rads).min(1) >= STATIC_CLEAR
+                    ok[idx] = good
+            else:
+                ok &= self._seg_point_dist_batch(Pp, Qq, cube).min(1) >= need
             n = int(ok.sum())
             if n == 0:
                 return 0, None
