@@ -14,6 +14,7 @@
 | 触れる前に動かない（対象が速く動き出した step で、腕が離れている）・置いた瞬間に重ならない | Bug 55・Bug 6 |
 | 床（可動リンクの下面が床より 10 mm 以上下の step が 1 % を超える） | 9-154 |
 | 壁（ホッケー: パック・腕の先端が側壁の内面を越える） | Bug 39・9-93 |
+| 有限（軌跡の位置に NaN・inf が無い。NaN は比較が偽になり、床・壁の検査を黙って素通りする） | Bug 68（hockey_bank9_phys） |
 
 `check_before_conclusion.py` の「不変条件」が `run(r)` を呼ぶ。返り値は (ok, 文) の列で、ok は True／None（⚠️）／False（⛔）。
 """
@@ -118,6 +119,19 @@ def _touch(d, xml):
     return True, '対象は腕に触れてから動き出す'
 
 
+def _finite(d):
+    bad = []
+    for e in range(len(d['ep_xpos'])):
+        a = np.concatenate([np.asarray(d['ep_xpos'][e], float).reshape(len(d['ep_xpos'][e]), -1),
+                            np.asarray(d['ep_cubes'][e], float).reshape(len(d['ep_cubes'][e]), -1)], axis=1)
+        nf = ~np.isfinite(a).all(axis=1)
+        if nf.any():
+            bad.append((e + 1, int(np.argmax(nf)), len(a)))
+    if bad:
+        return False, f'⛔ 位置が NaN・inf になった話: (話, step, 話の長さ) {bad[:5]}（Bug 68。物理が発散して話が途中で切れる）'
+    return True, f'全 {len(d["ep_xpos"])} 話で位置は有限'
+
+
 def _floor(d):
     names = [str(n) for n in d['body_names']]
     worst, frac = 0.0, 0.0
@@ -167,7 +181,7 @@ def run(r, trace=None):
     if 'ep_xpos' not in d.files:
         return out + [('軌跡', None, '⚠️ 古い形式の軌跡（話ごとの記録が無い）')]
     xml = yaml.safe_load(open(ROOT / 'single_run' / r / '.hydra' / 'config.yaml'))['xml_name']
-    for name, fn in (('制御入力', lambda: _ctrl(r, d)), ('触れる前', lambda: _touch(d, xml)),
+    for name, fn in (('有限', lambda: _finite(d)), ('制御入力', lambda: _ctrl(r, d)), ('触れる前', lambda: _touch(d, xml)),
                      ('床', lambda: _floor(d)), ('壁', lambda: _walls(d, xml))):
         try:
             out.append((name,) + fn())
