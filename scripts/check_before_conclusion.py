@@ -26,6 +26,7 @@
 """
 import argparse
 import re
+from functools import lru_cache
 import subprocess
 import sys
 from pathlib import Path
@@ -171,10 +172,16 @@ def ck_achieved(r):
     return True, f'対象が {moved:.3f} m 動いた' + warn
 
 
+@lru_cache(maxsize=None)
+def _audit_output():
+    """audit_run_validity.py は全 run を 1 回で監査する（約 8.5 秒）。--all で run ごとに回していたので 1 回だけにする（2026-10-19）。"""
+    return subprocess.run([sys.executable, str(ROOT / 'scripts' / 'audit_run_validity.py')],
+                          capture_output=True, text=True, cwd=ROOT).stdout
+
+
 def ck_version(r):
     """同じ xml_name の他 run と版が違わないか（9-105）。"""
-    out = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'audit_run_validity.py')],
-                         capture_output=True, text=True, cwd=ROOT).stdout
+    out = _audit_output()
     seg = out.split('同じ xml_name なのに中身が違う組')[-1]
     for block in seg.split('⛔ ')[1:]:
         if re.search(rf'^\s+{re.escape(r)}\s', block, re.M):
