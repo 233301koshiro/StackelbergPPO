@@ -1384,7 +1384,10 @@ class ChoreonoidSimWorld:
             # ⭐ env step の最後に当て直すため控える（2026-09-26、A'）。
             #   ⛔ **反射した直後の残り tick で、接触解決が押し出しながら速度を 2.3 倍にする。**
             #     反射の計算自体は検証済み（比 0.750）なので、**適用のタイミングだけの問題**。
-            self._puck_dq_target = (k, j.dq)
+            # ⛔ Bug 70（2026-10-19、系譜 9-263 ⑥）: 当て直しを env step の境で切っていたので、最後の tick で
+            #   発火すると次の step の接触解決が押し出して比が 0.75 → 約 1.7 になった。
+            #   ⭐ 発火した tick から 1 env step 分の tick 数だけ、step の境をまたいで当て直す。
+            self._puck_dq_target = (k, j.dq, getattr(self, '_ticks_per_step', 4))
             n_hit += 1
             if os.environ.get('HOCKEY_WALL_DEBUG'):
                 print(f'[wall] {_nm} 軸{"xy"[k]} 食い込み {depth[k]*1000:5.1f} mm  '
@@ -1531,6 +1534,7 @@ class ChoreonoidSimWorld:
         )
 
     def reset(self) -> dict:
+        self._puck_dq_target = None      # 反射の当て直しを話の境で持ち越さない（Bug 70）
         self.sim_item.stopSimulation()
         IU.processEvent()  # flush stop signal before restart
         for item in self.body_items.values():
@@ -1569,6 +1573,7 @@ class ChoreonoidSimWorld:
                 j.u = u * ainfo['gear']
                 self._base_u[id(j)] = j.u
 
+        self._ticks_per_step = n_frames * _SUBSTEPS     # 反射の当て直しの長さ（Bug 70）
         for _ in range(n_frames * _SUBSTEPS):
             for j, b in getattr(self, '_hinge_damp', ()):
                 j.u = self._base_u.get(id(j), 0.0) - b * j.dq
@@ -1614,28 +1619,22 @@ class ChoreonoidSimWorld:
             #     ⭐ **各 tick で速度を固定するのは、その近似にあたる。**
             _tgt = getattr(self, '_puck_dq_target', None)
             if _tgt is not None:
-                _k, _want = _tgt
+                _k, _want, _left = _tgt
                 self._puck_joints[_k].dq = _want
+                self._puck_dq_target = (_k, _want, _left - 1) if _left > 1 else None
             if _apre is not None:
                 self._arm_blocks = (getattr(self, '_arm_blocks', 0)
                                     + self._block_arm_on_walls(_apre))
 
-        # ⭐ 反射した速度を env step の最後に当て直す（接触解決が足した分を打ち消す）
+        # ⭐ 当て直しが次の env step へ持ち越されるとき（Bug 70。tick の中で当て直し済みなので、ここでは消さない）
         tgt = getattr(self, '_puck_dq_target', None)
-        if tgt is not None:
-            k, want = tgt
-            j = self._puck_joints[k]
-            got = j.dq
-            j.dq = want
-            self._puck_dq_target = None
-            if os.environ.get('HOCKEY_WALL_DEBUG'):
-                print(f'[wall] 当て直し 軸{"xy"[k]}  接触解決後 {got:+.4f} → {want:+.4f}'
-                      f'（接触が {abs(got / want) if want else float("nan"):.2f} 倍していた）',
-                      flush=True)
+        if tgt is not None and os.environ.get('HOCKEY_WALL_DEBUG'):
+            print(f'[wall] 当て直しを次の step へ持ち越す 軸{"xy"[tgt[0]]} {tgt[1]:+.4f} 残り {tgt[2]} tick', flush=True)
 
         return _get_state_dict(self._sim_body_entries)
 
     def set_state_cmd(self, qpos: list, qvel: list) -> dict:
+        self._puck_dq_target = None      # 外から入れた速度を反射の当て直しで上書きしない（Bug 70）
         if not self._sim_body_entries:
             return {'qpos': qpos, 'qvel': qvel, 'body_xpos': {}, 'body_xmat': {}}
         _set_state(self._sim_body_entries, qpos, qvel)
