@@ -357,6 +357,9 @@ def main():
         # md には残す（作業に要る）が、配布物である PDF からは落とす。
         md_text = re.sub(r'^> \*\*ドラフト管理\*\*.*?(?=\n(?!>)|\Z)', '',
                          md_text, flags=re.DOTALL | re.M)
+        # 本文中の「> 📝 **執筆メモ（本文に残さない）**」も同じく落とす（2026-10-19、PDF に 4 箇所出ていた）
+        md_text = re.sub(r'^> 📝 \*\*執筆メモ.*?(?=\n(?!>)|\Z)', '',
+                         md_text, flags=re.DOTALL | re.M)
         latex_body = md_to_latex_body(md_text, unnumbered=unnumbered,
                                       merge=opts.get('merge', False),
                                       title_override=opts.get('title'))
