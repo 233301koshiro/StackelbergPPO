@@ -792,6 +792,10 @@ Remote Control で**同じセッション**をスマホからも触る（[作業
 **スマホからで問題ないもの**: 進捗の確認（`tail single_run/queue_e2e_a1.log`）、
 docs の執筆・相談、結果の解釈、通常のコミット。
 
+ブランチ（2026-10-05 決定、ユーザー判断）
+- **全体に効く変更は `main`。RobotAssembler（軸6）専用のコードだけ、着手時に `main` から `feat/layer4-robotassembler` を切り直して書く**（RA は今のシステムとのギャップが多いので、main を壊さず戻せるように隔離する）。台帳・記録は常に `main`。理由と経緯は [研究方針.md「ブランチの使い分け」](docs/研究応用/方針/研究方針.md)
+- run はブランチに紐づかないので、投入前にキュー script へ `git rev-parse --short HEAD` を書く
+
 権限モード（2026-09-02 以降）
 - `.claude/settings.json` の `permissions.defaultMode` は **`auto`**。承認プロンプトは出ない。
 - 代わりに `permissions.deny` で**復元できないもの**を機械的に止めている。
