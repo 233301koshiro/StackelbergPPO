@@ -100,6 +100,7 @@ ConstraintForceSolver.cpp で defaultCoefficientOfRestitution が出るのは 4 
 ⭐⭐ **これは回避策ではなく、唯一の手段だった**（系譜 9-198 でソースまで確認）。
 ⚠️ **修論には「壁との接触は物理エンジンではなく速度反射としてモデル化した」と明記する。**
 ⭐ エアホッケーの壁は実際ほぼ弾性（e=0.6〜0.8）なので、モデル化としても正当である。
+⭐ **反射した速度は、発火した tick から 1 env step 分の tick 数（`frame_skip` × `CNOID_SUBSTEPS`）だけ、env step の境をまたいで当て直す**（Bug 70、2026-10-19）。⛔ それ以前は env step の境で切っていたため、最後の tick で発火すると次の step の接触解決が押し出し、比が 0.75 ではなく約 1.7 になっていた（`scripts/probe_wall_hit_tick.py`）。
 
 ### ⚠️ では Bullet に替えればいいのでは？ — **替えない**
 
