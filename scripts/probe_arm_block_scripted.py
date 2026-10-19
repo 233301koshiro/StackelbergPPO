@@ -106,13 +106,14 @@ def main():
     if inner is None:
         raise RuntimeError('⛔⛔ `_arm_caps` を持つ層が見つからない')
 
-    boxes = list(getattr(inner, '_wall_boxes', []) or [])
+    boxes = list(getattr(inner, '_arm_wall_boxes', None) or getattr(inner, '_wall_boxes', []) or [])
+    D = len(boxes[0][1]) if boxes else 2          # ブロックの判定の次元（Bug 71。表示だけ）
     caps = dict(getattr(inner, '_arm_caps', {}) or {})
     eb = getattr(inner, '_arm_body', None)
     sweep = getattr(inner, '_ARM_SWEEP', None)
     print(f'[scr] ⭐ 壁 {len(boxes)} 個: {[b[0] for b in boxes]}', flush=True)
     print(f'[scr] ⭐ 腕のカプセル本体: {len(caps)} / {eb.numLinks if eb else 0} リンク', flush=True)
-    print(f'[scr] ⭐ 掃過の点数 _ARM_SWEEP = {sweep}', flush=True)
+    print(f'[scr] ⭐ 掃過の点数 _ARM_SWEEP = {sweep} / ブロックの判定 {D} 次元 / 数える高さ {"壁の高さのみ" if os.environ.get("PROBE_TIP_Z") == "wall" else "全部"}', flush=True)
     if not boxes or not caps or sweep is None:
         raise RuntimeError('⛔⛔ 壁・カプセル・掃過のどれかが取れない。測っても意味が無い')
 
@@ -125,25 +126,30 @@ def main():
 
     # 目標: 先端が x∈[0.6,1.2] かつ |y|∈[0.30,0.45]（壁の内面 0.50 のすぐ手前）
     best = None
-    for th0 in np.linspace(-np.pi, np.pi, 181):
-        for th1 in np.linspace(-1.5, 1.5, 61):
-            segs = env._fk_points(chain, [th0, th1, 0.0, 0.0])
+    # ⭐ 壁の高さに置くときは第3関節も振る（第2関節だけでは先端が壁の高さに来ない形がある。Bug 71 の確かめで発覚）
+    th2s = np.linspace(-1.5, 1.5, 31) if os.environ.get('PROBE_TIP_Z') == 'wall' else [0.0]
+    for th0, th1, th2 in ((a, b, c) for a in np.linspace(-np.pi, np.pi, 181)
+                          for b in np.linspace(-1.5, 1.5, 61) for c in th2s):
+            segs = env._fk_points(chain, [th0, th1, th2, 0.0])
             t = segs[-1][1]
             if not (0.6 <= t[0] <= 1.2 and 0.30 <= abs(t[1]) <= 0.45):
                 continue
+            # ⭐ Bug 71: 3 次元のブロック（`HOCKEY_ARM_BLOCK=3d`）を試すときは、先端を壁の高さに置く
+            if os.environ.get('PROBE_TIP_Z') == 'wall' and not (0.16 <= t[2] <= 0.26):
+                continue
             score = abs(abs(t[1]) - 0.42)            # 壁にできるだけ近い
             if best is None or score < best[0]:
-                best = (score, th0, th1, t)
+                best = (score, th0, th1, th2, t)
     if best is None:
         raise RuntimeError('⛔⛔ 壁のすぐ内側に先端を置ける関節角が見つからない。'
                            '⚠️ この形態では台本を組めない')
-    _s, th0, th1, tip = best
-    print(f'[scr] ⭐⭐ 台本の初期姿勢: ヨー {np.degrees(th0):+.1f}° / 第2関節 {np.degrees(th1):+.1f}° '
+    _s, th0, th1, th2, tip = best
+    print(f'[scr] ⭐⭐ 台本の初期姿勢: ヨー {np.degrees(th0):+.1f}° / 第2関節 {np.degrees(th1):+.1f}° / 第3関節 {np.degrees(th2):+.1f}° '
           f'→ 先端 ({tip[0]:.3f},{tip[1]:.3f},{tip[2]:.3f})', flush=True)
 
     q = np.array(env.data.qpos, dtype=float)
     v = np.zeros_like(np.array(env.data.qvel, dtype=float))
-    q[0], q[1], q[2], q[3] = th0, th1, 0.0, 0.0
+    q[0], q[1], q[2], q[3] = th0, th1, th2, 0.0
     # ⭐ 壁へ向かう向きにヨーを回す（先端の y が増える向き）
     v[0] = WYAW if tip[1] >= 0 else -WYAW
     env.set_state(q, v)
@@ -151,6 +157,7 @@ def main():
 
     # ── 走らせて測る ───────────────────────────────────
     inside, outside_max, n = 0, 0.0, 0
+    z_in_xy = []                                       # ⭐ Bug 71: 壁の xy の中に入った点の高さ（越えたのか、壁の高さで入ったのか）
     reach_y, reach_x = 0.0, -9.9
     fires0 = getattr(inner, '_arm_blocks', 0)
     for _ in range(STEPS):
@@ -176,12 +183,17 @@ def main():
             o = np.asarray(bx[nm], dtype=float)
             R = np.asarray(bm[nm], dtype=float).reshape(3, 3)
             c = caps.get(nm)
-            pts = [o[:2]] if c is None else [(o + R @ c[0])[:2], (o + R @ c[1])[:2]]
+            pts = [o] if c is None else [o + R @ c[0], o + R @ c[1]]
             for p in pts:
+                # ⭐ PROBE_TIP_Z=wall のときは、ブロックの有無・次元によらず「壁の高さ（z 0.1525〜0.2725）の点」だけを数える
+                #   （ブロックなし・xy・3d を同じ物差しで比べるため。この XML の壁と板は z の範囲が同じ）
+                at_h = os.environ.get('PROBE_TIP_Z') != 'wall' or 0.1525 <= p[2] <= 0.2725
                 for _nm2, lo, hi in boxes:
-                    if np.all(p >= lo[:2]) and np.all(p <= hi[:2]):
-                        inside += 1
-                if 0.15 <= p[0] <= 1.95:
+                    if np.all(p[:2] >= lo[:2]) and np.all(p[:2] <= hi[:2]):
+                        z_in_xy.append(float(p[2]))
+                        if at_h:
+                            inside += 1
+                if 0.15 <= p[0] <= 1.95 and at_h:
                     outside_max = max(outside_max, abs(p[1]) - 0.90)
                 reach_y = max(reach_y, abs(p[1]))
                 reach_x = max(reach_x, p[0])
@@ -192,6 +204,9 @@ def main():
     print(f'[scr]    側壁の内面 |y|=0.50 ・ 外面 |y|=0.90 ・ 箱の x 範囲 [0.15, 1.95]')
     print(f'[scr] ⭐ ブロックの発火回数: {fires}')
     print(f'[scr] ⭐⭐ 腕が壁の中の標本: {inside}')
+    if z_in_xy:
+        print(f'[scr] ⭐ 壁・板の xy の中に入った点 {len(z_in_xy)} 個の z: {min(z_in_xy):.3f}〜{max(z_in_xy):.3f} m'
+              f'（壁の高さ 0.1525〜0.2725）')
     print(f'[scr] ⭐⭐⭐ 側壁の外面を越えた最大（x∈[0.15,1.95] の点のみ）: {outside_max*1000:+.1f} mm')
     # ⭐⭐ **判定の順序が大事**（2026-10-02）。
     #   ⛔ 「|y| が内面 0.50 に届かない」を先に見ると、**ブロックが止めた場合も
@@ -214,4 +229,13 @@ def main():
     return 0
 
 
-main()      # ⚠️ Bug 43: Choreonoid は sys.exit(0) を受け付けない
+# ⚠️ Bug 43・系譜 9-257: Choreonoid はスクリプトが終わっても自分では終わらない。os._exit で落とす（例外のときも）
+try:
+    main()
+except Exception:
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    os._exit(1)
+sys.stdout.flush()
+os._exit(0)
