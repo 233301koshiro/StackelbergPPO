@@ -1016,7 +1016,7 @@ class ChoreonoidSimWorld:
         if self._arm_block and getattr(self, '_wall_boxes', None):
             print(f'[choreonoid] 腕の壁貫通を塞ぐ: 有効'
                   f'（リンク {self._arm_body.numLinks} 本 / 箱 {len(self._wall_boxes)} 個 / '
-                  f'掃過 {self._ARM_SWEEP} 点）', flush=True)
+                  f'掃過 {self._ARM_SWEEP} 点 / 判定 {len(self._arm_wall_boxes[0][1])} 次元）', flush=True)
         if getattr(self, '_wall_boxes', None):
             for sb, _ in entries:
                 eb = sb.body()
@@ -1175,6 +1175,7 @@ class ChoreonoidSimWorld:
         """
         from lxml import etree
         self._wall_boxes = []
+        self._arm_wall_boxes = []        # 腕の壁ブロック用（Bug 71。`HOCKEY_ARM_BLOCK=3d` なら高さも持つ）
         self._puck_dq_target = None
         self._puck_joints = None
         self._puck_body = None
@@ -1200,6 +1201,16 @@ class ChoreonoidSimWorld:
             sz = np.array([float(x) for x in g.get('size').split()], dtype=float)
             c = pos + gp
             self._wall_boxes.append((nm, c[:2] - sz[:2], c[:2] + sz[:2]))
+            # ⛔ Bug 71（2026-10-19、系譜 9-263 ⑧）: xy だけだと腕にとって壁と板が高さ無限の柱になり、
+            #   板の 18〜30 cm 上を通る腕を止めて話の終わりまで凍らせた。⭐ `=3d` で高さも見る。
+            #   既定（`=1`）は xy のまま（過去の run の再生を変えない）。
+            #   ⚠️ 下端は床まで伸ばす: 壁と板は宙に浮いた箱で、その下（台があるはずの所）を腕がくぐれた
+            #   （probe_arm_block_scripted.py で z 0.06〜0.09 をくぐった）。上を越えるのだけを許す。
+            d = 3 if os.environ.get('HOCKEY_ARM_BLOCK') == '3d' else 2
+            lo, hi = c[:d] - sz[:d], c[:d] + sz[:d]
+            if d == 3:
+                lo[2] = -np.inf
+            self._arm_wall_boxes.append((nm, lo, hi))
         # パックの半幅（反射の判定に要る）
         for body in wb.findall('body'):
             if body.get('name') != 'cube':
@@ -1309,9 +1320,10 @@ class ChoreonoidSimWorld:
     def _arm_in_wall(self):
         """腕のどれかのリンク（線分）が壁の箱に入っているか。"""
         eb = self._arm_body
+        D = len(self._arm_wall_boxes[0][1])          # 2（xy）か 3（Bug 71、`HOCKEY_ARM_BLOCK=3d`）
         for k in range(eb.numLinks):
             lk = eb.link(k)
-            a = np.asarray(lk.p, dtype=float)[:2]
+            a = np.asarray(lk.p, dtype=float)[:D]
             # ⭐ **測定（`check_obstacle_clearance` / `plot_run`）と同じ定義にそろえる**:
             #   リンクの実体は「自分の原点 → 原点 + R·bone_offset」（カプセル本体）。
             #   ⛔ **「親→子の原点」だと末端リンクの本体が丸ごと抜ける**（2026-09-27 に実測）。
@@ -1319,9 +1331,9 @@ class ChoreonoidSimWorld:
             if cap is not None:
                 R = np.asarray(lk.R, dtype=float).reshape(3, 3)
                 o = np.asarray(lk.p, dtype=float)
-                segs = [((o + R @ cap[0])[:2], (o + R @ cap[1])[:2])]
+                segs = [((o + R @ cap[0])[:D], (o + R @ cap[1])[:D])]
             else:
-                bs = [np.asarray(eb.link(c).p, dtype=float)[:2]
+                bs = [np.asarray(eb.link(c).p, dtype=float)[:D]
                       for c in range(eb.numLinks) if eb.link(c).parent is lk]
                 segs = [(a, b) for b in bs] or [(a, a)]
             for p0, p1 in segs:
@@ -1331,7 +1343,7 @@ class ChoreonoidSimWorld:
                 #   ⭐ まず**線分の外接箱**と壁の外接箱が重なるかだけ見る。重ならなければ即棄却。
                 smin = np.minimum(p0, p1)
                 smax = np.maximum(p0, p1)
-                for _nm, lo, hi in self._wall_boxes:
+                for _nm, lo, hi in self._arm_wall_boxes:
                     if np.any(smax < lo) or np.any(smin > hi):
                         continue                      # ⭐ 箱が離れている。細かく見るまでもない
                     # ⛔⛔ `self.` を落として `NameError` を出した（9-210 の自作バグ、9-212 で発覚）。
