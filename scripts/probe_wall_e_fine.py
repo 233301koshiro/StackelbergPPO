@@ -22,7 +22,7 @@
     HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_WALL_DEBUG=1 \\
     /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/probe_wall_e_fine.py
 
-⚠️ Bug 43: **パイプへ繋がず必ずファイルへリダイレクト。**Choreonoid は起動だけで約 105 秒（⛔ 2026-10-14 の実測では 2 秒。Bug 43）。
+⚠️ Bug 43: **パイプへ繋がず必ずファイルへリダイレクト。**Choreonoid の起動は約 2 秒（系譜 9-256）。
 """
 import os
 import sys
@@ -119,4 +119,14 @@ def main():
     return 0
 
 
-main()      # ⚠️ Bug 43: Choreonoid は sys.exit(0) を受け付けない
+# ⚠️ Bug 43・系譜 9-257: Choreonoid はスクリプトが終わっても自分では終わらない（sys.exit も main() だけも同じ）。
+#   os._exit で落とす（例外のときも）。2026-10-20: CLAUDE.md の取り下げ済みの命令「末尾は main() だけ」に従っていたのを直した
+try:
+    main()
+except Exception:
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    os._exit(1)
+sys.stdout.flush()
+os._exit(0)

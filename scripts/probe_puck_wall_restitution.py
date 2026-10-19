@@ -91,4 +91,14 @@ def main():
         print('[pw] ⚠️ **壁まで届いていない。**初速か可動範囲を確認すること')
 
 
-main()
+# ⚠️ Bug 43・系譜 9-257: Choreonoid はスクリプトが終わっても自分では終わらない（sys.exit も main() だけも同じ）。
+#   os._exit で落とす（例外のときも）。2026-10-20: CLAUDE.md の取り下げ済みの命令「末尾は main() だけ」に従っていたのを直した
+try:
+    main()
+except Exception:
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    os._exit(1)
+sys.stdout.flush()
+os._exit(0)
