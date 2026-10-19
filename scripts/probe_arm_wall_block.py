@@ -15,7 +15,7 @@
 ⛔ **すり抜けが再現できなければプローブが壁を見ていない。**
 
 ⚠️ **出力はファイルへリダイレクトすること**（Bug 43。パイプだと timeout 時に 1 行も残らない）。
-⚠️ **Choreonoid は起動だけで約 105 秒**（⛔ 2026-10-14 の実測では 2 秒。Bug 43）かかるので timeout は 1200 秒以上。
+⚠️ timeout はプローブの所要時間から決める（Choreonoid の起動は約 2 秒。Bug 43・系譜 9-256）。
 
 起動:
   XML=e2e_hockey_easy USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
@@ -178,4 +178,14 @@ def main():
     print('[probe] 完了')
 
 
-main()   # ⚠️ sys.exit を使わない（Bug 43。Choreonoid が受け付けない）
+# ⚠️ Bug 43・系譜 9-257: Choreonoid はスクリプトが終わっても自分では終わらない（sys.exit も main() だけも同じ）。
+#   os._exit で落とす（例外のときも）。2026-10-20: CLAUDE.md の取り下げ済みの命令「末尾は main() だけ」に従っていたのを直した
+try:
+    main()
+except Exception:
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    os._exit(1)
+sys.stdout.flush()
+os._exit(0)

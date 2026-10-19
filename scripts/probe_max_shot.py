@@ -16,7 +16,7 @@
     timeout -k 30 2400 /choreonoid_ws/install/bin/choreonoid --no-window \\
     --python scripts/probe_max_shot.py > out.txt 2>&1
 
-⚠️ Bug 43: **パイプへ繋がず必ずファイルへ。**起動だけで約 105 秒（⛔ 2026-10-14 の実測では 2 秒。Bug 43）。
+⚠️ Bug 43: **パイプへ繋がず必ずファイルへ。**Choreonoid の起動は約 2 秒（系譜 9-256）。
 """
 import itertools
 import os
@@ -154,4 +154,14 @@ def main():
               f'（⚠️ 構えは {len(poses)} 個の乱択なので下限付き）')
 
 
-main()
+# ⚠️ Bug 43・系譜 9-257: Choreonoid はスクリプトが終わっても自分では終わらない（sys.exit も main() だけも同じ）。
+#   os._exit で落とす（例外のときも）。2026-10-20: CLAUDE.md の取り下げ済みの命令「末尾は main() だけ」に従っていたのを直した
+try:
+    main()
+except Exception:
+    import traceback
+    traceback.print_exc()
+    sys.stdout.flush()
+    os._exit(1)
+sys.stdout.flush()
+os._exit(0)
