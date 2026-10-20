@@ -9,7 +9,10 @@
 - ⭐ 離れたリンクの組はそのまま、**隣り合う組は関節のまわり（2 本の半径の和）を両方から削ってから**見る
   （関節での自然な重なりは数えず、**子が親の上へ折り返す**重なりだけを拾う）
 - 根元の取り付け用の球（先頭の body）は、骨の向きが運動学に効かない（9-154）ので**半径 r の球**として扱う
-- ⚠️ カプセルの延長分（`ext_start`）は軌跡に無いので含めない → **すり抜けを少なめに数える側**にずれる
+- ⭐ 2026-10-20（Bug 72）: **離れた組は本当のカプセル**（軌跡の `cap_fromto`、関節の後ろへのはみ出し `ext_start` を含む）で測る。
+  ⛔ 旧版はボーンだけで測り、dist の `11` が台座の球に 13 cm 食い込んでいたのを 0 mm と出した。
+  ⚠️ `cap_fromto` の無い古い軌跡は従来どおりボーンで測る（はみ出しは見えない。出力に「始点なし」と出す）。
+  隣り合う組はボーンのまま（はみ出しは親の中へ入るのが普通で、Choreonoid も隣り合う組は当たり判定から外す）
 - ⚠️ 軌跡は採用した話のうち中央値の 1 話（`xpos`）。全話ではない
 
     python3 scripts/check_self_penetration.py               # 全 run
@@ -70,10 +73,18 @@ def self_check():
         hit = E._self_overlaps(segs, list(g), [-1] + list(range(len(b) - 1)))
         assert bool(hit) == want, (r, hit)
     print('✅ 自分のリンクどうしの初期接触の門（Bug 56）: 固着した形を捕まえ、正常な形は通す')
+    # ⭐ Bug 72: 関節の後ろへはみ出したカプセルの食い込みを拾えるか（既知の失敗の再現）。
+    #   `arm_trace_cap.npz` は 2026-10-20 に新しい `record_arm_trace.py` で取り直した軌跡（元の arm_trace.npz は残してある）
+    f = 'single_run/tripo_pjd_dist_phys/trace/arm_trace_cap.npz'
+    if os.path.exists(f):
+        far = measure(f)[4]
+        assert far[2] and far[0] > 0.05 and far[3] == ('0', '11'), far
+        print(f'✅ 関節の後ろへのはみ出し（Bug 72）: dist の 0×11 の食い込み {far[0]*1000:.0f} mm を拾う')
 
 
 def measure(run):
-    p = f'single_run/{run}/trace/arm_trace.npz'
+    # run 名か、軌跡（.npz）のパス（run の軌跡を上書きせずに確かめるとき）
+    p = run if run.endswith('.npz') else f'single_run/{run}/trace/arm_trace.npz'
     d = np.load(p, allow_pickle=True)
     x, R, b = d['xpos'], d['xmat'], d['bone_offset']
     rad = np.asarray(d['geom_size'], float) if 'geom_size' in d.files else np.full(len(b), 0.03)
@@ -82,15 +93,23 @@ def measure(run):
     p0 = x.copy()
     p1 = x + np.einsum('tlij,lj->tli', R, b)
     p1[:, 0] = p0[:, 0]                       # 根元は球として扱う（9-154）
+    # ⭐ Bug 72: 離れた組は本当のカプセル（始点が関節の後ろにありうる）で測る
+    cap = np.asarray(d['cap_fromto'], float) if 'cap_fromto' in d.files and len(d['cap_fromto']) == L else None
+    if cap is not None and np.isfinite(cap).all():
+        q0 = x + np.einsum('tlij,lj->tli', R, cap[:, :3])
+        q1 = x + np.einsum('tlij,lj->tli', R, cap[:, 3:])
+    else:
+        cap, q0, q1 = None, p0, p1
     worst, frac, pair_w = 0.0, 0.0, None
     far = [0.0, 0.0]                          # 離れた組だけの最大めり込み・step の割合
+    pair_far = None
     pairs = [(i, j, False) for i in range(L) for j in range(i + 2, L)]
     # ⭐ 隣り合う組（根元の球は除く）も見る。⛔ ただし関節では必ず重なるので、
     #   **関節のまわり（2 本の半径の和）を両方から削ってから**重なりを見る → 子が親の上へ**折り返す**ときだけ拾う。
     #   ⛔ 初稿は隣り合う組を丸ごと外しており、Target-Pusher の「上腕が台座の中に折りたたまれる」を数えなかった
     pairs += [(i, i + 1, True) for i in range(1, L - 1)]
     for i, j, adj in pairs:
-        a0, a1, c0, c1 = p0[:, i], p1[:, i], p0[:, j], p1[:, j]
+        a0, a1, c0, c1 = (p0[:, i], p1[:, i], p0[:, j], p1[:, j]) if adj else (q0[:, i], q1[:, i], q0[:, j], q1[:, j])
         if adj:
             m = rad[i] + rad[j]
             da, dc = a1 - a0, c1 - c0
@@ -106,7 +125,11 @@ def measure(run):
             worst, pair_w = float(depth.max()), (str(d['body_names'][i]), str(d['body_names'][j]))
         frac = max(frac, f)
         if not adj:
+            if float(depth.max()) > far[0]:
+                pair_far = (str(d['body_names'][i]), str(d['body_names'][j]))
             far = [max(far[0], float(depth.max())), max(far[1], f)]
+    far.append(cap is not None)               # ⭐ Bug 72: はみ出しまで見たか
+    far.append(pair_far)
     return worst, frac, pair_w, T, far
 
 

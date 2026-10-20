@@ -116,6 +116,17 @@ GEAR_OVR = [float(v) for v in _go.split(',')] if _go else None
 if STOCH:
     print('[trace] ⭐ 確率的な行動で回す（学習中の探索と同じ。TRACE_STOCHASTIC=1）', flush=True)
 
+def _cap_fromto(b):
+    """body の形の線分（局所座標の始点 3 ＋ 終点 3）。カプセルは `fromto`、球は `pos` を両端に。無ければ nan"""
+    g = b.geoms[0].node if getattr(b, 'geoms', None) else None
+    if g is None:
+        return np.full(6, np.nan)
+    if g.get('fromto'):
+        return np.array(g.get('fromto').split(), dtype=float)
+    p = np.array((g.get('pos') or '0 0 0').split(), dtype=float)
+    return np.concatenate([p, p])
+
+
 names = None
 bone = None
 geom_size = None
@@ -173,7 +184,11 @@ for k in range(N_EP):
                          # ⭐ 2026-10-09: ギア比も話ごとに（関節の無い body は nan）。形の崩れを追うため
                          np.array([float(b.joints[0].actuator.gear)
                                    if getattr(b, 'joints', None) and b.joints[0].actuator is not None else np.nan
-                                   for b in env.robot.bodies]))
+                                   for b in env.robot.bodies]),
+                         # ⭐ 2026-10-20（Bug 72）: カプセルの始点と終点（body の局所座標、XML の `fromto` そのもの）。
+                         #   ⛔ ボーンだけでは**関節の後ろへのはみ出し（設計変数 `ext_start`）**が見えず、
+                         #     dist の `11` が台座の球に 13 cm 食い込んでいたのを検査が 0 mm と出した。球は始点＝終点＝`pos`
+                         np.array([_cap_fromto(b) for b in env.robot.bodies]))
             if names is None:
                 names = [b.name for b in env.robot.bodies]
                 bone, geom_size = shape[:2]
@@ -233,6 +248,9 @@ np.savez_compressed(out, replay_env=json.dumps(REPLAY_ENV),
                     ep_bone=np.array([e[4][0] if e[4] else None for e in eps], dtype=object),
                     ep_geom=np.array([e[4][1] if e[4] else None for e in eps], dtype=object),
                     ep_gear=np.array([e[4][2] if e[4] else None for e in eps], dtype=object),
+                    # ⭐ Bug 72: 話ごとのカプセルの始点・終点（局所座標、(L, 6)）。`cap_fromto` は中央値の話の分
+                    ep_cap=np.array([e[4][3] if e[4] else None for e in eps], dtype=object),
+                    cap_fromto=rep[4][3] if rep[4] else np.zeros((0, 6)),
                     # ⭐ 9-225: 話ごとの報酬の合計と制御コストの合計（どちらが効いているかを分ける）
                     ep_reward=np.array([e[5][0] for e in eps]), ep_reward_ctrl=np.array([e[5][1] for e in eps]),
                     # ⭐ 9-240: step ごとの |制御入力| の最大。ctrlrange ±1 は Choreonoid 側で切られない
