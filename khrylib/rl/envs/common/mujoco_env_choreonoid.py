@@ -14,7 +14,7 @@ from gym import spaces
 from gym.utils import seeding
 
 from cnoid.Base import RootItem
-from cnoid.Body import BodyLoader
+from cnoid.Body import BodyLoader, Link
 from cnoid.BodyPlugin import WorldItem, BodyItem, AISTSimulatorItem, SimulatorItem
 import cnoid.IRSLUtil as IU
 
@@ -1493,6 +1493,11 @@ class ChoreonoidSimWorld:
                 if not getattr(self, '_self_col_announced', False):
                     print('[choreonoid] ⭐ 腕の自己干渉を有効にした（隣り合うリンクは除外）', flush=True)
                     self._self_col_announced = True
+            # ⭐ 接触点の記録（`CNOID_CONTACT_LOG=1`、`probe_contact_log.py` 用。系譜 9-264 の NaN 調べ）。
+            #   ConstraintForceSolver は開始時に印を見るので、開始前に付ける。記録するだけで物理は変えない
+            if os.environ.get('CNOID_CONTACT_LOG'):
+                for _k in range(b.numLinks):
+                    b.link(_k).mergeSensingMode(Link.LinkContactState)
             body_item.storeInitialState()
             self.world_item.addChildItem(body_item)
             # floor_itemと同様、追加直後にチェックしないとScene上に表示されない。
