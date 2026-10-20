@@ -6,7 +6,7 @@
 他の検査も見ない（ログと md の数値の突き合わせでも、既知の古い主張の検索でもない）。
 実際に 2 件が古いか誤っていた: 起動 105 秒（実測 2 秒）・「sys.exit(0) のせいで exit 137」（実際は Choreonoid が自分では終わらず timeout が殺す）。
 
-    python3 scripts/check_env_claims.py          # 約 1 分（Choreonoid を 2 回起動）
+    python3 scripts/check_env_claims.py          # 約 1 分半（Choreonoid を 4 回起動）
 
 主張を足すときは CLAIMS に 1 行（主張・書いてある場所・確かめ方）。確かめられない主張は足さない（プロンプト ② の G で人が見る）。
 """
@@ -47,6 +47,22 @@ def no_self_exit():
                               f'{"自分では終わらず timeout が止めた" if hung else "自分で終わった"}（exit {rc}・{s:.0f} 秒）')
 
 
+def ignores_sigterm():
+    """6 秒で SIGTERM、効かなければ 10 秒後に KILL。KILL まで生きていれば「SIGTERM を無視する」（2026-10-20 に足した）"""
+    out = []
+    for name, src in (('待機', 'print("ALIVE", flush=True)\n'),
+                      ('Python 実行中', 'import time\nprint("ALIVE", flush=True)\nwhile True:\n    time.sleep(0.2)\n')):
+        with tempfile.TemporaryDirectory() as d:
+            py = Path(d) / 'p.py'
+            py.write_text(src)
+            t = time.time()
+            rc = subprocess.call(['timeout', '-s', 'TERM', '-k', '10', '6', CHOREONOID, '--no-window', '--python', str(py)],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=ROOT)
+            out.append((name, rc in (137, -9) and time.time() - t > 14, rc, time.time() - t))
+    return all(o[1] for o in out), '・'.join(f'{n}: exit {rc}・{s:.0f} 秒' for n, _, rc, s in out) + \
+        '（16 秒＝SIGTERM の後も生き、KILL で落ちた）'
+
+
 def no_push_hook():
     hooks = [p for p in (ROOT / '.git' / 'hooks').iterdir() if not p.name.endswith('.sample')]
     bad = [p.name for p in hooks if 'push' in p.read_text(errors='replace')]
@@ -57,6 +73,8 @@ CLAIMS = [
     ('Choreonoid の起動は約 2 秒（旧記述 105 秒）', 'CLAUDE.md §5-2 ⑤-3・Bug 43', startup),
     ('Choreonoid は sys.exit(0) で TypeError、スクリプトが終わっても自分では終わらない → 末尾は os._exit(0)',
      'CLAUDE.md §5-2 ⑤-3・Bug 43 追記・record_arm_trace.py 末尾', no_self_exit),
+    ('Choreonoid は SIGTERM を無視する（待機中も Python 実行中も）→ 止めるなら kill -9',
+     'デバッグ戦記 Bug 26・新しいチャットの始め方 ②', ignores_sigterm),
     ('コミットは自動では push されない', 'CLAUDE.md §6 権限表', no_push_hook),
 ]
 
