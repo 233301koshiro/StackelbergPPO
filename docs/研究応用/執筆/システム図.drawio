@@ -121,7 +121,7 @@
         <mxCell id="e_m5_d5" edge="1" parent="1" source="m5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="d5">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="gate" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" value="M7 第1層&#xa;門前払い&#xa;（学習前・幾何）" vertex="1">
+        <mxCell id="gate" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" value="M7 第1層&#xa;事前判定&#xa;（学習前・幾何）" vertex="1">
           <mxGeometry height="100" width="120" x="1055" y="167" as="geometry" />
         </mxCell>
         <mxCell id="fail1" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#f8cecc;strokeColor=#b85450;" value="棄却＋倍率助言&#xa;（腕を N 倍に）" vertex="1">
