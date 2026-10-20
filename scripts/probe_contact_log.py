@@ -47,6 +47,10 @@ def snapshot(world):
                         f'p={np.round(np.asarray(cps[i].position, dtype=float), 4).tolist()} '
                         f'n={np.round(np.asarray(cps[i].normal, dtype=float), 3).tolist()} '
                         f'v={np.round(np.asarray(cps[i].velocity, dtype=float), 3).tolist()}')
+    # ⭐ 接触のある tick は、その時の関節角（度）も出す（step の終わりの軌跡では見えない tick 内の姿勢を見るため）
+    if rows:
+        rb = world.sim_bodies['robot'].body()
+        rows.append('q=' + str([round(float(np.rad2deg(rb.joint(k).q)), 1) for k in range(rb.numJoints)]))
     return rows, finite
 
 
@@ -70,6 +74,14 @@ def _tick(self, after_start=False):
             OUT.write(f'step {s} tick {t} {"" if fin else "⛔NaN "}' + (' | '.join(rs) if rs else '接触なし') + '\n')
         OUT.flush()
 M.ChoreonoidSimWorld._tick = _tick
+
+# ⭐ CONTACT_DUMP_XML=<path>: 最後に読み込んだ形の XML を書き出す（止めた姿勢で測る `probe_contact_gap.py` に渡すため）
+_load0 = M.ChoreonoidSimWorld.load_model
+def _load(self, xml_str, frame_skip):
+    if os.environ.get('CONTACT_DUMP_XML'):
+        open(os.environ['CONTACT_DUMP_XML'], 'w').write(xml_str)
+    return _load0(self, xml_str, frame_skip)
+M.ChoreonoidSimWorld.load_model = _load
 
 _step0 = M.ChoreonoidSimWorld.step
 def _step(self, ctrl, n_frames):
