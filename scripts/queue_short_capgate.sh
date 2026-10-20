@@ -1,5 +1,5 @@
 #!/bin/bash
-# ⭐ Bug 72 の取り直し・短腕（ユーザー判断 10-21「直して取り直す」、系譜 9-270）:
+# ⭐ Bug 72 の取り直し・短腕（ユーザー判断 10-21「直して取り直す」、系譜 9-271）:
 #   到達の短腕 tripo_pj_short_phys（10-21 06:46 完走）も、`11` のカプセルが関節の後ろへ 0.2 m はみ出して（設計変数 ext_start）
 #   台座の球に 114 mm 食い込んだ形で学習していた（全 step）。再生 5 話のうち 3 話は NaN で 3〜5 step で切れ、
 #   best −120.66 は切れた話が混ざった値（完走した話は −400 前後＝誤差約 400 mm）。短腕は 1 本目 0.15 m ＜ 0.33 m で食い込みうる形（9-264）。
@@ -39,10 +39,10 @@ P="cfg=pusher_gearonly_real max_epoch_num=200 $C $PUSH"
 R="cfg=pusher_gearonly_real max_epoch_num=200 $C $REACH8 +reward_specs.init_contact_penalty=1900"
 CG="+env_specs.init_self_contact_caps=true"
 
-log "=== 短腕の取り直し（門を本当のカプセルで、Bug 72・系譜 9-270）HEAD=$(git rev-parse --short HEAD)"
+log "=== 短腕の取り直し（門を本当のカプセルで、Bug 72・系譜 9-271）HEAD=$(git rev-parse --short HEAD)"
 if [ ! -d single_run/tripo_pjp_short_phys/log ]; then
   mkdir -p single_run/tripo_pjp_short_phys/log
-  echo "学習していない。queue_phys.sh が門なしで走らせないための目印（10-21、系譜 9-270）。門を直した版は tripo_pjp_short_phys_cg（queue_short_capgate.sh）" \
+  echo "学習していない。queue_phys.sh が門なしで走らせないための目印（10-21、系譜 9-271）。門を直した版は tripo_pjp_short_phys_cg（queue_short_capgate.sh）" \
     > single_run/tripo_pjp_short_phys/SKIPPED.txt
   log "目印を作った: single_run/tripo_pjp_short_phys/log/（queue_phys.sh はこの run を飛ばす）"
 fi
