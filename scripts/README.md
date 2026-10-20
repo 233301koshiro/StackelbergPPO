@@ -112,6 +112,7 @@
 | `make_slide8_links_figure.py` | 進捗発表スライド 8「リンクに切り分けて寸法を測った」の図（→ `figures/slide8_links_split.png`） |
 | `make_slide9_m1_variance_figure.py` | 同スライド 9「M1 のばらつき」の図（→ `figures/slide9_m1_variance.png`） |
 | `render_pipeline_stages.py` | M3〜M5 の**処理の途中経過**を図にする（2026-10-07、スライド「システムフロー解説」用）。パイプラインの関数そのものを呼んで描く（→ `figures/pipeline_m2_pose.png`（M2 の失敗例 A1 対 A3）・`pipeline_m3.png`・`pipeline_m4.png`・`pipeline_m5.png`）。`--case` で別の手描き |
+| `make_system_figure.py` | **修論 図 3.1（システム図）を作る**（2026-10-20）。原本 `docs/研究応用/執筆/システム図.drawio`（スライド用の横長）を A4 縦に入る 2 段組みに並べ替えて `システム図_論文用.drawio` を出し、`--export` で `figures/system_overview.pdf`（ベクター）に書き出す。⚠️ 図を直すときは原本だけを直してこれを回す（論文用は生成物）。書き出しには draw.io desktop の CLI が要る（`DRAWIO=` で実行ファイルを指定、xvfb-run 経由） |
 | ⭐ `queue_postrun_replay.sh` | ⭐ **修論のための学習 45 本を、1 本終わるたびに「学習時の環境で再生 → 図 → 結論前の検査」まで済ませる**（9-236）。学習はしない。出力 `single_run/postrun_summary.log` |
 | ⭐ `queue_hockey_goal_rate.sh` | ⭐ **ホッケーの取り直し 2 本のゴール率を 20 話（全話）で測る**（9-237）。完走を待って `trace/arm_trace_20.npz` を作る。学習はしない |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
