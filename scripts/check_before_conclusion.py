@@ -270,7 +270,11 @@ def ck_far_pen(r):
     sys.path.insert(0, str(ROOT / 'scripts'))
     from check_self_penetration import measure
     w, fr, pr, T, far = measure(r)
-    msg = f'離れた組の最大めり込み {far[0]*1000:.0f} mm（step の {far[1]*100:.1f} %）'
+    msg = f'離れた組の最大めり込み {far[0]*1000:.0f} mm（step の {far[1]*100:.1f} %{"、" + "×".join(far[3]) if far[3] else ""}）'
+    # ⭐ Bug 72: 古い軌跡はカプセルの始点を持たず、関節の後ろへのはみ出しが見えない
+    if not far[2]:
+        msg += ('  ⚠️ 軌跡にカプセルの始点が無い（2026-10-20 より前の再生）。関節の後ろへのはみ出しは見ていない'
+                '（`audit_capsule_ext.py` で見る）')
     le = _launch_env(r) or {}
     if not le.get('CNOID_SELF_COLLISION'):
         return None, f'⚠️ 自己干渉なしで学習（または記録なし）。{msg}'
