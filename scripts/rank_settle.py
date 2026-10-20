@@ -95,7 +95,7 @@ def settle_epoch(runs, labels):
 
 # (runs, labels, コホート名) — 較正の根拠として修論 4.5.3・付録D.6 が参照する（実在の物理、9-246）
 # A: 同一条件・別シード対（差は乱数のみ）。B: 形態が異なる対。C: 3 形態同時（マトリクスの各列）
-# ⚠️ 配分 dist は Bug 72（台座への食い込み）で取り直し中。到達は _cg / _cg_s2、押しの seed0 は _cg と既存の _s2 を使う
+# ⚠️ 配分 dist と短腕は Bug 72（台座への食い込み）で取り直し（_cg）。到達は _cg / _cg_s2、押しの seed0 は _cg と既存の _s2 を使う
 _A = [('tripo_pj_mid_phys', '到達 中間'), ('tripo_pj_long_phys', '到達 長腕'), ('tripo_pjd_prox_phys', '到達 prox'),
       ('tripo_pjr199_phys', '到達 1.99 倍'), ('e2e_a1_reach_phys', '到達 A1 可動'), ('e2e_a1_fix3_reach_phys', '到達 A1 関節3固定'),
       ('tripo_pjp_long_phys', '押し 長腕'), ('tripo_pjp_mid_phys', '押し 中間'), ('tripo_pjdp_prox_phys', '押し prox'),
@@ -111,13 +111,13 @@ for X, sn in (('', 's0'), ('_s2', 's1')):
         ([f'e2e_a1_reach_phys{X}', f'e2e_a1_fix3_reach_phys{X}'], ['可動', '固定'], f'B 到達 A1 可動 vs 関節3固定 {sn}'),
     ]
 COHORTS += [
-    (['tripo_pj_long_phys', 'tripo_pj_short_phys'], ['long', 'short'], 'B 到達 長腕 vs 短腕'),
-    (['tripo_pj_mid_phys', 'tripo_pj_short_phys'], ['mid', 'short'], 'B 到達 中間 vs 短腕'),
-    (['tripo_pjp_long_phys', 'tripo_pjp_short_phys'], ['long', 'short'], 'B 押し 長腕 vs 短腕'),
-    (['tripo_pjp_mid_phys', 'tripo_pjp_short_phys'], ['mid', 'short'], 'B 押し 中間 vs 短腕'),
-    (['tripo_pjr199_phys', 'tripo_pj_short_phys'], ['1.99', 'short'], 'B 到達 1.99 倍 vs 短腕'),
-    (['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys'], ['mid', 'long', 'short'], 'C マトリクス 到達 3 形態 s0'),
-    (['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjp_short_phys'], ['long', 'mid', 'short'], 'C マトリクス 押し 3 形態 s0'),
+    (['tripo_pj_long_phys', 'tripo_pj_short_phys_cg'], ['long', 'short'], 'B 到達 長腕 vs 短腕'),
+    (['tripo_pj_mid_phys', 'tripo_pj_short_phys_cg'], ['mid', 'short'], 'B 到達 中間 vs 短腕'),
+    (['tripo_pjp_long_phys', 'tripo_pjp_short_phys_cg'], ['long', 'short'], 'B 押し 長腕 vs 短腕'),
+    (['tripo_pjp_mid_phys', 'tripo_pjp_short_phys_cg'], ['mid', 'short'], 'B 押し 中間 vs 短腕'),
+    (['tripo_pjr199_phys', 'tripo_pj_short_phys_cg'], ['1.99', 'short'], 'B 到達 1.99 倍 vs 短腕'),
+    (['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys_cg'], ['mid', 'long', 'short'], 'C マトリクス 到達 3 形態 s0'),
+    (['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjp_short_phys_cg'], ['long', 'mid', 'short'], 'C マトリクス 押し 3 形態 s0'),
 ]
 
 # D: 2 seed の帯（修論 4.1.4 の判定の単位）が離れたまま最後まで続く最小 epoch。(上位側の 2 run, 下位側の 2 run, 名前)
