@@ -83,7 +83,8 @@ def md_inline(text: str) -> str:
             p = re.sub(r'\[要参照挿入: ([^\]]+)\]',
                        r'{\\small\\textcolor{red}{[要参照挿入: \1]}}', p)
             result.append(p)
-    return ''.join(result)
+    # 太字が数式をまたぐと上の部分ごとの変換では対にならず、** が印字されていた（2026-10-20、3.2 節。Bug 73 追記）
+    return re.sub(r'\*\*(.+?)\*\*', r'\\textbf{\1}', ''.join(result))
 
 def heading_number(title: str):
     """見出し先頭の節番号を整数列で返す。'4.3.2 R2…' → [4, 3, 2]。無ければ None。
