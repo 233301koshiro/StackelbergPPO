@@ -527,6 +527,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         if not self.env_specs.get('init_self_contact', False):
             return False
         bodies = list(self.robot.bodies)
+        # ⭐ Bug 72（2026-10-20）: `init_self_contact_caps=true` で**本当のカプセル**（XML の `fromto`。
+        #   関節の後ろへのはみ出し `ext_start` を含む）で測る。⛔ ボーンだけだと、dist の `11` が後ろへ 0.19 m
+        #   伸びて台座の球に 13 cm 食い込んだ形を通した（3 本が届かない・押せない）。既定は無効（既存の run と同じ環境）
+        use_caps = self.env_specs.get('init_self_contact_caps', False)
         segs, radii, parents = [], [], []
         for body in bodies:
             p = self._body_xpos.get(body.name)
@@ -534,8 +538,16 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             if p is None or R is None or not getattr(body, 'geoms', None):
                 return False
             p = np.asarray(p, dtype=float)
-            q = p + np.asarray(R, dtype=float).reshape(3, 3) @ np.asarray(body.bone_offset, dtype=float)
-            segs.append((p, q))
+            R = np.asarray(R, dtype=float).reshape(3, 3)
+            g = body.geoms[0].node
+            if use_caps and g.get('fromto'):
+                ft = np.array(g.get('fromto').split(), dtype=float)
+                segs.append((p + R @ ft[:3], p + R @ ft[3:]))
+            elif use_caps:
+                c = p + R @ np.array((g.get('pos') or '0 0 0').split(), dtype=float)   # 球
+                segs.append((c, c))
+            else:
+                segs.append((p, p + R @ np.asarray(body.bone_offset, dtype=float)))
             radii.append(float(np.asarray(body.geoms[0].size, dtype=float).flatten()[0]))
             parents.append(bodies.index(body.parent) if body.parent in bodies else -1)
         hits = self._self_overlaps(segs, radii, parents)

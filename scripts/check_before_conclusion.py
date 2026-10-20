@@ -323,6 +323,10 @@ COMPARISONS = [
     ('到達マトリクス（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys'], {'xml_name'}),
     ('マトリクス 到達 対 押し（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pjp_mid_phys'], 'TASK'),
     ('配分・到達（4.3.3.4）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys'], {'xml_name'}),
+    # ⭐ Bug 72: 門を本当のカプセルで測る取り直し（queue_dist_capgate.sh）。prox は構造上食い込めないので設定の有無で環境は同じ
+    ('配分・到達 門の修正後（4.3.3.4、Bug 72）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('配分・押し 門の修正後（Bug 72）', ['tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('dist 到達 門の修正の前後（Bug 72）', ['tripo_pjd_dist_phys', 'tripo_pjd_dist_phys_cg'], {'env_specs.init_self_contact_caps'}),
     ('閉ループ 1.99 倍（4.4）', ['tripo_pjr199_phys', 'tripo_pj_short_phys'], {'xml_name'}),
     ('閉ループ 関節固定（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'], {'xml_name'}),
     ('付録D 到達 対 押し', ['tripo_v3_reach2_phys', 'tripo_arm_v3_pusher_phys'], 'TASK'),
