@@ -136,6 +136,14 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             i += 1
             continue
 
+        # 別行立ての数式 `$$...$$`（1 行）→ \[...\]。⛔ 2026-10-20 まで未対応で、中の $...$ だけが
+        #   行内数式になり、外側の $ が 1 つずつ文字として印字されていた（3.1 節の J^F・J^L）
+        dm = re.match(r'^\s*\$\$(.+)\$\$\s*$', line)
+        if dm:
+            out.append(r'\[' + dm.group(1) + r'\]')
+            i += 1
+            continue
+
         # 図: `![キャプション](figures/xxx.png)` を figure 環境にする。
         # 幅は `{width=0.7}` を alt 末尾に付けて指定できる（既定 0.92）。
         img = re.match(r'^!\[(.*?)\]\((figures/[^)]+)\)\s*(\{width=[\d.]+\})?\s*$',
@@ -222,7 +230,8 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             table_rows = []
             while i < len(lines) and '|' in lines[i]:
                 if not re.match(r'^[\|\-\s:]+$', lines[i]):
-                    cells = [c.strip() for c in lines[i].strip('|').split('|')]
+                    # 「\|」（数式のノルムの縦棒）では列を割らない（2026-10-20 まで 4.1.2 の Reach の報酬の式が割れていた）
+                    cells = [c.strip() for c in re.split(r'(?<!\\)\|', lines[i].strip().strip('|'))]
                     table_rows.append(cells)
                 i += 1
             if table_rows:
