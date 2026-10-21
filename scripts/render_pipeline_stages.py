@@ -7,7 +7,9 @@
   figures/pipeline_m2_pose.png  真横に描いた絵（A1）と斜めに描いた絵（A3）の 3D 化の比較（M2 の失敗例）
   figures/pipeline_m3.png   GLB の頂点 → マゼンタの頂点と関節（重心）→ 関節の高さで切ったリンク
   figures/pipeline_m4.png   リンクごとのメッシュとカプセル（長さ・太さ・はみ出し）
-  figures/pipeline_m4_paper.png  同じ図からはみ出しの割合と黒い点を外したもの（修論 3.9 用。はみ出しは測った結果なので 4.2.2 で言う。2026-10-21）
+  figures/pipeline_*_paper.png  修論 図 3.2〜3.5 用（2026-10-21）。図の中の題を外す（キャプションと重なる）。
+      m12: A1 の手描き → M1 の整形画像 → M2 の GLB（失敗例の図の上の段だけ）
+      m4 : はみ出しの割合と黒い点も外す（はみ出しは測った結果なので 4.2.2 で言う）
   figures/pipeline_m5.png   XML のカプセル模型（初期姿勢）と、関節軸の割り当て
 
     python3 scripts/render_pipeline_stages.py              # A1
@@ -71,7 +73,26 @@ def m2_pose(out):
     print(f'[M2] → {out}')
 
 
-def m3(case, names, out):
+def m12(case, out):
+    """論文用: 手描き → M1 の整形画像 → M2 の GLB を 1 段に並べる（m2_pose の上の段と同じ入力）。"""
+    from PIL import Image
+    fig, ax = plt.subplots(1, 3, figsize=(13, 4.6))
+    ax[0].imshow(Image.open(f'data/test/{case}/sketch/{case}_hand.webp')); ax[0].axis('off')
+    ax[1].imshow(Image.open(f'data/test/{case}/sketch/{case}_m1.jpeg')); ax[1].axis('off')
+    mesh = G._apply_yup_zup(G._load_concat(f'data/test/{case}/3D/{case}.glb'))
+    V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
+    idx = np.random.default_rng(0).choice(len(V), min(30000, len(V)), replace=False)
+    k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
+    a = ax[2]
+    a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.5)
+    a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('横 [m]'); a.set_ylabel('高さ z [m]')
+    ax[0].set_title('① 手描きスケッチ'); ax[1].set_title('② M1 の整形画像')
+    a.set_title(f'③ M2 の三次元メッシュ（横から）\n最長辺 {np.ptp(V, axis=0).max():.2f} m')
+    fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
+    print(f'[M1・M2] → {out}')
+
+
+def m3(case, names, out, paper=False):
     """GLB → マーカー → 関節 → 分割。glb_to_links.main() と同じ順に関数を呼ぶ。"""
     glb = f'data/test/{case}/3D/{case}.glb'
     mesh = G._apply_yup_zup(G._load_concat(glb))
@@ -107,11 +128,13 @@ def m3(case, names, out):
         ax[2].annotate(JA.get(names[k], names[k]), (c[0], c[2]), xytext=(25, 0), textcoords='offset points',
                        fontsize=12, color=COL[k % len(COL)], weight='bold')
     ax[2].set_title('③ 関節の高さ（破線）でメッシュを切る\n→ リンクごとの STL')
-    fig.text(0.99, 0.01, f'関節位置: 実行時の joints.json との差 最大 {err*1000:.1f} mm', ha='right', fontsize=8, color='gray')
+    if not paper:
+        fig.text(0.99, 0.01, f'関節位置: 実行時の joints.json との差 最大 {err*1000:.1f} mm', ha='right', fontsize=8, color='gray')
     for a in ax:
         a.set_aspect('equal'); a.set_xlabel('x [m]'); a.grid(alpha=0.3)
     ax[0].set_ylabel('z（高さ）[m]')
-    fig.suptitle('M3 関節検出とリンク分割（手描き A1）', fontsize=15)
+    if not paper:
+        fig.suptitle('M3 関節検出とリンク分割（手描き A1）', fontsize=15)
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
     print(f'[M3] → {out}')
 
@@ -155,12 +178,13 @@ def m4(case, names, out, paper=False):
                     + ('' if paper else f'\nはみ出し {over:.1f} %（黒い点）'))
         a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('骨からの距離 [m]')
     ax[0].set_ylabel('骨の軸に沿った距離 [m]（▲＝自分の関節）')
-    fig.suptitle('M4 長さと太さの抽出 — 長さ＝関節と関節の距離、太さ＝骨に垂直な断面の幅（黒線がカプセル）', fontsize=13)
+    if not paper:
+        fig.suptitle('M4 長さと太さの抽出 — 長さ＝関節と関節の距離、太さ＝骨に垂直な断面の幅（黒線がカプセル）', fontsize=13)
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
     print(f'[M4] → {out}')
 
 
-def m5(xml_path, names, out):
+def m5(xml_path, names, out, paper=False):
     """XML のカプセル模型（初期姿勢＝全関節 0°）を、XML の入れ子どおりに積んで描く。"""
     root = ET.parse(xml_path).getroot()
     body0 = root.find('worldbody/body')
@@ -205,7 +229,8 @@ def m5(xml_path, names, out):
     ax[1].axis('off')
     ax[1].text(0, 1, snippet, fontsize=9.5, va='top', transform=ax[1].transAxes)
     ax[1].set_title('XML（抜粋）— 子の <body> を親の中に入れ子にし、\npos＝親の骨の長さ にすると「先端に取り付け」になる', loc='left')
-    fig.suptitle('M5 シミュレーションモデル生成（topology.json → XML）', fontsize=15)
+    if not paper:
+        fig.suptitle('M5 シミュレーションモデル生成（topology.json → XML）', fontsize=15)
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
     print(f'[M5] → {out}')
 
@@ -231,8 +256,12 @@ def main():
     m2_pose(f'{a.out_dir}/pipeline_m2_pose.png')
     m3(a.case, names, f'{a.out_dir}/pipeline_m3.png')
     m4(a.case, names, f'{a.out_dir}/pipeline_m4.png')
-    m4(a.case, names, f'{a.out_dir}/pipeline_m4_paper.png', paper=True)
     m5(f'{tmp}/model.xml', names, f'{a.out_dir}/pipeline_m5.png')
+    # 論文用（修論 図 3.2〜3.5）
+    m12(a.case, f'{a.out_dir}/pipeline_m12_paper.png')
+    m3(a.case, names, f'{a.out_dir}/pipeline_m3_paper.png', paper=True)
+    m4(a.case, names, f'{a.out_dir}/pipeline_m4_paper.png', paper=True)
+    m5(f'{tmp}/model.xml', names, f'{a.out_dir}/pipeline_m5_paper.png', paper=True)
 
 
 if __name__ == '__main__':
