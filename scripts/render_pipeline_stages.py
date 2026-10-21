@@ -7,6 +7,7 @@
   figures/pipeline_m2_pose.png  真横に描いた絵（A1）と斜めに描いた絵（A3）の 3D 化の比較（M2 の失敗例）
   figures/pipeline_m3.png   GLB の頂点 → マゼンタの頂点と関節（重心）→ 関節の高さで切ったリンク
   figures/pipeline_m4.png   リンクごとのメッシュとカプセル（長さ・太さ・はみ出し）
+  figures/pipeline_m4_paper.png  同じ図からはみ出しの割合と黒い点を外したもの（修論 3.9 用。はみ出しは測った結果なので 4.2.2 で言う。2026-10-21）
   figures/pipeline_m5.png   XML のカプセル模型（初期姿勢）と、関節軸の割り当て
 
     python3 scripts/render_pipeline_stages.py              # A1
@@ -115,8 +116,11 @@ def m3(case, names, out):
     print(f'[M3] → {out}')
 
 
-def m4(case, names, out):
-    """リンクごとに、メッシュとカプセル（mesh_to_params と同じ軸・半径・はみ出しの計算）。"""
+def m4(case, names, out, paper=False):
+    """リンクごとに、メッシュとカプセル（mesh_to_params と同じ軸・半径・はみ出しの計算）。
+
+    paper=True は手順だけを見せる版（はみ出しの割合と黒い点を描かない）。
+    """
     mdir = f'data/test/{case}/meshes'
     fo = json.load(open(f'{mdir}/joints.json'))['frame_origins']
     lengths = json.load(open(f'{mdir}/joints.json')).get('link_lengths', {})
@@ -136,15 +140,19 @@ def m4(case, names, out):
         radial = np.linalg.norm(V - np.outer(t, u), axis=1) * np.sign(V @ v + 1e-12)
         tc = np.clip(t, 0, L); out_m = np.linalg.norm(V - np.outer(tc, u), axis=1) > r
         a = ax[i]
-        a.scatter(radial[~out_m], t[~out_m], c=COL[i % len(COL)], s=0.6, alpha=0.5)
-        a.scatter(radial[out_m], t[out_m], c='k', s=0.8)
+        if paper:
+            a.scatter(radial, t, c=COL[i % len(COL)], s=0.6, alpha=0.5)
+        else:
+            a.scatter(radial[~out_m], t[~out_m], c=COL[i % len(COL)], s=0.6, alpha=0.5)
+            a.scatter(radial[out_m], t[out_m], c='k', s=0.8)
         th = np.linspace(0, np.pi, 40)
         cap = np.r_[np.c_[r * np.ones(2), [0, L]], np.c_[r * np.cos(th), L + r * np.sin(th)],
                     np.c_[-r * np.ones(2), [L, 0]], np.c_[-r * np.cos(th), -r * np.sin(th)]]
         a.plot(cap[:, 0], cap[:, 1], 'k-', lw=1.5)
         a.plot([0, 0], [0, L], 'k--', lw=1)
         a.plot(0, 0, 'm^', ms=10)
-        a.set_title(f'{JA.get(n, n)}\n長さ {L:.3f} m・太さ（半径）{r:.3f} m\nはみ出し {over:.1f} %（黒い点）')
+        a.set_title(f'{JA.get(n, n)}\n長さ {L:.3f} m・太さ（半径）{r:.3f} m'
+                    + ('' if paper else f'\nはみ出し {over:.1f} %（黒い点）'))
         a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('骨からの距離 [m]')
     ax[0].set_ylabel('骨の軸に沿った距離 [m]（▲＝自分の関節）')
     fig.suptitle('M4 長さと太さの抽出 — 長さ＝関節と関節の距離、太さ＝骨に垂直な断面の幅（黒線がカプセル）', fontsize=13)
@@ -223,6 +231,7 @@ def main():
     m2_pose(f'{a.out_dir}/pipeline_m2_pose.png')
     m3(a.case, names, f'{a.out_dir}/pipeline_m3.png')
     m4(a.case, names, f'{a.out_dir}/pipeline_m4.png')
+    m4(a.case, names, f'{a.out_dir}/pipeline_m4_paper.png', paper=True)
     m5(f'{tmp}/model.xml', names, f'{a.out_dir}/pipeline_m5.png')
 
 
