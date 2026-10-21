@@ -14,6 +14,9 @@
 
     python3 scripts/make_obstacle_reach_xml.py            # 既定（柱1本）
     python3 scripts/make_obstacle_reach_xml.py --name e2e_a1v_obs2 --oy 0.15
+    # ⭐ 実在の物理の腕に、旧い _obs_tall2 と同じ柱を足す（2026-10-21、進捗 D-5）
+    python3 scripts/make_obstacle_reach_xml.py --src assets/mujoco_envs/e2e_a1v_phys_arm171.xml \
+        --name e2e_a1v_obs_tall2_phys_arm171 --height 0.85
 """
 import argparse
 import pathlib
@@ -27,6 +30,7 @@ TARGET = (0.80, 0.0, 0.15)
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument('--src', default=str(SRC), help='柱を足す元の XML（既定は旧い物理の e2e_a1v.xml）')
     ap.add_argument('--name', default='e2e_a1v_obs')
     ap.add_argument('--ox', type=float, default=0.45, help='障害物の x（根元と目標の間）')
     ap.add_argument('--oy', type=float, default=0.0, help='障害物の y')
@@ -34,7 +38,7 @@ def main() -> int:
     ap.add_argument('--height', type=float, default=0.45, help='柱の高さ')
     a = ap.parse_args()
 
-    root = ET.parse(SRC).getroot()
+    root = ET.parse(a.src).getroot()
     wb = root.find('worldbody')
 
     # ⭐ body として置く（9-98）。geom は body 原点に置き、位置は body が持つ。
@@ -55,6 +59,7 @@ def main() -> int:
     out = ENVS / f'{a.name}.xml'
     out.write_bytes(ET.tostring(root))
     print(f'{out}')
+    print(f'  元の XML {a.src}')
     print(f'  障害物  角柱 半幅 {a.radius} m・高さ {a.height} m  位置 ({a.ox}, {a.oy})')
     print(f'  目標    {TARGET}')
     print(f'  ⚠️ 根元(0,0) と目標({TARGET[0]},{TARGET[1]}) を結ぶ直線上に置いてある。'
