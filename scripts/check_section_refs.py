@@ -8,6 +8,12 @@
 **存在しない節番号は「古い主張」に見えない。**
 
 CLAUDE.md §5-1-2「検査を書けるならスクリプトにする」に従う。
+
+⭐ 2026-10-21 に**欠番**の検査を足した。第4章に 4.3.1・4.3.3.2 が無く 4.3.2 から
+始まる節が残っていたのを、人が読んで見つけた（判定 md 型 26・型 27）。参照の検査は
+「指した先が在るか」しか見ないので、**在るべき節が無い**ことは拾えない。
+項が 1 つだけの節は判断が要るので ⚠️ を出すだけにする。
+`--reproduce` で既知の欠番を拾えるかを確かめる。
 """
 import re
 import sys
@@ -50,7 +56,70 @@ def collect_sections(texts: dict) -> set:
     return found
 
 
+# 意図して空けている番号と、その理由。⛔ 件数を 0 にするために足さない（CLAUDE.md §5-2 ①）
+INTENTIONAL_GAPS = {
+    '付録B': '付録は A と D だけ。D を B に改めるかは 50 ページ化の判断と一緒に決める（2026-10-21、引き継ぎ）',
+    '付録C': '同上',
+}
+
+
+def collect_headings(texts: dict) -> list:
+    """文書順の番号の列。章は '4'・'D'、節は '4.3.2'・'D.1' の形。"""
+    out = []
+    for text in texts.values():
+        for line in text.splitlines():
+            m = re.match(r'^#\s+(?:第(\d+)章|付録([A-Z]))', line)
+            if m:
+                out.append(m.group(1) or m.group(2))
+                continue
+            m = re.match(r'^#{2,5}\s+([0-9A-Z]+(?:\.[0-9]+)+)\s', line)
+            if m:
+                out.append(m.group(1))
+    return out
+
+
+def find_gaps(headings: list):
+    """親ごとに子の番号が 1, 2, … と抜けなく並ぶかを見る。
+
+    戻り値: (欠番, 項が 1 つだけの親)。欠番は '4.3.1' や '付録B' の形。
+    """
+    gaps, singles = [], []
+    chapters = [h for h in dict.fromkeys(h for h in headings if '.' not in h)]
+    nums = [int(c) for c in chapters if c.isdigit()]
+    letters = [c for c in chapters if c.isalpha()]
+    if nums:
+        gaps += [f'第{n}章' for n in range(1, max(nums) + 1) if n not in nums]
+    if letters:
+        gaps += [f'付録{chr(c)}' for c in range(ord('A'), ord(max(letters)) + 1)
+                 if chr(c) not in letters]
+    children = {}
+    for h in headings:
+        if '.' in h:
+            parent, last = h.rsplit('.', 1)
+            children.setdefault(parent, []).append(int(last))
+    for parent, ks in children.items():
+        for n in range(1, max(ks) + 1):
+            if n not in ks:
+                gaps.append(f'{parent}.{n}')
+        if len(set(ks)) == 1 and parent.count('.') >= 1:
+            singles.append(parent)
+    return gaps, singles
+
+
+def reproduce() -> int:
+    """既知の欠番（2026-10-21 の第4章）を拾えるかを確かめる。"""
+    known = ['1', '2', '3', '4', '4.1', '4.2', '4.3', '4.3.2', '4.3.3', '4.3.3.1', '4.3.3.3',
+             '4.3.3.4', '4.4', '4.4.1', 'A', 'A.1', 'D', 'D.1']
+    gaps, _ = find_gaps(known)
+    want = {'4.3.1', '4.3.3.2', '付録B', '付録C'}
+    ok = want <= set(gaps)
+    print(('✅' if ok else '⛔') + f' 既知の欠番 {sorted(want)} → 検出 {sorted(gaps)}')
+    return 0 if ok else 1
+
+
 def main() -> int:
+    if '--reproduce' in sys.argv:
+        return reproduce()
     texts = {}
     for name in BODY:
         p = DRAFT / name
@@ -90,6 +159,19 @@ def main() -> int:
             print(f'  {name}:{i}  「{num}」は {len(num.rstrip(".").split("."))} 桁なのに # が {lv} 個')
         print()
 
+    gaps, singles = find_gaps(collect_headings(texts))
+    known_gaps = [g for g in gaps if g in INTENTIONAL_GAPS]
+    gaps = [g for g in gaps if g not in INTENTIONAL_GAPS]
+    if gaps:
+        print(f'⛔ 欠番 {len(gaps)} 件（在るべき番号の節が無い）\n')
+        for g in gaps:
+            print(f'  {g}')
+        print()
+    for g in known_gaps:
+        print(f'ℹ️ 意図した欠番 {g}: {INTENTIONAL_GAPS[g]}')
+    for s in singles:
+        print(f'⚠️ {s} は項が 1 つだけ（分ける必要があるか、判定 md 型 26）')
+
     if bad:
         print(f'⛔ 実在しない節への参照 {len(bad)} 件\n')
         for name, i, num, line in bad:
@@ -98,10 +180,11 @@ def main() -> int:
         print(f'\n⭐ 実在する節: {len(sections)} 個 / 章: {sorted(chapters)}')
         return 1
 
-    if depth_bad:
+    if depth_bad or gaps:
         return 1
     print(f'✅ 節参照はすべて実在する節を指している（参照先候補 {len(sections)} 節）')
     print('✅ 見出しの深さと節番号の桁数も一致している')
+    print('✅ 欠番は無い（意図したものを除く）')
     return 0
 
 
