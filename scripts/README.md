@@ -52,6 +52,7 @@
 | **`probe_hockey_arm_wall.py`** | 腕を壁に衝突させても届くかを測る（9-94）。⭐ **割り切りの「根拠」を測る型のプローブ** |
 | ⭐⭐ **`search_joint_axes.py`** | 関節軸を第1層で枝刈り（9-127）。81 通りを 0.2 秒、53 % 棄却 |
 | ⭐ **`make_realistic_density_xml.py`** | リンク密度に根拠を与えた XML を作る（9-126）。薄肉パイプの実効密度 |
+| ⭐ **`enum_irsl_link_lengths.py`** | 研究室の部品（IRSL の RobotAssembler 部品ライブラリ）で XL-430 から次の XL-430 までのリンクに作れる長さを、RobotAssembler の `attach` で組んで数え上げる（軸6 L-3a・L-4b、9-277）。Choreonoid で回す。起動時に研究室の腕のリンク（76.80 mm）を再現する自己検査。→ `data/axis6/irsl_link_lengths.csv` |
 | **`make_obstacle_reach_xml.py`** | 障害物のある Reach の XML を作る（9-104）。⚠️ **障害物は `<body>` に入れる**（9-98）。⭐ `--src` で元の XML を選べる（既定は旧い物理の `e2e_a1v.xml`。実在の物理の腕は `--src assets/mujoco_envs/e2e_a1v_phys_arm171.xml`、9-275） |
 | **`gemini_api.py`** | M1 を Gemini API で回す骨組み（9-123）。⚠️ **未着手・キー待ち** |
 | ⭐ **`tripo_api.py`** | Tripo3D API で画像→3D を生成（9-115）。`--balance` / `--verify-seed`。⚠️ キーは `.env` |
