@@ -93,7 +93,7 @@ def settle_epoch(runs, labels):
     return settled, order, [round(v, 2) for v in final_vals], epochs[-1], epochs[0], truncated
 
 
-# (runs, labels, コホート名) — 較正の根拠として修論 4.5.3・付録D.6 が参照する（実在の物理、9-246）
+# (runs, labels, コホート名) — 較正の根拠として修論 4.5.3・付録D.4 が参照する（実在の物理、9-246）
 # A: 同一条件・別シード対（差は乱数のみ）。B: 形態が異なる対。C: 3 形態同時（マトリクスの各列）
 # ⚠️ 配分 dist と短腕は Bug 72（台座への食い込み）で取り直し（_cg）。到達は _cg / _cg_s2、押しの seed0 は _cg と既存の _s2 を使う
 _A = [('tripo_pj_mid_phys', '到達 中間'), ('tripo_pj_long_phys', '到達 長腕'), ('tripo_pjd_prox_phys', '到達 prox'),
