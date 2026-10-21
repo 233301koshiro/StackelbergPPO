@@ -93,7 +93,7 @@ def settle_epoch(runs, labels):
     return settled, order, [round(v, 2) for v in final_vals], epochs[-1], epochs[0], truncated
 
 
-# (runs, labels, コホート名) — 較正の根拠として修論 4.5.3・付録D.4 が参照する（実在の物理、9-246）
+# (runs, labels, コホート名) — 較正の根拠として修論 4.6.3・付録D.4 が参照する（実在の物理、9-246）
 # A: 同一条件・別シード対（差は乱数のみ）。B: 形態が異なる対。C: 3 形態同時（マトリクスの各列）
 # ⚠️ 配分 dist と短腕は Bug 72（台座への食い込み）で取り直し（_cg）。到達は _cg / _cg_s2、押しの seed0 は _cg と既存の _s2 を使う
 _A = [('tripo_pj_mid_phys', '到達 中間'), ('tripo_pj_long_phys', '到達 長腕'), ('tripo_pjd_prox_phys', '到達 prox'),
@@ -120,7 +120,7 @@ COHORTS += [
     (['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjp_short_phys_cg'], ['long', 'mid', 'short'], 'C マトリクス 押し 3 形態 s0'),
 ]
 
-# D: 2 seed の帯（修論 4.1.4 の判定の単位）が離れたまま最後まで続く最小 epoch。(上位側の 2 run, 下位側の 2 run, 名前)
+# D: 2 seed の帯（修論 4.2.2 の判定の単位）が離れたまま最後まで続く最小 epoch。(上位側の 2 run, 下位側の 2 run, 名前)
 BANDS = [
     (['tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2'], ['tripo_pj_long_phys', 'tripo_pj_long_phys_s2'], 'D 帯 到達 中間 vs 長腕'),
     (['tripo_pjp_long_phys', 'tripo_pjp_long_phys_s2'], ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2'], 'D 帯 押し 長腕 vs 中間'),

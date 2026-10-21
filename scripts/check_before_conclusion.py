@@ -315,27 +315,27 @@ def ck_base(r):
 #   各組: (名前, run の列, 違ってよいキー)。'TASK' は到達 対 押し＝報酬のキーは違って当然なので COMMON だけ比べる。
 COMPARISONS = [
     # ⭐ 9-246: 実在の物理で全部やり直した *_phys（それ以前の *_scgc は 9-232〜9-245）
-    ('押しの柱（4.3.3）', ['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys'], {'xml_name'}),
+    ('押しの柱（4.4.3）', ['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys'], {'xml_name'}),
     ('armature 1.71 対 1（long）', ['tripo_pjp_long_phys', 'tripo_pjp_long_phys_arm1'], {'xml_name'}),
     ('armature 1.71 対 1（mid）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_arm1'], {'xml_name'}),
-    ('R1 形の凍結（4.1.4）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys'], {'robot_param_scale'}),
+    ('R1 形の凍結（4.4.1）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys'], {'robot_param_scale'}),
     ('R2 縦型の到達 対 押し', ['e2e_a1v_reach_phys', 'e2e_a1v_pusher_phys'], 'TASK'),
     # ⭐ Bug 72（10-21）: 短腕も 11 のはみ出しで台座に食い込んでいたので、門を直して取り直す（queue_short_capgate.sh）
-    ('到達マトリクス（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('到達マトリクス（4.4.3.2）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
     ('短腕 到達 門の修正の前後（Bug 72）', ['tripo_pj_short_phys', 'tripo_pj_short_phys_cg'], {'env_specs.init_self_contact_caps'}),
-    ('マトリクス 到達 対 押し（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pjp_mid_phys'], 'TASK'),
-    ('配分・到達（4.3.3.4）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys'], {'xml_name'}),
+    ('マトリクス 到達 対 押し（4.4.3.2）', ['tripo_pj_mid_phys', 'tripo_pjp_mid_phys'], 'TASK'),
+    ('配分・到達（4.4.3.3）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys'], {'xml_name'}),
     # ⭐ Bug 72: 門を本当のカプセルで測る取り直し（queue_dist_capgate.sh）。prox は構造上食い込めないので設定の有無で環境は同じ
-    ('配分・到達 門の修正後（4.3.3.4、Bug 72）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('配分・到達 門の修正後（4.4.3.3、Bug 72）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
     ('配分・押し 門の修正後（Bug 72）', ['tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
     ('dist 到達 門の修正の前後（Bug 72）', ['tripo_pjd_dist_phys', 'tripo_pjd_dist_phys_cg'], {'env_specs.init_self_contact_caps'}),
-    ('閉ループ 1.99 倍（4.4）', ['tripo_pjr199_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
-    ('閉ループ 関節固定（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'], {'xml_name'}),
+    ('閉ループ 1.99 倍（4.5）', ['tripo_pjr199_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('閉ループ 関節固定（4.5.5）', ['e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'], {'xml_name'}),
     ('付録D 到達 対 押し', ['tripo_v3_reach2_phys', 'tripo_arm_v3_pusher_phys'], 'TASK'),
-    ('マトリクス 押し（4.3.3.3）', ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys'], {'xml_name', 'env_specs.init_self_contact_caps'}),
-    ('閉ループ 2.11 倍 押し（4.4.4）', ['tripo_pjr211p_phys', 'tripo_pjp_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
-    ('閉ループ 関節固定 押し（4.4.5）', ['e2e_a1_pusher_phys', 'e2e_a1_fix3_pusher_phys'], {'xml_name'}),
-    ('関節固定 到達 対 押し（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
+    ('マトリクス 押し（4.4.3.2）', ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('閉ループ 2.11 倍 押し（4.5.4）', ['tripo_pjr211p_phys', 'tripo_pjp_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('閉ループ 関節固定 押し（4.5.5）', ['e2e_a1_pusher_phys', 'e2e_a1_fix3_pusher_phys'], {'xml_name'}),
+    ('関節固定 到達 対 押し（4.5.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
