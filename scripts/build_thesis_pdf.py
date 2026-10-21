@@ -244,8 +244,15 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 if max_cell_w > 22 or ncols >= 5:
                     # 長文セル（比較表等）は折り返し可能な固定幅列にする。
                     # l| のままだと1行に収まらず紙面外へはみ出す（Overfull \hbox）。
-                    col_w = f'{0.92 / ncols:.3f}\\textwidth'
-                    col_spec = '|' + (f'p{{{col_w}}}|') * ncols
+                    # 列幅は列の文字量の平方根に比例させる（2026-10-21）。等分だと短い列（「判定」「報告」）が
+                    #   長い列と同じ幅を取り、長い列が細く折り返されて表が縦に伸びていた（表 3.2 が 1 ページ近く）。
+                    #   高さ ≒ 文字量 ÷ 幅 の和を最小にする幅は √文字量 に比例する。最小は本文幅の 8 %。
+                    tot = [sum(_disp_width(r[j]) if j < len(r) else 0 for r in table_rows) for j in range(ncols)]
+                    wts = [max(t, 1) ** 0.5 for t in tot]
+                    fr = [w / sum(wts) for w in wts]
+                    fr = [max(x, 0.08) for x in fr]
+                    fr = [x / sum(fr) * 0.92 for x in fr]
+                    col_spec = '|' + ''.join(f'p{{{x:.3f}\\textwidth}}|' for x in fr)
                 else:
                     col_spec = '|' + 'l|' * ncols
                 out.append(r'\begin{center}')
