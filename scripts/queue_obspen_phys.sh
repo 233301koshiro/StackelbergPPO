@@ -54,8 +54,10 @@ FB="+fix_base=true"
 REACH8="+reward_specs.use_reach=true +reward_specs.target_x=0.8 +reward_specs.target_y=0.0 +reward_specs.target_z=0.15 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false +env_specs.cube_x_offset=100"
 OBS="+reward_specs.obstacle_penalty_scale=1.0"
 
-log "=== 障害物 Reach を今の物理で 2 seed（D-5、系譜 9-274）HEAD=$(git rev-parse --short HEAD)。tripo_arm_v3_pusher_phys_s2 の起動 → ホッケー seed1 の起動を待つ"
-until [ -d single_run/tripo_arm_v3_pusher_phys_s2/log ]; do sleep 60; done
+log "=== 障害物 Reach を今の物理で 2 seed（D-5、系譜 9-274）HEAD=$(git rev-parse --short HEAD)。e2e_a1_fix3_pusher_phys_s2 の起動 → ホッケー seed1 の起動を待つ"
+# ⛔ 10-21 17 時台に待つ相手を直した: 元は tripo_arm_v3_pusher_phys_s2（付録D.5 の v3）を待っていたが、a7bbb57 で
+#   その 4 本を queue_phys.sh から外したので起動せず、ここで止まり続けていた。いまの本キューの最後の起動は e2e_a1_fix3_pusher_phys_s2。
+until [ -d single_run/e2e_a1_fix3_pusher_phys_s2/log ]; do sleep 60; done
 log "本キューの最後が起動した。先にホッケー seed1（queue_hockey_phys_g10_blk3d.sh をそのまま呼ぶ）"
 bash scripts/queue_hockey_phys_g10_blk3d.sh
 until [ -d single_run/hockey_bank9_phys_g10_blk3d_s2/log ]; do sleep 60; done
