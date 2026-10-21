@@ -304,6 +304,8 @@ PREAMBLE = r"""
 \documentclass[12pt,a4paper]{report}
 \usepackage{fontspec}
 \usepackage{xeCJK}
+% 丸数字（①〜）は既定で欧文扱いになり、TeX Gyre Termes に字形が無く黙って消える（2026-10-21、図 3.2 の ①〜③）。和文の字として Noto で組む
+\xeCJKsetcharclass{"2460}{"24FF}{1}
 \setCJKmainfont{Noto Serif CJK JP}
 \setCJKsansfont{Noto Sans CJK JP}
 \setCJKmonofont{Noto Sans Mono CJK JP}
