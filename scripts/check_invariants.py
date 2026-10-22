@@ -12,7 +12,7 @@
 | 報酬の桁（学習ログの 1 step 平均が、その run の中央値の 20 倍を超える epoch） | Bug 60（ep0 の −367） |
 | 制御入力（再生の |ctrl| が ±1 を超え、しかも切っていない） | Bug 60 |
 | 触れる前に動かない（対象が速く動き出した step で、腕が離れている）・置いた瞬間に重ならない | Bug 55・Bug 6 |
-| 床（可動リンクの下面が床より 10 mm 以上下の step が 1 % を超える） | 9-154 |
+| 床（可動リンクの下面が床より 10 mm 以上下の step が 1 % を超える。⭐ 10-22: 割合によらず 50 mm 以上下なら ⛔） | 9-154・9-288 |
 | 壁（ホッケー: パック・腕の先端が側壁の内面を越える） | Bug 39・9-93 |
 | 有限（軌跡の位置に NaN・inf が無い。NaN は比較が偽になり、床・壁の検査を黙って素通りする） | Bug 68（hockey_bank9_phys） |
 | 置いた瞬間に静的な箱（板・壁）に重ならない | Bug 69（初期姿勢の探索が板を見ず、重なった話が発散した） |
@@ -35,6 +35,9 @@ from check_cube_penetration import cube_half  # noqa: E402
 
 FLOOR_TOL = 0.010   # 床より下の許容 [m]
 FLOOR_FRAC = 0.01   # 床下にいてよい step の割合
+# ⭐ 2026-10-22（系譜 9-283 ③・9-288）: 割合だけでは深く短い沈み込み（打撃の一瞬・開始の姿勢）を素通りした。
+#   0.5 % の step だけ 182 mm 沈めた軌跡が ✅ だった。深さは離れた組のめり込みの ⛔ と同じ 50 mm
+FLOOR_DEEP = 0.050
 START_V = 0.5       # 「動き出した」とみなす対象の速さ [m/s]
 DT = 0.04           # 記録 1 step
 
@@ -169,6 +172,8 @@ def _floor(d):
         frac = max(frac, float((z < -FLOOR_TOL).mean()))
     if frac > FLOOR_FRAC:
         return False, f'⛔ 可動リンクが床より {-worst*1000:.0f} mm 下、{frac*100:.1f} % の step（9-154 型）'
+    if worst < -FLOOR_DEEP:
+        return False, f'⛔ 可動リンクが床より {-worst*1000:.0f} mm 下（{FLOOR_DEEP*1000:.0f} mm 超。床下は {frac*100:.1f} % の step だけ、9-288 型）'
     return True, f'床: 最も下 {worst*1000:.0f} mm・床下 {frac*100:.1f} % の step（一瞬の接触まで）'
 
 

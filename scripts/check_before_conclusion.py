@@ -575,6 +575,9 @@ def reproduce():
          _worker_seeds('tripo_pjp_mid_frozen_phys_fx_s2')[0] != _worker_seeds('tripo_pjp_mid_phys_s2')[0]),
         ('seed0 どうしは種が同じ（直す前後で 1〜4）',
          _worker_seeds('tripo_pjp_mid_frozen_phys_fx')[0] == _worker_seeds('tripo_pjp_mid_phys')[0] == [1, 2, 3, 4]),
+        # ⭐ 9-288: 割合は小さいが深い床下（ホッケー seed0 の開始の姿勢、先端 66 mm）
+        ('床の深く短い沈み込み（9-288）を ⛔', ck_invariants('hockey_bank9_phys_g10_wfix')[0] is False),
+        ('押しの中間は不変条件 ✅', ck_invariants('tripo_pjp_mid_phys')[0] is True),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
