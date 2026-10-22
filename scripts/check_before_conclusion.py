@@ -117,6 +117,8 @@ def ck_achieved(r):
     # ⛔⛔ 9-138: 固定 body と接触するタスクは、同じ checkpoint でも再生ごとに揺れる
     #   （ホッケー 64〜308 mm・障害物 254 %）。1 エピソードで達成を判定してはいけない。
     static = has_static_body(r)
+    # ⛔ 取り下げ（9-237）: 下の「1 話目は当てにならない」は取り下げた読み。頭の話に特別な性質は無く、捨てない（既定 0）。
+    #   残っている意味は「1 話だけで量を比べない」こと（話はどれも初期状態のくじ）
     # ⛔⛔ Bug 47 / 9-142: 軌跡は「読み込み直後の 1 話目」であり、その 1 話は当てにならない
     #   （対照 Pusher で 1 話目 15.11 m 対 3〜6 話 6.54〜15.97 m）。
     #   ⚠️ 反復しても検出できない（毎回 1 話目をやり直すだけ）。
@@ -165,6 +167,28 @@ def ck_achieved(r):
     if is_reach:
         tgt = d['target']
         dist = np.linalg.norm(tip - tgt, axis=1)
+        # ⭐ 2026-10-22（系譜 9-283）: 判定は代表の話のまま、全話の最小距離を添える（押しの「話ごとの対象移動」と同じ）。
+        #   何話届けば「到達」とするかは判断が要るので、ここでは変えない
+        try:
+            z = np.load(p, allow_pickle=True)
+            if 'ep_xpos' in z.files and 'ep_bone' in z.files:
+                mins = []
+                for e in range(len(z['ep_xpos'])):
+                    x_e = np.asarray(z['ep_xpos'][e], float)
+                    if x_e.ndim != 3 or len(x_e) == 0:
+                        continue
+                    t_e = x_e[:, -1, :] + np.einsum('tij,j->ti', np.asarray(z['ep_xmat'][e], float)[:, -1],
+                                                     np.asarray(z['ep_bone'][e], float)[-1])
+                    dd = np.linalg.norm(t_e - tgt, axis=1)
+                    mins.append(float(np.nanmin(dd)) if np.isfinite(dd).any() else float('nan'))
+                if mins:
+                    ok_n = sum(m < 0.01 for m in mins)
+                    warn += (f'  ⭐ 話ごとの最小 [{", ".join(f"{m*1000:.0f}" for m in mins)}] mm'
+                             f'（{ok_n}/{len(mins)} 話で 10 mm 以内） ')
+                    if ok_n not in (0, len(mins)):
+                        warn += '⚠️ **届く話と届かない話がある。代表の 1 話で到達を言わないこと** '
+        except Exception as ex:   # 添える情報なので判定は止めないが、黙らない
+            warn += f'  ⚠️ 話ごとの最小を出せない（{type(ex).__name__}） '
         if dist.min() < 0.01:
             return True, f'到達（最小 {dist.min()*1000:.0f} mm）' + warn
         return False, (f'⛔ **未到達**（最小 {dist.min()*1000:.0f} mm・最終 {dist[-1]*1000:.0f} mm）。'
