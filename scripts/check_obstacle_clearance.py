@@ -81,12 +81,43 @@ def main(run):
           f"（|y| > {s[1]:.2f} なら柱の脇を通っている）")
     print(f"⭐ 先端 z の範囲: {tip[:,2].min():+.3f} 〜 {tip[:,2].max():+.3f} m"
           f"（> {hi[2]:.2f} なら柱の上をまたいでいる）")
+    # ⭐ 2026-10-22（系譜 9-283）: 上の表は代表の 1 話だけ。全話（ep_*）でも、軸が柱の中に居た step と、
+    #   半径込みの表面の最接近（負＝カプセルが柱に食い込む）を出す。⛔ 以前は代表の話しか見ず、半径も見なかった
+    if 'ep_xpos' in z.files and 'ep_bone' in z.files:
+        rows = []
+        for e in range(len(z['ep_xpos'])):
+            xp_e = np.asarray(z['ep_xpos'][e], dtype=float)
+            if xp_e.ndim != 3 or len(xp_e) == 0:
+                continue
+            en_e = xp_e + np.einsum('tlij,lj->tli', np.asarray(z['ep_xmat'][e], dtype=float), np.asarray(z['ep_bone'][e], dtype=float))
+            rad = (np.asarray(z['ep_geom'][e], dtype=float).ravel()
+                   if 'ep_geom' in z.files and z['ep_geom'][e] is not None else np.zeros(xp_e.shape[1]))
+            ins_e, surf = np.zeros(len(xp_e), dtype=bool), np.inf
+            for i in range(xp_e.shape[1]):
+                for t in np.linspace(0, 1, P):
+                    q = xp_e[:, i, :] + (en_e[:, i, :] - xp_e[:, i, :]) * t
+                    ins_e |= np.all((q >= lo) & (q <= hi), axis=1)
+                    dd = np.linalg.norm(np.maximum(np.maximum(lo - q, q - hi), 0.0), axis=1) - rad[i]
+                    if np.isfinite(dd).any():
+                        surf = min(surf, float(np.nanmin(dd)))
+            tip_e = en_e[:, -1, :]
+            rows.append((e + 1, int(ins_e.sum()), len(xp_e), surf, float(np.nanmin(np.linalg.norm(tip_e - tgt, axis=1)))))
+            worst = max(worst, int(ins_e.sum()))
+        print(f"\n⭐ 全 {len(rows)} 話（軸が柱の中に居た step・半径込みの表面の最接近〔負＝食い込み〕・先端の目標最小距離）:")
+        for e, k, T, surf, dt in rows:
+            print(f"    {e} 話目  {k:>4} / {T:<5} 表面 {surf*1000:+7.1f} mm  目標まで {dt*1000:6.1f} mm"
+                  + ('  ⛔ 軸が柱の中' if k else ('  ⚠️ カプセルが柱に食い込む' if surf < 0 else '')))
+    else:
+        print("\n⚠️ 話ごとの軌跡（ep_*）が無い古い形式。代表の 1 話だけを見た")
     if worst == 0:
-        print("\n✅ **どのリンクも柱の中に入っていない ＝ 本当に回避している**")
+        print("\n✅ **どのリンクの軸も柱の中に入っていない**（全話。カプセルの表面は上の「表面」の列で見る）")
     else:
         print(f"\n⛔ **最大 {worst} step 柱の中に居る。回避とは言えない**（9-118 と同型）")
+    return worst
 
 
 if __name__ == '__main__':
+    bad = 0
     for r in sys.argv[1:]:
-        main(r); print()
+        bad += bool(main(r)); print()
+    sys.exit(1 if bad else 0)
