@@ -315,7 +315,7 @@ grep -rn "5\.5\|4\.4\.5" docs/ --include=*.md    # 旧番号で検索
 ```bash
 python3 scripts/check_docs_inventory.py
 python3 scripts/check_open_gaps.py      # ⭐ 埋まった穴の印が残っていないか
-python3 scripts/check_env_claims.py        # ⭐ 道具と環境の主張を実際に動かして確かめる（約 1 分半）
+python3 scripts/check_env_claims.py        # ⭐ 道具と環境の主張を実際に動かして確かめる（約 1 分半）。コンテナで回す（docker exec akita_sp_ppo …。ホストには Choreonoid が無く、止まる）
 python3 scripts/check_open_gaps.py --status   # ④層（進捗・引き継ぎ・方針）の「⏳ / 🔄 / 稼働中」の行を並べ、1 行ずつ本当にまだかを見る
 python3 scripts/check_rule_zombies.py          # 訂正の注記の前後に、古い命令が残っていないか（指示の層）
 ```
