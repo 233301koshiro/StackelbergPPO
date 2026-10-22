@@ -357,7 +357,61 @@ def fig_margin_ladder():
     return 'margin_ladder.png'
 
 
+def fig_arm_forms():
+    """修論 4.1.1 の図: 検証に用いた水平 3 関節アーム（2026-10-22、ユーザー指摘「肝心のロボットの画像の一つもない」）。
+
+    (a) M2 が生成したメッシュ（`data/tripo_arm_colorful2`、系譜 第5段の v2c の元）を横から。
+    (b) 比較に用いた 7 形態を上から。リンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
+    """
+    import xml.etree.ElementTree as ET
+    sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+    import glb_to_links as G
+    mesh = G._apply_yup_zup(G._load_concat(os.path.join(ROOT, 'data/tripo_arm_colorful2/colorful stacking rod 3d model.glb')))
+    V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
+    idx = np.random.default_rng(0).choice(len(V), min(30000, len(V)), replace=False)
+    k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
+
+    forms = [('短腕（0.5 倍）', 'short'), ('中間（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
+             ('根元重（配分）', 'prox'), ('先端重（配分）', 'dist'),
+             ('指針の 1.99 倍', 'rec199'), ('指針の 2.11 倍', 'rec211')]
+    col = ['#888888', '#d94040', '#3070d0', '#30a050']        # 台座・1・2・3 本目
+    fig, ax = plt.subplots(1, 2, figsize=(9.2, 4.6), gridspec_kw={'width_ratios': [0.42, 2.6]})
+    a = ax[0]
+    a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.4)
+    a.set_aspect('equal'); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]')
+    a.set_title('(a) 生成したメッシュ（横から）', fontsize=11)
+    a = ax[1]
+    for row, (lab, n) in enumerate(forms):
+        y = -row * 0.3
+        body = ET.parse(os.path.join(ROOT, f'assets/mujoco_envs/tripo_arm_v2c_pj_{n}_phys_arm171.xml')).getroot().find('worldbody/body')
+        a.add_patch(plt.Circle((0, y), 0.1, color=col[0], alpha=0.6))
+        x, j = 0.0, 1
+        for g in body.iter('geom'):
+            if g.get('fromto') is None:
+                continue
+            ft = list(map(float, g.get('fromto').split())); r = float(g.get('size'))
+            L = float(np.linalg.norm(np.subtract(ft[3:], ft[:3])))
+            a.add_patch(Rectangle((x, y - r), L, 2 * r, color=col[j], alpha=0.8, lw=0))
+            for q in (x, x + L):
+                a.add_patch(plt.Circle((q, y), r, color=col[j], alpha=0.8, lw=0))
+            a.plot(x, y, 'k.', ms=4)
+            x += L; j += 1
+        a.text(-0.14, y, lab, ha='right', va='center', fontsize=10)
+        a.text(x + 0.06, y, f'{x:.3f} m', va='center', fontsize=9)
+    for xv, lab in ((0.80, '到達の目標\n0.80 m'), (0.85, '押しの対象の\n手前の面 0.85 m')):
+        a.axvline(xv, color='k', ls='--' if xv == 0.80 else ':', lw=1)
+        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5)
+    a.set_xlim(-1.0, 1.85); a.set_ylim(-6 * 0.3 - 0.2, 0.42); a.set_aspect('equal')
+    a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
+    a.set_title('(b) 比較に用いた形態（上から）', fontsize=11)
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, 'arm_forms.png'))
+    plt.close(fig)
+    return 'arm_forms.png'
+
+
 FIGS = {'matrix': fig_matrix_reversal,
+        'arm': fig_arm_forms,
         'transfer': fig_transfer_decomposition,
         'diagnosis': fig_diagnosis_validation,
         'separation': fig_task_separation,
