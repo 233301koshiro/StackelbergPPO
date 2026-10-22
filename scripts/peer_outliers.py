@@ -9,8 +9,11 @@
      仲間は達成している（押し 0.5 m 以上、到達 5 mm 未満）
 実例: 9-240 の配分・実在 dist（prox 0〜1 mm に対し 57〜131 mm → 台座の球に当たっていた、9-241）。
 
-    python3 scripts/peer_outliers.py                    # 取り直しの run
-    python3 scripts/peer_outliers.py --suffix _noclip   # 退避した run で確かめる
+    python3 scripts/peer_outliers.py                    # 比べる組の run（`*_phys`）
+    python3 scripts/peer_outliers.py --suffix _nostrict # 組の run 名の末尾に付けた名前で退避した run
+
+⚠️ 最後に「見た本数」を出す。`--suffix` に当たる run が無いと、以前は黙って「✅ 外れた run は無い」と出た（9-283 ③）。
+   軌跡が読めない run も、以前は黙って外していた。今は ⚠️ で名前を出す。
 """
 import argparse
 import re
@@ -33,13 +36,17 @@ def best(r):
     return float(m[-1]) if m else None
 
 
+UNREADABLE = {}
+
+
 def task(r):
     p = ROOT / 'single_run' / r / 'trace' / 'arm_trace.npz'
     if not p.exists():
         return None
     try:
         name, v = metric(np.load(p, allow_pickle=True))
-    except Exception:
+    except Exception as ex:   # 黙って外さない
+        UNREADABLE[r] = f'{type(ex).__name__}: {ex}'
         return None
     return name, float(v.mean())
 
@@ -50,11 +57,14 @@ def main():
     a = ap.parse_args()
     out = []
     names = sorted({r for _, runs, _ in COMPARISONS for r in runs})
+    n_pair = 0
+    seen = set()
     # ① seed 対
     for r in names:
         b0, b1 = best(r + a.suffix), best(r + '_s2' + a.suffix)
         if b0 is None or b1 is None:
             continue
+        n_pair += 1
         if abs(b0 - b1) > max(5.0, 0.5 * max(abs(b0), abs(b1))):
             out.append(f'⚠️ seed で best が大きく違う: {r}{a.suffix} {b0:.2f} 対 _s2 {b1:.2f} → 両方を再生して形と動きを比べる')
     # ② 組の中で 1 本だけ達成していない
@@ -62,6 +72,7 @@ def main():
         for s2 in ('', '_s2'):
             got = {r: task(r + s2 + a.suffix) for r in runs}
             got = {r: v for r, v in got.items() if v}
+            seen.update(r + s2 + a.suffix for r in got)
             for r, (kind, v) in got.items():
                 peers = [pv for pr, (pk, pv) in got.items() if pr != r and pk == kind]
                 if not peers:
@@ -70,7 +81,12 @@ def main():
                     out.append(f'⚠️ {gname}: {r}{s2}{a.suffix} だけ届かない（誤差 {v:.0f} mm、仲間 {min(peers):.0f} mm）→ 先に再生して見る')
                 if kind.startswith('対象') and v < 0.1 and max(peers) > 0.5:
                     out.append(f'⚠️ {gname}: {r}{s2}{a.suffix} だけ対象が動かない（{v:.2f} m、仲間 {max(peers):.2f} m）→ 先に再生して見る')
+    for r, why in sorted(UNREADABLE.items()):
+        out.append(f'⚠️ 軌跡が読めないので外した: {r}（{why}）')
     print('\n'.join(out) if out else '✅ 外れた run は無い（完走して軌跡がある分だけ）')
+    print(f'（見た: seed 対 {n_pair} 組・軌跡 {len(seen)} 本）')
+    if n_pair == 0 and not seen:
+        print(f'⚠️ 該当する run が 0 本。--suffix {a.suffix!r} と組の run 名（check_before_conclusion.py の COMPARISONS）を確かめる')
 
 
 if __name__ == '__main__':
