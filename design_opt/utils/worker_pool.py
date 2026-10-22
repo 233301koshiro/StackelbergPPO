@@ -41,6 +41,9 @@ class ChoreonoidWorkerPool:
         cfg_yaml = OmegaConf.to_yaml(flags)
 
         print(f'[WorkerPool] Launching {self.n_workers} choreonoid workers...', flush=True)
+        # Bug 76: 効いたワーカーの種を学習の stdout.log に残す（ワーカーのログは /tmp にしか残らない）
+        from design_opt.utils.tools import worker_seed
+        print(f'[WorkerPool] ⭐ ワーカーの乱数の種 {[worker_seed(cfg.seed, i) for i in range(self.n_workers)]}（seed {cfg.seed}、Bug 76）', flush=True)
 
         for i in range(self.n_workers):
             # duplex=False: conn1=読み取り専用, conn2=書き込み専用
