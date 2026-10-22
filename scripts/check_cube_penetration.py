@@ -23,6 +23,10 @@
 
     python3 scripts/check_cube_penetration.py            # Pusher の軌跡すべて
     python3 scripts/check_cube_penetration.py <run名>    # 1 本だけ
+
+⛔ 2026-10-22（系譜 9-283「まだ見ていないもの」）: 以前は代表の 1 話（`xpos`・`cube`）しか見ず、5 話の軌跡（`ep_*`）の
+   ほかの話で腕が箱を通り抜けても「通り抜けは無い」と出た（3 話目にだけ通り抜けを作った軌跡で確かめた）。
+   通り抜けと軸の食い込みは全話で数える。表は代表の話のまま。問題があれば終了コード 1。
 """
 import sys
 from pathlib import Path
@@ -50,6 +54,21 @@ def cube_half(xml_name):
     return None, None, None
 
 
+def _through_inside(xpos, ends, c, s):
+    """(腕が箱の向こう側へ出た標本の数, リンクの軸が箱の中に入った step の数)。1 話ぶん。"""
+    T = len(xpos)
+    through, inside = 0, np.zeros(T, dtype=bool)
+    for i in range(xpos.shape[1]):
+        a_, b_ = xpos[:, i, :], ends[:, i, :]
+        for u in np.linspace(0, 1, P):
+            p_ = a_ + (b_ - a_) * u
+            through += int(np.sum((p_[:, 0] > c[:, 0] + s[0])
+                                  & (np.abs(p_[:, 1] - c[:, 1]) < s[1])
+                                  & (np.abs(p_[:, 2] - c[:, 2]) < s[2])))
+            inside |= np.all(s[None, :] - np.abs(p_ - c) > 0, axis=1)
+    return through, int(inside.sum())
+
+
 def check(run):
     d = ROOT / 'single_run' / run
     tz = d / 'trace' / 'arm_trace.npz'
@@ -60,6 +79,12 @@ def check(run):
     xml = cfg.get('xml_name')
     typ, s, cz = cube_half(xml)
     print(f"=== {run}   xml={xml}")
+    if 'hockey' in str(xml):
+        # ⛔ 2026-10-22: 「腕が箱の +x 側へ出た＝通り抜け」は押しの前提。ホッケーのパックは壁で跳ね返って腕の側へ
+        #   戻るので、腕がパックの向こう側にいるのは普通に起きる（全話で数えたら blk3d が 56853 標本と出た）。
+        #   ホッケーの壁・パックの抜けは check_invariants.py の「壁」と judge_hockey_goal.py が見る
+        print("    ⚠️ ホッケーは判定しない（通り抜けの向きが決まらない。壁は check_invariants.py が見る）")
+        return None
     if typ is None:
         print("    ⚠️ cube が無い XML。判定しない")
         return None
@@ -133,6 +158,30 @@ def check(run):
                                   & (np.abs(p_[:, 1] - c[:, 1]) < s[1])
                                   & (np.abs(p_[:, 2] - c[:, 2]) < s[2])))
 
+    # ⭐ 全話（ep_*）でも通り抜けと軸の食い込みを数える（代表の話だけでは他の話の通り抜けを見ない）
+    ep_bad = []
+    if 'ep_xpos' in z.files and 'ep_bone' in z.files:
+        for e in range(len(z['ep_xpos'])):
+            xp_e = np.asarray(z['ep_xpos'][e], dtype=float)
+            if len(xp_e) < 2:
+                continue
+            xm_e, bo_e = np.asarray(z['ep_xmat'][e], dtype=float), np.asarray(z['ep_bone'][e], dtype=float)
+            ce = np.asarray(z['ep_cubes'][e], dtype=float)
+            c_e = np.column_stack([ce[:, 0], ce[:, 1], np.full(len(ce), cz)])
+            th_e, in_e = _through_inside(xp_e, xp_e + np.einsum('tlij,lj->tli', xm_e, bo_e), c_e, s)
+            if th_e or in_e:
+                ep_bad.append((e + 1, th_e, in_e))
+        n_ep = len(z['ep_xpos'])
+        if ep_bad:
+            print(f"\n⛔⛔ **全 {n_ep} 話のうち {len(ep_bad)} 話で、腕が箱の向こう側へ出たか軸が箱に入った**: "
+                  + '・'.join(f'{e} 話目（向こう側 {th} 標本・軸が中 {k} step）' for e, th, k in ep_bad))
+            through += sum(th for _, th, _ in ep_bad)
+            total += sum(k for _, _, k in ep_bad)
+        else:
+            print(f"\n⭐ 全 {n_ep} 話で、腕が箱の向こう側へ出た標本も、軸が箱に入った step も 0。")
+    else:
+        print("\n⚠️ 話ごとの軌跡（ep_*）が無い古い形式。代表の 1 話だけを見た")
+
     moved = float(abs(c[-1, 0] - c[0, 0]))
     print()
     if through:
@@ -160,13 +209,12 @@ def check(run):
     elif rad is not None:
         print(f"✅ **食い込みは無い**（半径込みで判定。標本の刻み {step_move*1000:.0f} mm "
               f"< 隙間 {gap_min*1000:.0f} mm）。")
-    return total
+    return total + through
 
 
 def main():
     if len(sys.argv) > 1:
-        check(sys.argv[1])
-        return
+        return 1 if check(sys.argv[1]) else 0
     runs = sorted(p.parent.parent.name for p in
                   (ROOT / 'single_run').glob('*/trace/arm_trace.npz'))
     bad = []
@@ -177,12 +225,13 @@ def main():
         print()
     print('=' * 60)
     if bad:
-        print(f"⛔⛔ **{len(bad)} 本で腕の軸が cube の内部に入っていた**")
+        print(f"⛔⛔ **{len(bad)} 本で腕の軸が cube の内部に入ったか、向こう側へ出た**（全話で数える）")
         for r, t in bad:
-            print(f"    {r}  ({t} step)")
-    else:
-        print("✅ 軸が cube に入った run は無い")
+            print(f"    {r}  ({t} 標本・step)")
+        return 1
+    print("✅ 軸が cube に入った・向こう側へ出た run は無い（全話で数える）")
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
