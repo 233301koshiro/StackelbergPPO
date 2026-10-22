@@ -73,8 +73,9 @@ def running_best(y):
 def fig_matrix_reversal():
     labels = ['短腕 0.403 m', '中間 0.887 m', '長腕 1.451 m']
     cols = [C_SHORT, C_MID, C_LONG]
-    runs_r = ['tripo_pj_short', 'tripo_pj_mid', 'tripo_pj_long']
-    runs_p = ['tripo_pjp_short', 'tripo_pjp_mid', 'tripo_pjp_long']
+    # 実在の物理のシード 0（系譜 9-246）。短腕は Bug 72 の門を直した取り直し（9-271）
+    runs_r = ['tripo_pj_short_phys_cg', 'tripo_pj_mid_phys', 'tripo_pj_long_phys']
+    runs_p = ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys']
     best_r = [running_best(curve(r)[1])[-1] for r in runs_r]
     best_p = [running_best(curve(r)[1])[-1] for r in runs_p]
 
