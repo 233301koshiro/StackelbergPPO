@@ -22,7 +22,8 @@
   10. ⭐ **縦型アームの台座が倒れていないか**（Bug 58。9-235）
   12. ⭐ **物理的にありえない値が無いか**（`check_invariants.py`。2026-10-12）
   11. ⭐ **比べる相手と起動行が、比べる変数以外で違わないか**（Bug 59。9-238）。組は COMPARISONS。
-      任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）
+      任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）。
+      ⭐ 起動行に出ないワーカーの乱数の種も比べる（Bug 76。直す前の seed 1 は 2〜5、直した後は 1001〜1004。2026-10-22）
   13. ⭐ **起動行の robot_param_scale が学習に届いたか**（Bug 74・Bug 75）。記録された値と、
       `log_train.txt` の「⭐ robot_param_scale = …」の行（無い run は当時の config.py が読んだ yml の値）を比べる。
       `--reproduce` で、既知の失敗（凍結が効かなかった R1）と既定値の取り違えを拾えるかを確かめる
@@ -477,6 +478,22 @@ def same_curve(a, b, n_min=5):
     return n >= n_min and ca[:n] == cb[:n], n
 
 
+def _worker_seeds(r):
+    """⛔ Bug 76: ワーカーの乱数の種。起動行には出ない変数で、直す前の seed 1（2〜5）と直した後（1001〜1004）が違う。
+    stdout の「ワーカーの乱数の種 [...]」の行（直した後の run）か、無ければ直す前の式 seed + 番号 + 1 から。→ (種の列, 出どころ)"""
+    out = run_dir(r) / 'stdout.log'
+    if out.exists():
+        m = re.search(r'ワーカーの乱数の種 \[([0-9, ]+)\]', out.read_text(encoding='utf-8', errors='ignore'))
+        if m:
+            return [int(x) for x in m.group(1).split(',')], 'stdout'
+    o = _overrides(r) or {}
+    try:
+        seed, n = int(float(o.get('seed', 0))), int(float(o.get('num_threads', 4)))
+    except (TypeError, ValueError):
+        return None, '起動行から読めない'
+    return [seed + i + 1 for i in range(n)], '直す前の式'
+
+
 def ck_pair(r):
     base, s2 = (r[:-3], '_s2') if r.endswith('_s2') else (r, '')
     msgs, bad, n = [], False, 0
@@ -496,6 +513,10 @@ def ck_pair(r):
             if d:
                 bad = True
                 msgs.append(f'{name} の {o + s2} と: {"; ".join(d)}')
+            (wa, sa), (wb, sb) = _worker_seeds(r), _worker_seeds(o + s2)
+            if wa is not None and wb is not None and wa != wb:
+                bad = True
+                msgs.append(f'{name} の {o + s2} とワーカーの乱数の種が違う（{wa}〔{sa}〕対 {wb}〔{sb}〕。起動行には出ない、Bug 76）')
             same, m = same_curve(r, o + s2)
             if same:
                 bad = True
@@ -549,6 +570,11 @@ def reproduce():
          != _resolve({'cfg': 'pusher_gearonly_real'})['robot_param_scale']),
         ('到達の長腕 seed1 の手首の折り返し（9-287）を ⚠️', ck_fold('tripo_pj_long_phys_s2')[0] is None),
         ('折り返さない中間は ✅', ck_fold('tripo_pj_mid_phys')[0] is True),
+        # ⛔ Bug 76: 種を直した後の seed 1 と直す前の seed 1 は、起動行が 1 変数違いでもワーカーの種が違う
+        ('R1 の凍結 seed1（新しい種）と凍結しない mid seed1（古い種）の種の違いを拾う',
+         _worker_seeds('tripo_pjp_mid_frozen_phys_fx_s2')[0] != _worker_seeds('tripo_pjp_mid_phys_s2')[0]),
+        ('seed0 どうしは種が同じ（直す前後で 1〜4）',
+         _worker_seeds('tripo_pjp_mid_frozen_phys_fx')[0] == _worker_seeds('tripo_pjp_mid_phys')[0] == [1, 2, 3, 4]),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
