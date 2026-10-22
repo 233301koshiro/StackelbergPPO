@@ -1098,6 +1098,13 @@ class ChoreonoidSimWorld:
             self.sim_item.setContactCullingDepth(float(_cd))
             # ⚠️ 読み返しの関数は Python に公開されていない。効いたかは再生で既知の失敗が消えるかで見る
             print(f'[choreonoid] ⭐ 接触を捨てる深さを {float(_cd)} m に設定した（既定 0.05、Bug 57）', flush=True)
+        # ⭐ 2026-10-22（系譜 9-288 の追い調べ）: 接触の力を解く反復（ガウス・ザイデル法）の上限。AIST の既定は 25
+        #   （`ConstraintForceSolver.cpp` の DEFAULT_MAX_NUM_GAUSS_SEIDEL_ITERATION）。ホッケーで先端が床に 30〜48 mm
+        #   入ったまま残るのが、反復が足りずに接触の力が収束しないためかを確かめる口。⚠️ **既定では何もしない**（指定したときだけ）
+        _mi = os.environ.get('CNOID_MAX_ITER')
+        if _mi:
+            self.sim_item.setMaxNumIterations(int(_mi))
+            print(f'[choreonoid] ⭐ 接触の反復の上限を {int(_mi)} 回に設定した（既定 25）', flush=True)
 
         # ⭐⭐ 反発係数（2026-09-26、9-173）。
         #   ⛔⛔ **AISTSimulator は材質ごとの `restitution` を読まない。**
