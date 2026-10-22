@@ -52,6 +52,8 @@ def main_loop(FLAGS, job_dir):
 
     """create agent"""
     agent = BodyGenAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=FLAGS.num_threads, training=True, checkpoint=load_epoch)
+    # Bug 74: 効いた値と出どころを一次ログに残す（起動行の値が捨てられても ep0 で分かるように）
+    agent.logger.info(f'⭐ robot_param_scale = {cfg.robot_param_scale}（{cfg.robot_param_scale_src} から）')
 
     if FLAGS.render:
         agent.pre_epoch_update(start_epoch)

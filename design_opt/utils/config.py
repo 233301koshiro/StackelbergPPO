@@ -101,7 +101,9 @@ class Config:
         self.env_init_height = cfg.get('env_init_height', False)
 
         # robot config
-        self.robot_param_scale = cfg.get('robot_param_scale', 0.1)
+        # ⛔ Bug 74（系譜 9-281）: 以前は yml だけを読み、起動行の `+robot_param_scale=` を黙って捨てていた（R1 の凍結が効かなかった）
+        self.robot_param_scale_src = 'flag' if FLAG.get('robot_param_scale', None) is not None else 'yml'
+        self.robot_param_scale = FLAG.get('robot_param_scale', cfg.get('robot_param_scale', 0.1))
         self.robot_cfg = cfg.get('robot', dict())
         # ⭐ 系譜 9-235: `+fix_base=true` で根元の柱（台座）の形を設計変数から外す（xml_robot.Body.set_params）
         if FLAG.get('fix_base', False):

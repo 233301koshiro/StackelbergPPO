@@ -318,7 +318,9 @@ COMPARISONS = [
     ('押しの柱（4.4.3）', ['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys'], {'xml_name'}),
     ('armature 1.71 対 1（long）', ['tripo_pjp_long_phys', 'tripo_pjp_long_phys_arm1'], {'xml_name'}),
     ('armature 1.71 対 1（mid）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_arm1'], {'xml_name'}),
-    ('R1 形の凍結（4.4.1）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys'], {'robot_param_scale'}),
+    # ⛔ Bug 74: tripo_pjp_mid_frozen_phys は凍結が効いていなかった（mid と全 epoch 一致）ので組から外し、_fx で取り直す（9-281）。
+    #   same_curve はこの旧い組で「200 epoch すべて一致」を拾うことを 10-22 に確かめた（組に残すと正しい mid まで ⛔ になる）
+    ('R1 形の凍結（4.4.1）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys_fx'], {'robot_param_scale'}),
     ('R2 縦型の到達 対 押し', ['e2e_a1v_reach_phys', 'e2e_a1v_pusher_phys'], 'TASK'),
     # ⭐ Bug 72（10-21）: 短腕も 11 のはみ出しで台座に食い込んでいたので、門を直して取り直す（queue_short_capgate.sh）
     ('到達マトリクス（4.4.3.2）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
@@ -388,6 +390,18 @@ def diff_runs(a, b, allowed):
     return out
 
 
+def _exec_curve(r):
+    log = run_dir(r) / 'log' / 'log_train.txt'
+    return re.findall(r'exec_R_eps\s+(-?[\d.]+)', log.read_text(encoding='utf-8', errors='ignore')) if log.exists() else []
+
+
+def same_curve(a, b, n_min=5):
+    """⛔ Bug 74（系譜 9-281）: 同じ seed で比べる変数だけ違うのに exec_R_eps が全 epoch 一致 ＝ その変数が学習に届いていない。"""
+    ca, cb = _exec_curve(a), _exec_curve(b)
+    n = min(len(ca), len(cb))
+    return n >= n_min and ca[:n] == cb[:n], n
+
+
 def ck_pair(r):
     base, s2 = (r[:-3], '_s2') if r.endswith('_s2') else (r, '')
     msgs, bad, n = [], False, 0
@@ -407,8 +421,12 @@ def ck_pair(r):
             if d:
                 bad = True
                 msgs.append(f'{name} の {o + s2} と: {"; ".join(d)}')
+            same, m = same_curve(r, o + s2)
+            if same:
+                bad = True
+                msgs.append(f'⛔⛔ {name} の {o + s2} と exec_R_eps が {m} epoch すべて一致（比べる変数が学習に届いていない、Bug 74）')
     if bad:
-        return False, '⛔ 比べる相手と起動行が違う（Bug 59）: ' + ' ／ '.join(msgs)
+        return False, '⛔ 比べる相手との比較が成り立たない（起動行の違い Bug 59・曲線の一致 Bug 74）: ' + ' ／ '.join(msgs)
     return True, (f'比べる相手 {n} 本と、比べる変数以外は同じ' if n else '比べる相手が無い・まだ無い（COMPARISONS に無い組は見ない）')
 
 
