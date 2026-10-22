@@ -563,6 +563,12 @@ def ck_invariants(r):
     return True, f'{len(res)} 項目とも成り立つ'
 
 
+def _inv_item(r, name):
+    """不変条件の 1 項目だけの判定（--reproduce 用）"""
+    from check_invariants import run as inv
+    return {n: ok for n, ok, _ in inv(r)}[name]
+
+
 def ck_effective(r):
     """⭐ 13. 起動行（無ければ yml）の robot_param_scale と、学習に効いた値が同じか（Bug 74・Bug 75）。"""
     o = _raw_overrides(r)
@@ -602,6 +608,9 @@ def reproduce():
         # ⭐ 9-288: 割合は小さいが深い床下（ホッケー seed0 の開始の姿勢、先端 66 mm）
         ('床の深く短い沈み込み（9-288）を ⛔', ck_invariants('hockey_bank9_phys_g10_wfix')[0] is False),
         ('押しの中間は不変条件 ✅', ck_invariants('tripo_pjp_mid_phys')[0] is True),
+        # ⭐ 壁の判定に高さを足した（10-22）: 壁の上空を通るのは壁に入っていない。浮いた壁の下へ入るのは入っている（=3d が箱を床まで伸ばすのはこれを止めるため、Bug 71 の対処）
+        ('ホッケー blk3d の腕は壁の上空（z 0.31 以上）を通るだけ → 壁は ✅', _inv_item('hockey_bank9_phys_g10_blk3d', '壁') is True),
+        ('ホッケー wfix の腕は浮いた壁の下を通る（|y| 0.89）→ 壁は ⛔', _inv_item('hockey_bank9_phys_g10_wfix', '壁') is False),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
