@@ -123,6 +123,50 @@ class Config:
         self.control_prior = FLAG.get('control_prior', False)
         self.fix_skeleton = FLAG.get('fix_skeleton', False)
 
+        # ⭐ 系譜 9-283 ①・9-285: 読まれない設定を黙って捨てない（Bug 74 の型）。警告を出すだけで、効く値は変えない
+        try:
+            self.unread_warnings = self._unread_settings(FLAG, cfg)
+        except Exception as e:      # 検査の失敗で学習を止めない
+            self.unread_warnings = [f'読まれない設定の検査が例外で止まった: {e!r}']
+        for w in self.unread_warnings:
+            print(f'[Config] ⚠️ {w}', flush=True)
+
+    # 上の __init__ が yml（cfg）だけから読む設定と、起動行・conf（FLAG）だけから読む設定。__init__ に足したらここにも足す
+    _YML_ONLY = {'gamma': 'gamma', 'tau': 'tau', 'agent_specs': 'agent_specs', 'adv_clip': 'adv_clip',
+                 'seed_method': 'seed_method', 'scheduled_params': 'scheduled_params', 'env_name': 'env_name',
+                 'done_condition': 'done_condition', 'add_body_condition': 'add_body_condition',
+                 'max_body_depth': 'max_body_depth', 'min_body_depth': 'min_body_depth',
+                 'enable_remove': 'enable_remove', 'env_init_height': 'env_init_height', 'robot': 'robot_cfg'}
+    _FLAG_ONLY = ('epoch', 'eval_batch_size', 'lr_decay', 'policy_optimizer', 'policy_lr', 'policy_momentum',
+                  'policy_weightdecay', 'value_optimizer', 'value_lr', 'value_momentum', 'value_weightdecay',
+                  'clip_epsilon', 'num_optim_epoch', 'min_batch_size', 'mini_batch_size', 'max_epoch_num', 'seed',
+                  'save_model_interval', 'norm_advantage', 'max_grad_norm', 'uni_obs_norm', 'norm_return',
+                  'reward_shift', 'xml_name', 'planner_demean', 'enable_wandb', 'group', 'skel_entropy_coef',
+                  'attr_entropy_coef', 'control_entropy_coef', 'skel_transform_nsteps', 'reset_epoch',
+                  'reset_obs_norm', 'skel_uniform_prob', 'stack_follower_steps', 'lamda', 'fisher_correct',
+                  'stabilize_fisher', 's_gradient_limit', 'gradient_ratio_limit', 'morph_prior', 'control_prior',
+                  'fix_skeleton')
+    _BOTH = ('policy_specs', 'obs_specs', 'value_specs', 'env_specs', 'reward_specs', 'robot_param_scale', 'fix_base', 'restore_dir')
+    # train.py が FLAG から直接読むもの・Hydra と conf の管理用（Config の外）
+    _ELSEWHERE = ('render', 'show_noise', 'num_threads', 'gpu_index', 'project', 'job_name', 'cfg', 'hydra',
+                  'n', 'tmp', 'base_dir', 'project_path')
+
+    def _unread_settings(self, FLAG, cfg):
+        from omegaconf import OmegaConf
+        plain = lambda v: OmegaConf.to_container(v, resolve=True) if OmegaConf.is_config(v) else v
+        out = []
+        for k, attr in self._YML_ONLY.items():
+            if k in FLAG and plain(FLAG[k]) != plain(getattr(self, attr)):
+                out.append(f'起動行・conf の {k}={plain(FLAG[k])} は読まれない（yml から読み {plain(getattr(self, attr))} が効く）')
+        for k in self._FLAG_ONLY:
+            if k in cfg and plain(cfg[k]) != plain(getattr(self, k)):
+                out.append(f'yml の {k}={cfg[k]} は読まれない（起動行・conf から読み {plain(getattr(self, k))} が効く）')
+        known = set(self._YML_ONLY) | set(self._FLAG_ONLY) | set(self._BOTH) | set(self._ELSEWHERE)
+        for k in FLAG.keys():
+            if k not in known:
+                out.append(f'起動行の {k} はどこにも読まれない')
+        return out
+
 
 def replay_robot_param_scale(cfg, run_dir):
     """再生の道具が呼ぶ: 学習に効いた robot_param_scale に cfg を合わせる（学習では呼ばない）。
