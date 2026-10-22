@@ -286,6 +286,24 @@ def ck_far_pen(r):
     return True, msg
 
 
+def ck_fold(r):
+    """⭐ 系譜 9-287: **隣り合うリンクを 120° を超えて折り返す姿勢を使っていないか**（同じ平面に並べた実機では当たる）。
+
+    学習は隣り合う組を判定しない（関節で必ず重なる）ので、ここは止めずに ⚠️ を出す。使っていれば、結論に
+    「実機では段違いの取り付けが要る」を添える（禁じたときの成績は学習し直さないと分からない）。
+    """
+    if not (run_dir(r) / 'trace' / 'arm_trace.npz').exists():
+        return False, '⛔ 再生していない'
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from check_self_penetration import fold, FOLD_DEG
+    mx, fr, pr, ne = fold(r)
+    msg = f'隣り合う組の最大の曲げ {mx:.1f}°、{FOLD_DEG:.0f}° 超は全 {ne} 話の step の {fr*100:.1f} %'
+    if fr > 0.01:
+        return None, (f'⚠️ {msg}（{"×".join(pr)}）。同じ平面の実機では当たる姿勢を使っている → 結論に'
+                      '「実機では段違いの取り付けが要る」を添える（修論 5.3 (C)）')
+    return True, msg
+
+
 def ck_base(r):
     """⭐ 系譜 9-235・Bug 58: **縦型アームの台座が倒れていないか**。"""
     import json as _j
@@ -516,7 +534,7 @@ CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg),
           ('⭐⭐ exec 到達', ck_entered_exec),
-          ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 台座', ck_base),
+          ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 折り返し', ck_fold), ('⭐ 台座', ck_base),
           ('⭐ 比べる相手', ck_pair), ('⭐ 不変条件', ck_invariants), ('⭐ 効いた値', ck_effective)]
 
 
@@ -529,6 +547,8 @@ def reproduce():
         ('明示の 0.1 と指定なし（yml 1）を違うと見る',
          _resolve({'cfg': 'pusher_gearonly_real', 'robot_param_scale': '0.1'})['robot_param_scale']
          != _resolve({'cfg': 'pusher_gearonly_real'})['robot_param_scale']),
+        ('到達の長腕 seed1 の手首の折り返し（9-287）を ⚠️', ck_fold('tripo_pj_long_phys_s2')[0] is None),
+        ('折り返さない中間は ✅', ck_fold('tripo_pj_mid_phys')[0] is True),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
