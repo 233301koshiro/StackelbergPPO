@@ -26,6 +26,11 @@ import sys
 import numpy as np
 
 TOL = 0.005          # めり込みがこれ [m] を超えた step を「すり抜け」と数える
+# ⭐ 2026-10-22（ユーザー「実機での gap の 1 つに衝突はあるから、これに対して言えないのはまずい」、系譜 9-287）:
+#   隣り合う組を「関節のまわり（2 本の半径の和 d）を両方から削って」判定すると、削った端どうしの距離は 2d·sin(φ/2)
+#   （φ は 2 本のなす角）で、d を切ると当たる → φ < 60°＝**まっすぐから 120° を超えて曲げると当たる**（半径に依らない）。
+#   同じ平面に並べた実機では取れない姿勢の目安。⚠️ 120° は「削る量＝半径の和」という仮定から出る値で、実機の関節の組み方の裏付けは無い
+FOLD_DEG = 120.0
 
 
 def seg_seg_dist(p1, q1, p2, q2):
@@ -80,6 +85,12 @@ def self_check():
         far = measure(f)[4]
         assert far[2] and far[0] > 0.05 and far[3] == ('0', '11'), far
         print(f'✅ 関節の後ろへのはみ出し（Bug 72）: dist の 0×11 の食い込み {far[0]*1000:.0f} mm を拾う')
+    # ⭐ 系譜 9-287: 到達の長腕 seed1 が手首（11×111）を 148° 折り返す姿勢を拾えるか、折り返さない中間は拾わないか
+    for r, want in [('tripo_pj_long_phys_s2', True), ('tripo_pj_mid_phys', False)]:
+        if os.path.exists(f'single_run/{r}/trace/arm_trace.npz'):
+            fo = fold(r)
+            assert (fo[1] > 0.5) == want, (r, fo)
+            print(f'✅ 折り返し（9-287）: {r} 最大 {fo[0]:.1f}°・{FOLD_DEG:.0f}° 超 {fo[1]*100:.1f} %（{"拾う" if want else "拾わない"}）')
 
 
 def measure(run):
@@ -133,6 +144,29 @@ def measure(run):
     return worst, frac, pair_w, T, far
 
 
+def fold(run):
+    """隣り合うリンクの曲げ角（まっすぐ＝0°）。全話（`ep_xmat`）で、最大角・FOLD_DEG を超えた step の割合・その組を返す。"""
+    p = run if run.endswith('.npz') else f'single_run/{run}/trace/arm_trace.npz'
+    d = np.load(p, allow_pickle=True)
+    if 'ep_xmat' in d.files:      # ⚠️ 話ごとに長さが違うと object 配列になるので、話ごとに扱う
+        eps = [(np.asarray(x, float), np.asarray(b, float)) for x, b in zip(d['ep_xmat'], d['ep_bone'])]
+    else:
+        eps = [(np.asarray(d['xmat'], float), np.asarray(d['bone_offset'], float))]
+    us = []
+    for X, B in eps:                                        # (step, リンク, 3, 3)・(リンク, 3)
+        u = np.einsum('tlij,lj->tli', X, B)
+        us.append(u / np.maximum(np.linalg.norm(u, axis=-1, keepdims=True), 1e-12))
+    u = np.concatenate(us)
+    worst, frac, pair = 0.0, 0.0, None
+    for i in range(1, u.shape[1] - 1):                     # 根元の球（0）は骨の向きが運動学に効かない（9-154）
+        ang = np.degrees(np.arccos(np.clip((u[:, i] * u[:, i + 1]).sum(-1), -1, 1)))
+        f = float((ang > FOLD_DEG).mean())
+        if f > frac or (f == frac and ang.max() > worst):
+            pair = (str(d['body_names'][i]), str(d['body_names'][i + 1]))
+        worst, frac = max(worst, float(ang.max())), max(frac, f)
+    return worst, frac, pair, len(eps)
+
+
 def main():
     if '--self-check' in sys.argv:
         return self_check()
@@ -147,20 +181,24 @@ def main():
     for r in runs:
         try:
             w, fr, pr, T, far = measure(r)
+            fo = fold(r)
         except Exception as e:
             print(f'  ⚠️ {r}: 読めない（{e!r}）'); continue
-        rows.append((r, w, fr, pr, T, (f'`{r}`' in thesis) or (r in thesis), far))
+        rows.append((r, w, fr, pr, T, (f'`{r}`' in thesis) or (r in thesis), far, fo))
     rows.sort(key=lambda z: -z[1])
     hit = [z for z in rows if z[2] > 0]
     print(f'\n⭐ 対象 {len(rows)} run  /  すり抜けあり（めり込み > {TOL*1000:.0f} mm の step が 1 つ以上）: {len(hit)} run'
           f'  /  そのうち修論本文に名前が出る run: {sum(z[5] for z in hit)}')
     # ⭐ 離れた組を別に出す（2026-10-09、系譜 9-227）。⛔ 最悪の 1 組だけだと、隣り合う組の重なりの陰に
     #   離れた組の 39〜45 mm が隠れ、9-223 で「離れた組 0」と読み違えた
-    print(f'{"run":44s} {"最大めり込み":>10s} {"step の割合":>10s}  {"組":14s} {"うち離れた組":>16s} 修論')
-    for r, w, fr, pr, T, th, far in rows:
-        if fr == 0 and len(runs) > 3:
+    nf = sum(z[7][1] > 0 for z in rows)
+    print(f'⭐ 隣り合う組を {FOLD_DEG:.0f}° を超えて折り返す（同じ平面の実機では当たる）step がある: {nf} run（全話で数える）')
+    print(f'{"run":44s} {"最大めり込み":>10s} {"step の割合":>10s}  {"組":14s} {"うち離れた組":>16s}  {"折り返し（最大・"+str(int(FOLD_DEG))+"°超・組）":24s} 修論')
+    for r, w, fr, pr, T, th, far, fo in rows:
+        if fr == 0 and fo[1] == 0 and len(runs) > 3:
             continue
-        print(f'{r:44s} {w*1000:8.0f} mm {fr*100:9.1f} %  {str(pr):14s} {far[0]*1000:5.0f} mm {far[1]*100:5.1f} %  {"★" if th else ""}')
+        print(f'{r:44s} {w*1000:8.0f} mm {fr*100:9.1f} %  {str(pr):14s} {far[0]*1000:5.0f} mm {far[1]*100:5.1f} %  '
+              f'{fo[0]:6.1f}° {fo[1]*100:5.1f} % {str(fo[2]) if fo[1] else "":16s} {"★" if th else ""}')
 
 
 if __name__ == '__main__':
