@@ -39,6 +39,7 @@ FLOOR_FRAC = 0.01   # 床下にいてよい step の割合
 #   0.5 % の step だけ 182 mm 沈めた軌跡が ✅ だった。深さは離れた組のめり込みの ⛔ と同じ 50 mm
 FLOOR_DEEP = 0.050
 START_V = 0.5       # 「動き出した」とみなす対象の速さ [m/s]
+JUMP_V = 0.5        # 話の途中で「加速した」とみなす 1 記録 step の速さの増え [m/s]（judge_hockey_goal.py の JUMP と同じ）
 DT = 0.04           # 記録 1 step
 
 
@@ -96,13 +97,19 @@ def _touch(d, xml):
         idx = np.nonzero(v > START_V)[0]
         if not len(idx):
             continue
-        k = int(idx[0])                          # c[k] → c[k+1] で速く動いた
-        # 標本の刻み（Bug 48）: その間に腕の点が動いた距離までは「触れていない」と言えない
+        # 調べる step: 最初に動き出した step と、⭐ 話の途中で速さが JUMP_V 以上増えた step（2026-10-22、系譜 9-283 ③:
+        # 以前は最初の 1 回だけで、50 step 目で腕に触れずに箱を 0.1 m 動かした軌跡が ✅ だった。Bug 39・9-93・Bug 70 の型）
+        # ⚠️ 跳ね返り（壁・板・可動域の端）は、衝突を含む記録 step で速さが一度落ち、次の step で戻るので「加速」に見える
+        #   （_blk3d の話 2・5: 1.49 → 0.52 → 1.05 m/s、比 0.73）。衝突の前（2 step 前）の速さも超えたときだけ数える
+        prev = np.maximum(v[1:-1], v[:-2])                   # v[k-1] と v[k-2]（k = 2…）
+        ks = sorted({int(idx[0])} | {int(k) for k in np.nonzero(v[2:] - prev > JUMP_V)[0] + 2 if v[k] > START_V})
         ends = xp + np.einsum('tlij,lj->tli', xm, bo)
-        res = float(np.linalg.norm(ends[k + 1] - ends[k], axis=1).max())
-        g = min(gap(xp[j], xm[j], bo, rad, c[j], half) for j in (k, k + 1))
-        if g > res + 0.02:
-            out.append((e + 1, k, round(g * 1000), round(res * 1000)))
+        for k in ks:                             # c[k] → c[k+1] で速く動いた
+            # 標本の刻み（Bug 48）: その間に腕の点が動いた距離までは「触れていない」と言えない
+            res = float(np.linalg.norm(ends[k + 1] - ends[k], axis=1).max())
+            g = min(gap(xp[j], xm[j], bo, rad, c[j], half) for j in (k, k + 1))
+            if g > res + 0.02:
+                out.append((e + 1, k, round(g * 1000), round(res * 1000)))
     # ⭐ 置いた瞬間に重なっていないか（Bug 55: 重なりの押し出しは「触れてから動く」を満たしてしまう）
     over = []
     for e in range(len(d['ep_init'])):
@@ -119,8 +126,9 @@ def _touch(d, xml):
     if over:
         return False, f'⛔ 置いた瞬間に腕と対象が重なっている話: (話, 隙間 mm) {over[:3]}（Bug 55 型。動いても打撃ではない）'
     if out:
-        return False, f'⛔ 腕が離れているのに対象が動き出した話: (話, step, 隙間 mm, 刻み mm) {out[:3]}（Bug 55 型）'
-    return True, '対象は腕に触れてから動き出す'
+        return False, (f'⛔ 腕が離れているのに対象が動き出した・加速した: (話, step, 隙間 mm, 刻み mm) {out[:3]}'
+                       f'{f" ほか {len(out) - 3} 件" if len(out) > 3 else ""}（Bug 55・Bug 70 型）')
+    return True, '対象は腕に触れてから動き出し、途中で腕から離れて加速しない'
 
 
 def _finite(d):

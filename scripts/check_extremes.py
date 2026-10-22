@@ -17,6 +17,10 @@
 | **対象物が slide の可動限界に達していないか** | **Bug 39**: cube の x 可動上限が 1.25 m 対 200 m と **160 倍違う**のに `fwd_cube` の生値を比べ、大小を逆に読んだ。⚠️ **上限に張り付いていれば、その値はタスクではなく上限を測っている** |
 | **腕が壁の外へ出ていないか** | **9-80**: 再生も図もしたが**パックしか見ず**、同じファイルの腕の `xpos` を読まなかった。腕は壁の外面 0.90 に対し **1.31** まで出ていた。**7 時間の run を 1 本無駄にした** |
 
+⭐ 2026-10-22（系譜 9-283 ③ の残り）: 以前は代表の 1 話（`xpos`・`cube`）しか見なかった。話ごとの記録（`ep_*`）があれば
+全話を見る（無い古い軌跡は代表の話だけ）。可動限界と壁は 1 話でも越えれば ⛔、「対象が動かない」は全話が動かないときだけ ⛔
+（一部の話で動かないのは方策の出来で、接触が効いていない症状ではない）。
+
     python3 scripts/check_extremes.py          # 全軌跡
     python3 scripts/check_extremes.py <run名>  # 1 本
 """
@@ -43,6 +47,10 @@ def limits(xml_name):
         if j.get('type') == 'slide' and j.get('range'):
             lo, hi = (float(x) for x in j.get('range').split())
             slide[j.get('name')] = (lo, hi)
+    # 関節の値 0 の位置（cube の body の pos）。⛔ 2026-10-22: 以前は話の最初の位置を 0 とみなし、
+    # 初期位置にくじがある課題（ホッケー y ±0.25）で変位を誤った
+    cb = [b for b in t.iter('body') if b.get('name') == 'cube']
+    slide['_origin'] = np.array([float(x) for x in cb[0].get('pos', '0 0 0').split()]) if cb else None
     walls = []
     for g in t.findall('worldbody/geom'):
         if g.get('type') == 'box' and g.get('size') and g.get('pos'):
@@ -50,6 +58,23 @@ def limits(xml_name):
             s = np.array([float(x) for x in g.get('size').split()])
             walls.append((g.get('name') or '(no-name)', p, s))
     return slide, walls
+
+
+def episodes(z):
+    """話ごとの (xpos, xmat, bone, cube)。`ep_*` が無い古い軌跡は代表の 1 話だけ。
+    `ep_bone` が無い軌跡（hockey_bank7・8）は代表の骨を使う（再生は方策の平均の行動なので、形は全話で同じ）。"""
+    if 'ep_xpos' in z.files and len(z['ep_xpos']):
+        out = []
+        for e in range(len(z['ep_xpos'])):
+            x = np.asarray(z['ep_xpos'][e], float)
+            if x.ndim != 3 or not len(x):
+                continue
+            b = z['ep_bone'][e] if 'ep_bone' in z.files else z['bone_offset']
+            out.append((x, np.asarray(z['ep_xmat'][e], float), np.asarray(b, float),
+                        np.asarray(z['ep_cubes'][e], float)))
+        if out:
+            return out
+    return [(z['xpos'], z['xmat'], z['bone_offset'], np.asarray(z['cube'], dtype=float))]
 
 
 def check(run, quiet=False):
@@ -63,21 +88,30 @@ def check(run, quiet=False):
     except (FileNotFoundError, ET.ParseError):
         return None
     z = np.load(tz, allow_pickle=True)
-    xpos, xmat, bone = z['xpos'], z['xmat'], z['bone_offset']
-    ends = xpos + np.einsum('tlij,lj->tli', xmat, bone)
-    pts = np.concatenate([xpos, ends], axis=1)          # 全リンクの両端
-    cube = np.asarray(z['cube'], dtype=float)
+    eps = episodes(z)
+    # 全リンクの両端（全話を step の向きにつなぐ）
+    pts = np.concatenate([np.concatenate([x, x + np.einsum('tlij,lj->tli', m, b)], axis=1)
+                          for x, m, b, _ in eps], axis=0)
+    cubes = [c for *_, c in eps if len(c)]
+    cube = np.concatenate(cubes, axis=0) if cubes else np.zeros((0, 3))
 
     flags = []
     # 1. 対象物が slide の可動限界に達していないか（Bug 39）
     for ax, key in ((0, 'cube_slide'), (1, 'cube_slide2')):
-        if key not in slide or not len(cube):
+        if key not in slide or not cubes:
             continue
         lo, hi = slide[key]
-        mv = cube[:, ax] - cube[0, ax]                  # 初期位置からの変位 = 関節の値
-        for v, bound, side in ((mv.max(), hi, 'upper'), (mv.min(), lo, 'lower')):
-            if bound and abs(v) >= abs(bound) * TOL:
-                flags.append(f'cube が {key} の{side} {bound:g} に達した（{v:.2f}）')
+        org = slide['_origin']
+        for e, c in enumerate(cubes):
+            if np.abs(c[:, 0]).max() > 50:              # 到達で退避した箱（cube_x_offset=100、9-234）
+                continue
+            mv = c[:, ax] - (org[ax] if org is not None else c[0, ax])     # 関節の値
+            # 上限は上から、下限は下から近づいたときだけ（⛔ 以前は abs で比べ、退避した x 100 を下限 −2 と取り違えうる）
+            for v, bound, side, hit in ((mv.max(), hi, 'upper', mv.max() >= hi - (1 - TOL) * abs(hi)),
+                                        (mv.min(), lo, 'lower', mv.min() <= lo + (1 - TOL) * abs(lo))):
+                if bound and hit:
+                    n = int(((mv >= hi - (1 - TOL) * abs(hi)) if side == 'upper' else (mv <= lo + (1 - TOL) * abs(lo))).sum())
+                    flags.append(f'cube が {key} の{side} {bound:g} に達した（{v:.2f}、話 {e}、{n} step）')
     # 2. 腕が壁の内部へ入っていないか（9-80）
     for name, p, s in walls:
         out = (np.abs(pts[:, :, :3] - p) > s).all(axis=2)   # 3 軸とも箱の外
@@ -89,11 +123,11 @@ def check(run, quiet=False):
     #   全 Reach run で毎回出て、読まれない検査になる（§5-2 ①）。
     ov = d / '.hydra' / 'overrides.yaml'
     is_reach = 'use_reach=true' in (ov.read_text(encoding='utf-8') if ov.exists() else '')
-    if not is_reach and len(cube) and float(np.abs(cube[:, :2] - cube[0, :2]).max()) < 0.001:
-        flags.append('cube が 1 mm も動いていない（押しタスクなのに対象が静止）')
+    if not is_reach and cubes and all(float(np.abs(c[:, :2] - c[0, :2]).max()) < 0.001 for c in cubes):
+        flags.append(f'cube が 1 mm も動いていない（押しタスクなのに対象が静止、全 {len(cubes)} 話）')
 
     if not quiet:
-        print(f'=== {run}  xml={xml}')
+        print(f'=== {run}  xml={xml}  （全 {len(eps)} 話）')
         print(f'    腕 x[{pts[:,:,0].min():.2f},{pts[:,:,0].max():.2f}] '
               f'y[{pts[:,:,1].min():.2f},{pts[:,:,1].max():.2f}] '
               f'z[{pts[:,:,2].min():.2f},{pts[:,:,2].max():.2f}]')

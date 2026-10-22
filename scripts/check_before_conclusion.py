@@ -611,6 +611,10 @@ def reproduce():
         # ⭐ 壁の判定に高さを足した（10-22）: 壁の上空を通るのは壁に入っていない。浮いた壁の下へ入るのは入っている（=3d が箱を床まで伸ばすのはこれを止めるため、Bug 71 の対処）
         ('ホッケー blk3d の腕は壁の上空（z 0.31 以上）を通るだけ → 壁は ✅', _inv_item('hockey_bank9_phys_g10_blk3d', '壁') is True),
         ('ホッケー wfix の腕は浮いた壁の下を通る（|y| 0.89）→ 壁は ⛔', _inv_item('hockey_bank9_phys_g10_wfix', '壁') is False),
+        # ⭐ 話の途中の「腕から離れて加速」（10-22、9-283 ③ の残り）: Bug 70 の跳ね返り（g10 の話 3、+3.05 → −5.08 m/s）は ⛔、
+        #   ふつうの跳ね返り（blk3d の話 2・5、比 0.73。衝突の step で速さが一度落ちて戻る）は ✅
+        ('Bug 70 のエネルギーが増える跳ね返り（g10 の話 3）を ⛔', _inv_item('hockey_bank9_phys_g10', '触れる前') is False),
+        ('ふつうの跳ね返り（blk3d の話 2・5）は ✅', _inv_item('hockey_bank9_phys_g10_blk3d', '触れる前') is True),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]

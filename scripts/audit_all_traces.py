@@ -14,6 +14,10 @@
 | 5 | ⭐ **先端速度が非現実的** | 9-80（幾何の上にしか無い解を信じた）／打撃の妥当性 |
 | 6 | ⭐ **対象がまったく動かない** | 9-135（`fwd_cube`≈0 を「動いていない」と 2 回誤読した。**逆に本当に動かない場合を拾う**） |
 
+⭐ 2026-10-22（系譜 9-283 ③ の残り）: 以前は代表の 1 話（`xpos`・`cube`）しか見なかった。話ごとの記録（`ep_*`）があれば
+全話を見る（無い古い軌跡は代表の話だけ）。①②③④⑤ は 1 話でも当たれば出し、⑥「動かない」は全話が動かないときだけ出す
+（一部の話で動かないのは方策の出来）。到達で退避した箱（x 100、9-234）は ③④ から外す。
+
     python3 scripts/audit_all_traces.py            # 全部
     python3 scripts/audit_all_traces.py --only-hit # 引っかかったものだけ
 """
@@ -54,30 +58,52 @@ def cube_range(xml_name):
     return None
 
 
+def episodes(z):
+    """話ごとの (xpos, xmat, bone, cube)。`ep_*` が無い古い軌跡は代表の 1 話だけ。
+    `ep_bone` が無い軌跡（hockey_bank7・8）は代表の骨（再生は方策の平均の行動なので形は全話で同じ）。"""
+    cube0 = np.asarray(z['cube'], dtype=float) if 'cube' in z.files else None
+    if 'ep_xpos' in z.files and len(z['ep_xpos']):
+        out = []
+        for e in range(len(z['ep_xpos'])):
+            x = np.asarray(z['ep_xpos'][e], float)
+            if x.ndim != 3 or not len(x):
+                continue
+            b = z['ep_bone'][e] if 'ep_bone' in z.files else z['bone_offset']
+            c = np.asarray(z['ep_cubes'][e], float) if 'ep_cubes' in z.files else cube0
+            out.append((x, np.asarray(z['ep_xmat'][e], float), np.asarray(b, float), c))
+        if out:
+            return out
+    return [(z['xpos'], z['xmat'], z['bone_offset'], cube0)]
+
+
 def audit(run):
     f = os.path.join(ROOT, 'single_run', run, 'trace', 'arm_trace.npz')
     z = np.load(f, allow_pickle=True)
     names = [str(x) for x in z['body_names']]
-    xp, xm, bo = z['xpos'], z['xmat'], z['bone_offset']
-    ends = xp + np.einsum('tlij,lj->tli', xm, bo)
-    T = len(xp)
+    eps = episodes(z)
     hits = []
+    ne = len(eps)
+    tag = (lambda bad: f'（{len(bad)}/{ne} 話: {bad[:5]}{"…" if len(bad) > 5 else ""}）') if ne > 1 else (lambda bad: '')
 
-    if T < 50:
-        hits.append(f'① エピソードが {T} step で終わっている')
+    short = [e for e, (x, *_) in enumerate(eps) if len(x) < 50]
+    if short:
+        hits.append(f'① エピソードが {min(len(eps[e][0]) for e in short)} step で終わっている{tag(short)}')
 
-    mov = min((min(xp[:, i, 2].min(), ends[:, i, 2].min()) for i in range(1, len(names))),
-              default=0.0)
-    if mov < -0.001:
-        hits.append(f'② 可動リンクが床下 {mov*1000:.0f} mm')
+    movs, sps = [], []
+    for xp, xm, bo, _ in eps:
+        ends = xp + np.einsum('tlij,lj->tli', xm, bo)
+        movs.append(min((min(xp[:, i, 2].min(), ends[:, i, 2].min()) for i in range(1, len(names))),
+                        default=0.0))
+        tip = ends[:, -1, :]
+        sps.append(float((np.linalg.norm(np.diff(tip, axis=0), axis=1) / DT).max()) if len(tip) > 1 else 0.0)
+    under = [e for e, m in enumerate(movs) if m < -0.001]
+    if under:
+        hits.append(f'② 可動リンクが床下 {min(movs)*1000:.0f} mm{tag(under)}')
+    fast = [e for e, v in enumerate(sps) if v > TIP_SPEED_MAX]
+    if fast:
+        hits.append(f'⑤ 先端速度 {max(sps):.1f} m/s（上限 {TIP_SPEED_MAX} を超過＝発散の疑い）{tag(fast)}')
 
-    tip = ends[:, -1, :]
-    sp = np.linalg.norm(np.diff(tip, axis=0), axis=1) / DT if T > 1 else np.array([0.0])
-    if sp.max() > TIP_SPEED_MAX:
-        hits.append(f'⑤ 先端速度 {sp.max():.1f} m/s（上限 {TIP_SPEED_MAX} を超過＝発散の疑い）')
-
-    c = np.asarray(z['cube'], dtype=float) if 'cube' in z else None
-    if c is not None and len(c):
+    if eps[0][3] is not None and len(eps[0][3]):
         try:
             cfg = yaml.safe_load(open(os.path.join(ROOT, 'single_run', run, '.hydra', 'config.yaml')))
             xml = cfg.get('xml_name')
@@ -85,30 +111,38 @@ def audit(run):
         except Exception:
             xml, rs = None, {}
         rng = cube_range(xml) if xml else None
+        live = [(e, ep) for e, ep in enumerate(eps) if np.abs(ep[3][:, 0]).max() <= 50]   # 退避した箱を外す
         if rng:
             for k, (lo, hi) in rng.items():
-                fin = float(c[-1, k])
-                if abs(fin - lo) < 0.02 or abs(fin - hi) < 0.02:
+                stuck = [(e, float(ep[3][-1, k])) for e, ep in live
+                         if abs(ep[3][-1, k] - lo) < 0.02 or abs(ep[3][-1, k] - hi) < 0.02]
+                if stuck:
                     hits.append(f'③ 対象が {"xy"[k]} の可動域の端に張り付いている'
-                                f'（最終 {fin:.3f}、範囲 [{lo:.2f}, {hi:.2f}]）')
-        # ⭐ 押し系なのに対象が動かない
+                                f'（最終 {stuck[0][1]:.3f}、範囲 [{lo:.2f}, {hi:.2f}]）{tag([e for e, _ in stuck])}')
+        # ⭐ 押し系なのに対象が動かない（全話が動かないときだけ）
         is_reach = bool(rs.get('use_reach'))
-        dx = float(np.linalg.norm(c[-1, :2] - c[0, :2]))
-        if not is_reach and dx < 0.01:
-            hits.append(f'⑥ 押し系なのに対象が {dx*1000:.1f} mm しか動いていない')
+        dxs = [float(np.linalg.norm(ep[3][-1, :2] - ep[3][0, :2])) for ep in eps]
+        if not is_reach and max(dxs) < 0.01:
+            hits.append(f'⑥ 押し系なのに対象が {max(dxs)*1000:.1f} mm しか動いていない'
+                        f'{f"（全 {ne} 話）" if ne > 1 else ""}')
         # ⭐ 腕が対象の向こう側へ出る（通り抜け）
         half = 0.05
         P = 11
-        thr = 0
-        for i in range(len(names)):
-            a, b = xp[:, i, :], ends[:, i, :]
-            for u in np.linspace(0, 1, P):
-                p = a + (b - a) * u
-                thr += int(np.sum((p[:, 0] > c[:, 0] + half)
-                                  & (np.abs(p[:, 1] - c[:, 1]) < half)
-                                  & (np.abs(p[:, 2] - c[:, 2]) < half)))
+        thr, thr_eps = 0, []
+        for e, (xp, xm, bo, c) in live:
+            ends = xp + np.einsum('tlij,lj->tli', xm, bo)
+            n0 = thr
+            for i in range(len(names)):
+                a, b = xp[:, i, :], ends[:, i, :]
+                for u in np.linspace(0, 1, P):
+                    p = a + (b - a) * u
+                    thr += int(np.sum((p[:, 0] > c[:, 0] + half)
+                                      & (np.abs(p[:, 1] - c[:, 1]) < half)
+                                      & (np.abs(p[:, 2] - c[:, 2]) < half)))
+            if thr > n0:
+                thr_eps.append(e)
         if thr:
-            hits.append(f'④ 腕が対象の向こう側へ出ている（延べ {thr} 標本）')
+            hits.append(f'④ 腕が対象の向こう側へ出ている（延べ {thr} 標本）{tag(thr_eps)}')
     return hits
 
 
