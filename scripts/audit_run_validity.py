@@ -53,6 +53,24 @@ def blob_at(path, when):
     return r2.stdout.strip()[:12] or None
 
 
+def cfg_values_at(path, when):
+    """`when` 時点の cfg の**値**の版（YAML として読み、コメント・並びを除いたハッシュ）。無ければ None。
+    ⭐ 2026-10-22: cfg はコメントを頻繁に直すので、ファイルの版（blob）で比べると値の変わらない run まで「違う」になる"""
+    import hashlib, json
+    import yaml
+    r = subprocess.run(['git', 'log', '-1', '--format=%H', f'--before={when}', '--', path],
+                       cwd=ROOT, capture_output=True, text=True)
+    commit = r.stdout.strip()
+    if not commit:
+        return None
+    r2 = subprocess.run(['git', 'show', f'{commit}:{path}'], cwd=ROOT, capture_output=True, text=True)
+    try:
+        v = yaml.safe_load(r2.stdout)
+    except yaml.YAMLError:
+        return None
+    return hashlib.sha1(json.dumps(v, sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument('--prefix', default='')
@@ -71,16 +89,17 @@ def main() -> int:
             continue
         rows.append((run, t, xml, cfg,
                      blob_at(f'assets/mujoco_envs/{xml}.xml', t),
-                     blob_at(f'design_opt/cfg/{cfg}.yml', t) if cfg else None))
+                     blob_at(f'design_opt/cfg/{cfg}.yml', t) if cfg else None,
+                     cfg_values_at(f'design_opt/cfg/{cfg}.yml', t) if cfg else None))
 
     print(f"{'run':<26}{'起動':<18}{'xml_name':<22}{'XMLの版':<14}{'cfgの版'}")
-    for run, t, xml, cfg, xb, cb in rows:
+    for run, t, xml, cfg, xb, cb, cv in rows:
         print(f"{run:<26}{t[5:]:<18}{xml:<22}{str(xb)[:10]:<14}{str(cb)[:10]}")
 
     # ⚠️ 同じ xml_name で版が違う組を検出
     print("\n=== ⚠️ 同じ xml_name なのに中身が違う組")
     by_xml = {}
-    for run, t, xml, cfg, xb, cb in rows:
+    for run, t, xml, cfg, xb, cb, cv in rows:
         by_xml.setdefault(xml, []).append((run, xb))
     bad = 0
     for xml, lst in by_xml.items():
@@ -91,6 +110,23 @@ def main() -> int:
             for run, v in lst:
                 print(f"       {run:<26} {str(v)[:10]}")
     if not bad:
+        print("  ✅ 無し")
+    # ⭐ 2026-10-22（系譜 9-283）: cfg の yml も名前で読まれ、中身が書き換わる（XML と同じ型）。以前は XML しか見ていなかった。
+    #   ⚠️ check_before_conclusion.py の「版」はこの見出しより後ろの「⛔ 」の塊から run 名を探すので、XML の節の後ろに置く
+    print("\n=== ⚠️ 同じ cfg 名なのに値が違う組（YAML として比べる。コメントだけの違いは数えない）")
+    by_cfg = {}
+    for run, t, xml, cfg, xb, cb, cv in rows:
+        if cfg:
+            by_cfg.setdefault(cfg, []).append((run, cv))
+    bad_c = 0
+    for cfg, lst in by_cfg.items():
+        versions = {v for _, v in lst if v}
+        if len(versions) > 1:
+            bad_c += 1
+            print(f"  ⛔ cfg {cfg}: {len(versions)} 種類の値")
+            for run, v in lst:
+                print(f"       {run:<26} {str(v)[:10]}")
+    if not bad_c:
         print("  ✅ 無し")
     print(f"\n⚠️ **同じ名前で中身が違う組は、そのままでは比較できない。**")
     print("   比較するなら (a) 同じ版どうしを選ぶ か (b) 新しい版で回し直す。")
