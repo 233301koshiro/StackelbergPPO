@@ -29,6 +29,13 @@ def init_fc_weights(fc):
 def mask_list(lst, mask):
     return [item for i, item in enumerate(lst) if mask[i]]
 
+def worker_seed(seed, worker_id):
+    """ワーカーの乱数の種（Bug 76、系譜 9-283 A）。
+    ⛔ 以前は seed + worker_id + 1 で、seed 0（1〜4）と seed 1（2〜5）が 4 本中 3 本の列を共有していた。
+    seed 0 は以前と同じ値になるので、seed 0 の run はそのまま比べられる。"""
+    return 1000 * int(seed) + int(worker_id) + 1
+
+
 def set_global_seed(seed):
     os.environ['PYTHONHASHSEED'] = str(seed)
     random.seed(seed)

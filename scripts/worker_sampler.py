@@ -44,7 +44,7 @@ from design_opt.envs import env_dict
 from design_opt.models.bodygen_policy import BodyGenPolicy
 from khrylib.rl.core.running_norm import RunningNorm
 from design_opt.utils.logger import LoggerRLV1
-from design_opt.utils.tools import TrajBatchDisc, set_global_seed
+from design_opt.utils.tools import TrajBatchDisc, set_global_seed, worker_seed
 from khrylib.rl.agents.agent import Memory
 def tensorfy(np_list, device=torch.device('cpu')):
     if isinstance(np_list[0], list):
@@ -61,12 +61,13 @@ cfg = Config(FLAGS, project_path, f'/tmp/cnoid_worker_{WORKER_TAG}')
 dtype  = torch.float64
 torch.set_default_dtype(dtype)
 device = torch.device('cpu')  # ワーカーは推論のみ → CPU で十分
-set_global_seed(cfg.seed + WORKER_ID + 1)
+set_global_seed(worker_seed(cfg.seed, WORKER_ID))
+print(f'[worker] 乱数の種 {worker_seed(cfg.seed, WORKER_ID)}（seed {cfg.seed}・worker {WORKER_ID}、Bug 76）', flush=True)
 
 # ---- 環境構築 -------------------------------------------------------
 os.environ['USE_CHOREONOID'] = '1'
 env = env_dict[cfg.env_name](cfg, agent=None)
-env.seed(cfg.seed + WORKER_ID + 1)
+env.seed(worker_seed(cfg.seed, WORKER_ID))
 
 # ---- ポリシー構築（推論用 CPU コピー） --------------------------------
 # BodyGenPolicy が必要とする agent の属性を env から引いてプロキシを作る
