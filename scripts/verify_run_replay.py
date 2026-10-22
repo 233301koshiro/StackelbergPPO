@@ -20,9 +20,25 @@ import os, sys
 sys.path.append(os.getcwd())
 os.environ.setdefault('USE_CHOREONOID', '1')
 
+# ⛔ 9-283: 以前は launch_env.json を読まず、物理の環境変数を渡し忘れると別の物理で再生していた
+#   （mid を渡さずに 12.84・渡して 9.74、best 10.42。許容幅 35 % なので両方「✅ 再現した」）。
+#   record_arm_trace.py と同じく学習時の値を入れる。明示的に渡した値は上書きしない（違えば警告）。
+import json
+_le = os.path.join(os.environ['EVAL_RESTORE_DIR'], 'launch_env.json')
+LAUNCH_ENV = json.load(open(_le)) if os.path.exists(_le) else None
+if LAUNCH_ENV is None:
+    print('[verify] ⚠️ launch_env.json が無い（9-236 より前の run）。物理の環境変数は手で渡したものだけ', flush=True)
+else:
+    for _k, _v in LAUNCH_ENV.items():
+        if _k not in os.environ:
+            os.environ[_k] = _v
+        elif os.environ[_k] != _v:
+            print(f'[verify] ⚠️ {_k}: 学習時 {_v} ／ 再生 {os.environ[_k]}（手で渡した値を使う）', flush=True)
+    print(f'[verify] ⭐ 学習時の環境で再生: {LAUNCH_ENV}', flush=True)
+
 import numpy as np, yaml, torch
 from omegaconf import OmegaConf
-from design_opt.utils.config import Config
+from design_opt.utils.config import Config, replay_robot_param_scale
 from design_opt.agents.genesis_agent import BodyGenAgent, tensorfy
 from design_opt.utils.tools import set_global_seed
 
@@ -37,6 +53,7 @@ FLAGS = OmegaConf.create(yaml.safe_load(open(f'{rd}/.hydra/config.yaml')))
 OmegaConf.update(FLAGS, 'restore_dir', rd)
 cfg = Config(FLAGS, os.getcwd(), rd)
 cfg.restore_dir = rd
+replay_robot_param_scale(cfg, rd)   # 9-283: Bug 74 の修正前の run は学習時の値で
 cfg.control_prior = False      # Bug 10: true のままだとランダム初期化ネットで再現される
 cfg.morph_prior = False
 torch.set_default_dtype(torch.float64)
@@ -83,7 +100,8 @@ for i, (tot, n) in enumerate(rows):
 
 late = [t for t, _ in rows[DISCARD:]]
 print(f"\n[verify] {DISCARD+1} 話目以降の平均 : {np.mean(late):10.2f}")
-print(f"[verify] 全話の単純平均       : {np.mean([t for t,_ in rows]):10.2f}  ⚠️ 頭に引きずられるので使わない")
+if DISCARD:
+    print(f"[verify] 全話の単純平均       : {np.mean([t for t,_ in rows]):10.2f}")
 if best_log is not None:
     diff = abs(np.mean(late) - best_log)
     rel = diff / max(abs(best_log), 1e-9)

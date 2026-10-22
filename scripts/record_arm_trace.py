@@ -54,7 +54,7 @@ import yaml
 import torch
 from omegaconf import OmegaConf
 
-from design_opt.utils.config import Config
+from design_opt.utils.config import Config, replay_robot_param_scale
 from design_opt.agents.genesis_agent import BodyGenAgent, tensorfy
 from design_opt.utils.tools import set_global_seed
 
@@ -74,6 +74,7 @@ d.pop('restore_dir', None)
 FLAGS = OmegaConf.create(d)
 cfg = Config(FLAGS, project_path, restore_dir)
 cfg.restore_dir = restore_dir
+replay_robot_param_scale(cfg, restore_dir)   # 9-283: Bug 74 の修正前の run は学習時の値で
 cfg.control_prior = False
 cfg.morph_prior = False
 # ⭐ 学習時と違う env_specs で再生する口（2026-10-09、系譜 9-234）。例: TRACE_ENV_SPECS='{"cube_x_offset": 100}'

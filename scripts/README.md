@@ -81,7 +81,7 @@
 | ⭐⭐ **`audit_design_space.py`** | **設計空間と物理のパラメータを全部並べ、根拠の有無を突き合わせる**（9-149）。⛔ **3 回数え直した末に最初の数えが取りこぼしていたので機械化した** |
 | ⭐⭐ **`diagnose_morphology.py`（9-144 追加）** | **第1層が障害物を扱えるようになった。**⚠️ **目撃型**（避けて届く姿勢を見つけたときだけ断定。棄却側の確実性を壊さない） |
 | ⭐ **`audit_implicit_physics.py`** | **XML に書かれていない物理パラメータを挙げる。**⭐ **Choreonoid が扱えない形状型（cylinder 等）も検出する**（9-118）。 ⭐ **新しいタスクを入れる前に必ず**（9-86。`solref` が既定のままでホッケーが 6 回沼った） |
-| **`verify_run_replay.py`** | 学習済み run を 5 話再生し env の reward を積んで log と比べる。頭 2 話を捨てる（9-66） |
+| **`verify_run_replay.py`** | 学習済み run を 5 話再生し env の reward を積んで log と比べる（9-66）。既定は全話を使う（`EVAL_DISCARD` 0、9-237）。⭐ 10-22: 学習時の物理の環境変数を `launch_env.json` から読む（9-283） |
 | **`probe_m1_compliance.py`** | M1 の仕様遵守率（マーカー数・比の保存）。マゼンタ検出は `probe_m1_tilt` を import |
 | **`probe_m1_tilt.py`** | M1 画像の傾き。⚠️ **この量は合否を分けない**（9-79）。姿勢の判定は `check_glb_pose.py` |
 | `check_glb_pose.py` | **M2 の後**に関節の Z 広がりで姿勢を判定。閾値 0.25 は実測較正済み |
