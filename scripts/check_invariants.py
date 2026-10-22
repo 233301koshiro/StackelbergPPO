@@ -183,12 +183,18 @@ def _walls(d, xml):
     if not side:
         return True, '壁なし'
     inner = float(side[0].get('pos').split()[1]) - float(side[0].find('geom').get('size').split()[1])
+    # 壁の上端。腕の表面（点の z − 半径）がこれより上なら壁の上空を通っただけで、壁には入っていない（_blk3d は z 0.31 以上で越えていた）
+    top = float(side[0].get('pos').split()[2]) + float(side[0].find('geom').get('size').split()[2])
     _, half, _ = cube_half(xml)
     py = max(float(np.abs(np.asarray(c, float)[:, 1]).max()) for c in d['ep_cubes'])
-    ty = 0.0
+    ty = over = 0.0
     for e in range(len(d['ep_xpos'])):
-        xp, xm, bo, _ = _caps(d, e)
-        ty = max(ty, float(np.abs((xp + np.einsum('tlij,lj->tli', xm, bo))[:, 1:, 1]).max()))
+        xp, xm, bo, rad = _caps(d, e)
+        tip = (xp + np.einsum('tlij,lj->tli', xm, bo))[:, 1:]
+        ay = np.abs(tip[:, :, 1])
+        below = tip[:, :, 2] - rad[None, 1:] < top
+        ty = max(ty, float(np.where(below, ay, 0.0).max()))
+        over = max(over, float(np.where(below, 0.0, ay).max()))
     bad = []
     if py > inner - half[1] + 0.02:
         bad.append(f'パック |y| {py:.2f}')
@@ -196,7 +202,8 @@ def _walls(d, xml):
         bad.append(f'腕 |y| {ty:.2f}')
     if bad:
         return False, f'⛔ 側壁の内面 {inner:.2f} を越えた: {", ".join(bad)}（Bug 39・9-93 型）'
-    return True, f'壁の内側（パック |y| ≤ {py:.2f}・腕 ≤ {ty:.2f}、内面 {inner:.2f}）'
+    up = f'。壁の上空（上端 {top:.3f} より上）は |y| {over:.2f} まで' if over > inner + 0.02 else ''
+    return True, f'壁の内側（パック |y| ≤ {py:.2f}・腕 ≤ {ty:.2f}、内面 {inner:.2f}）{up}'
 
 
 def run(r, trace=None):
