@@ -122,3 +122,23 @@ class Config:
         self.morph_prior = FLAG.get('morph_prior', False)
         self.control_prior = FLAG.get('control_prior', False)
         self.fix_skeleton = FLAG.get('fix_skeleton', False)
+
+
+def replay_robot_param_scale(cfg, run_dir):
+    """再生の道具が呼ぶ: 学習に効いた robot_param_scale に cfg を合わせる（学習では呼ばない）。
+
+    ⛔ 系譜 9-283: Bug 74 の修正（c86c04e）より前の config.py は起動行の値を捨てて yml の値で学習した。
+    その run を今の Config で組むと起動行の値が効き、学習しなかった形を再生する。
+    ⭐ の行（train.py が出す「⭐ robot_param_scale = …」）が log_train.txt に無ければ修正前の run とみなす。
+    """
+    log = os.path.join(run_dir, 'log', 'log_train.txt')
+    if not os.path.exists(log) or '⭐ robot_param_scale = ' in open(log, encoding='utf-8', errors='ignore').read():
+        return cfg.robot_param_scale
+    cfg_path = os.path.join(cfg.project_path, 'design_opt', 'cfg', f'{cfg.id}.yml')
+    yml = yaml.safe_load(open(cfg_path, 'r')).get('robot_param_scale', 0.1)
+    if float(yml) != float(cfg.robot_param_scale):
+        print(f'[replay] ⛔ Bug 74 の修正前の run: 起動行の robot_param_scale {cfg.robot_param_scale} ではなく、'
+              f'学習に効いた yml の {yml} で再生する', flush=True)
+        cfg.robot_param_scale = yml
+        cfg.robot_param_scale_src = 'yml（Bug 74 の修正前の run）'
+    return cfg.robot_param_scale

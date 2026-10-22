@@ -1291,7 +1291,7 @@ def _run_layers23(run, task, geo=None, target=None):
     import yaml
     import torch
     from omegaconf import OmegaConf
-    from design_opt.utils.config import Config
+    from design_opt.utils.config import Config, replay_robot_param_scale
     from design_opt.agents.genesis_agent import BodyGenAgent, tensorfy
     from design_opt.utils.tools import set_global_seed
 
@@ -1300,6 +1300,7 @@ def _run_layers23(run, task, geo=None, target=None):
     d.pop('restore_dir', None)
     cfg = Config(OmegaConf.create(d), os.getcwd(), run)
     cfg.restore_dir = run
+    replay_robot_param_scale(cfg, run)   # 9-283: Bug 74 の修正前の run は学習時の値で
     cfg.control_prior = False   # Bug 10: 再評価時に転用フィルタが残ると重みが読まれない
     cfg.morph_prior = False
     torch.set_default_dtype(torch.float64)
@@ -1372,7 +1373,10 @@ def _run_layers23(run, task, geo=None, target=None):
             break
     print(f'[diagnose] 第3層の行動: {len(xs) or len(dists)} step（打ち切り {cfg.done_condition.get("max_nsteps", 1000)}）', flush=True)
     if xs:
-        v = [abs(xs[i+1]-xs[i]) / 0.01 for i in range(len(xs)-1)]
+        # ⛔ 9-283: 以前は 0.01 s で割り、4 倍の速さを出していた（1 step は timestep 0.01 × frame_skip 4 ＝ env.dt 0.04 s）。
+        #   tripo_pjp_long_phys の 2.55〜2.81 m/s が 10.2〜11.2 m/s と出て、「一撃で吹き飛ばす」に化けていた
+        v = [abs(xs[i+1]-xs[i]) / env.dt for i in range(len(xs)-1)]
+        print(f'[diagnose] 第3層の速さは 1 step {env.dt:g} s で計算', flush=True)
         trace['cube_x'] = xs
         trace['peak_v'] = max(v) if v else 0.0
         trace['move_start'] = next((i for i, d in enumerate(v) if d > 0.05), None)
