@@ -615,6 +615,10 @@ def reproduce():
         #   ふつうの跳ね返り（blk3d の話 2・5、比 0.73。衝突の step で速さが一度落ちて戻る）は ✅
         ('Bug 70 のエネルギーが増える跳ね返り（g10 の話 3）を ⛔', _inv_item('hockey_bank9_phys_g10', '触れる前') is False),
         ('ふつうの跳ね返り（blk3d の話 2・5）は ✅', _inv_item('hockey_bank9_phys_g10_blk3d', '触れる前') is True),
+        # ⭐ 10-23（9-283 ③ の E）: ⚠️ だけの run を ✅ にしない。実在の物理の完走 run で当たっていたのは dist の門の取り直し seed0 の 1 本（報酬の桁）
+        ('⚠️ だけなら最後の行は ✅ にならない', _verdict(0, 1).startswith('⚠️') and _verdict(0, 0).startswith('✅')),
+        ('⚠️ だけの run（tripo_pjd_dist_phys_cg の報酬の桁）を ✅ にしない',
+         _tally('tripo_pjd_dist_phys_cg')[:2] == (0, 1)),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
@@ -623,17 +627,37 @@ def reproduce():
     return 0 if all(ok for _, ok in cases) else 1
 
 
+def _verdict(ng, warn):
+    # ⭐ 10-23（系譜 9-283 ③ の E、ユーザー判断）: ⚠️（測れない・記録が無い・要確認）を合格に数えない。
+    #   以前は ⛔ の数だけを見ていたので、⚠️ がいくつあっても「✅ 結論を書いてよい」になった（Bug 72 と同じ「持っていない量を 0 と読む」型）
+    if ng:
+        return '⛔ 結論を書く前に上を直すこと'
+    if warn:
+        return f'⚠️ 結論の前に ⚠️ の {warn} 件を人が確かめること（測れない・記録が無いは合格ではない）'
+    return '✅ 結論を書いてよい'
+
+
+def _run_check(fn, r):
+    # 検査が例外で落ちたら ⚠️（測れていない）。以前は --all が古い軌跡（ep_bone が無い hockey_bank7）で止まり、後ろの run を 1 本も見なかった
+    try:
+        return tuple(fn(r))
+    except Exception as ex:
+        return None, f'⚠️ 検査が例外で落ちた（{type(ex).__name__}: {str(ex)[:80]}）'
+
+
+def _tally(r):
+    rows = [(name,) + _run_check(fn, r) for name, fn in CHECKS]
+    return (sum(ok is False for _, ok, _ in rows), sum(ok is None for _, ok, _ in rows), rows)
+
+
 def audit(r):
     print(f'\n=== {r}')
-    ng = 0
-    for name, fn in CHECKS:
-        ok, msg = fn(r)
+    ng, warn, rows = _tally(r)
+    for name, ok, msg in rows:
         mark = '✅' if ok else ('⚠️' if ok is None else '⛔')
-        if ok is False:
-            ng += 1
         print(f'  {mark} {name:<8} {msg}')
-    print(f'  → {"⛔ 結論を書く前に上を直すこと" if ng else "✅ 結論を書いてよい"}')
-    return ng
+    print(f'  → {_verdict(ng, warn)}')
+    return ng, warn
 
 
 def main() -> int:
@@ -641,7 +665,7 @@ def main() -> int:
     ap.add_argument('runs', nargs='*')
     ap.add_argument('--all', action='store_true', help='完走した run 全部')
     ap.add_argument('--pair', nargs=2, metavar=('A', 'B'), help='2 本の起動行を比べる（xml_name・cfg 以外の差）')
-    ap.add_argument('--reproduce', action='store_true', help='既知の失敗（Bug 74・75）を拾えるかを確かめる')
+    ap.add_argument('--reproduce', action='store_true', help='既知の失敗（Bug 74・75・76、⚠️ を合格に数えない ほか）を拾えるかを確かめる')
     a = ap.parse_args()
     if a.reproduce:
         return reproduce()
@@ -657,8 +681,8 @@ def main() -> int:
                           encoding='utf-8', errors='ignore'))
     if not runs:
         ap.error('run 名か --all を指定してください')
-    tot = sum(audit(r) for r in runs)
-    print(f'\n合計 {tot} 件の要対応')
+    res = [audit(r) for r in runs]
+    print(f'\n合計 {sum(n for n, _ in res)} 件の要対応・⚠️ {sum(w for _, w in res)} 件の要確認')
     return 0
 
 
