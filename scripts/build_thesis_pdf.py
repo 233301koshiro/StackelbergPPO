@@ -255,7 +255,21 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                     col_spec = '|' + ''.join(f'p{{{x:.3f}\\textwidth}}|' for x in fr)
                 else:
                     col_spec = '|' + 'l|' * ncols
-                out.append(r'\begin{center}')
+                # 直前の段落が表の題（**表 N.M**: …）なら、題と表を 1 つの minipage に入れて同じページに置く。
+                # 分けて出すと、題だけがページの下に残り表が次のページへ送られる（2026-10-22、表 4.3）。
+                j = len(out) - 1
+                while j >= 0 and not out[j].strip():
+                    j -= 1
+                caption = None
+                if j >= 0 and out[j].startswith(r'\textbf{表 '):
+                    caption = out[j]
+                    del out[j:]
+                if caption:
+                    out.append('')
+                    out.append(r"\par\vspace{8pt}\noindent\begin{minipage}[t]{\textwidth}")
+                    out.append(caption + r'\par\vspace{4pt}\centering')
+                else:
+                    out.append(r'\begin{center}')
                 out.append(r'\begin{tabular}{' + col_spec + '}')
                 out.append(r'\hline')
                 for row in table_rows:
@@ -264,7 +278,11 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                     out.append(cells_tex + r' \\')
                     out.append(r'\hline')
                 out.append(r'\end{tabular}')
-                out.append(r'\end{center}')
+                if caption:
+                    out.append(r"\end{minipage}\par\vspace{8pt}")
+                    out.append('')
+                else:
+                    out.append(r'\end{center}')
             continue
 
         # 箇条書き（ネスト対応: 先頭スペースで深さを判定）
