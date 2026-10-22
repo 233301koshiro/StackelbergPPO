@@ -23,6 +23,9 @@
   12. ⭐ **物理的にありえない値が無いか**（`check_invariants.py`。2026-10-12）
   11. ⭐ **比べる相手と起動行が、比べる変数以外で違わないか**（Bug 59。9-238）。組は COMPARISONS。
       任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）
+  13. ⭐ **起動行の robot_param_scale が学習に届いたか**（Bug 74・Bug 75）。記録された値と、
+      `log_train.txt` の「⭐ robot_param_scale = …」の行（無い run は当時の config.py が読んだ yml の値）を比べる。
+      `--reproduce` で、既知の失敗（凍結が効かなかった R1）と既定値の取り違えを拾えるかを確かめる
 """
 import argparse
 import re
@@ -343,6 +346,7 @@ COMPARISONS = [
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
           'env_specs.init_self_contact', 'max_epoch_num', 'num_threads', 'launch_env'}
 # 指定が無いときにコードが使う値（pusher.py）。⛔ Bug 59 は「書いていない＝既定値」が見えなかった
+# ⛔ Bug 75: これは yml にも無いときの値。run の cfg の yml にあればそちらが効く（_yml_defaults）
 DEFAULTS = {'reward_specs.ctrl_cost_coeff': '0.0001', 'reward_specs.contact_weight': '1.0',
             'reward_specs.init_contact_penalty': '50.0', 'env_specs.arm_safe_init': 'False',
             'fix_base': 'False', 'env_specs.init_self_contact': 'False', 'robot_param_scale': '0.1'}
@@ -358,7 +362,7 @@ def _norm(v):
         return str(v).lower()
 
 
-def _overrides(r):
+def _raw_overrides(r):
     import yaml
     p = run_dir(r) / '.hydra' / 'overrides.yaml'
     if not p.exists():
@@ -370,8 +374,61 @@ def _overrides(r):
     # ⭐ 自分自身からの再開（restore_dir が自分のフォルダ）は条件の違いではないので外す
     if o.get('restore_dir', '').rstrip('/').endswith('/' + r):
         o.pop('restore_dir'); o.pop('epoch', None)
+    return o
+
+
+@lru_cache(maxsize=None)
+def _yml_defaults(cfg):
+    """⭐ Bug 75: 起動行に無いキーで効く値のうち、cfg の yml が決めるもの（config.py と同じ読み方）。"""
+    import yaml
+    p = ROOT / 'design_opt' / 'cfg' / f'{cfg}.yml'
+    if not p.exists():
+        return {}
+    y = yaml.safe_load(p.read_text(encoding='utf-8')) or {}
+    out = {}
+    if 'robot_param_scale' in y:
+        out['robot_param_scale'] = y['robot_param_scale']
+    if (y.get('robot') or {}).get('fix_base') is not None:
+        out['fix_base'] = y['robot']['fix_base']
+    for s in ('reward_specs', 'env_specs'):
+        for k, v in (y.get(s) or {}).items():
+            out[f'{s}.{k}'] = v
+    return out
+
+
+_EFF_SCALE = re.compile(r'⭐ robot_param_scale = (\S+?)（')
+
+
+def _effective_scale(r, o):
+    """学習に効いた robot_param_scale と、その出どころ。
+
+    Bug 74 の修正（c86c04e）より後の run は train.py が ⭐ の行を出す。その行が無い run は、
+    当時の config.py が起動行を捨てて yml だけを読んでいた。r=None は修正後のコードで走らせた場合。
+    """
+    yml = _yml_defaults(o.get('cfg', ''))
+    log = run_dir(r) / 'log' / 'log_train.txt' if r else None
+    if log is not None and log.exists():
+        m = _EFF_SCALE.search(log.read_text(encoding='utf-8', errors='ignore'))
+        if m:
+            return m.group(1), 'log_train.txt'
+        return yml.get('robot_param_scale', 0.1), 'yml（Bug 74 の修正前の run）'
+    return o.get('robot_param_scale', yml.get('robot_param_scale', 0.1)), '起動行か yml'
+
+
+def _resolve(o, r=None):
+    """起動行の上書きを、効いた値の辞書にする: コードの既定 → cfg の yml → 起動行。robot_param_scale は効いた値。"""
     full = {k: _norm(v) for k, v in DEFAULTS.items()}
+    full.update({k: _norm(v) for k, v in _yml_defaults(o.get('cfg', '')).items()})
     full.update({k: _norm(v) for k, v in o.items()})
+    full['robot_param_scale'] = _norm(_effective_scale(r, o)[0])
+    return full
+
+
+def _overrides(r):
+    o = _raw_overrides(r)
+    if o is None:
+        return None
+    full = _resolve(o, r)
     full['launch_env'] = str(sorted((_launch_env(r) or {}).items()))
     return full
 
@@ -443,12 +500,41 @@ def ck_invariants(r):
     return True, f'{len(res)} 項目とも成り立つ'
 
 
+def ck_effective(r):
+    """⭐ 13. 起動行（無ければ yml）の robot_param_scale と、学習に効いた値が同じか（Bug 74・Bug 75）。"""
+    o = _raw_overrides(r)
+    if o is None:
+        return None, '⚠️ 起動行の記録（.hydra）が無い'
+    rec = o.get('robot_param_scale', _yml_defaults(o.get('cfg', '')).get('robot_param_scale', 0.1))
+    eff, src = _effective_scale(r, o)
+    if _norm(rec) != _norm(eff):
+        return False, f'⛔ 指定は {rec}、効いた値は {eff}（{src}）。起動行が学習に届いていない（Bug 74）'
+    return True, f'robot_param_scale {eff}（{src}）'
+
+
 CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg),
           ('⭐⭐ exec 到達', ck_entered_exec),
           ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 台座', ck_base),
-          ('⭐ 比べる相手', ck_pair), ('⭐ 不変条件', ck_invariants)]
+          ('⭐ 比べる相手', ck_pair), ('⭐ 不変条件', ck_invariants), ('⭐ 効いた値', ck_effective)]
+
+
+def reproduce():
+    """既知の失敗を拾えるか（拾えない検査の ✅ は根拠にならない）。"""
+    cases = [
+        ('凍結が効かなかった R1（Bug 74）を ⛔', ck_effective('tripo_pjp_mid_frozen_phys')[0] is False),
+        ('凍結しない mid は ✅', ck_effective('tripo_pjp_mid_phys')[0] is True),
+        # ⛔ Bug 75: yml が 1 の cfg で「0.1 を明示」と「指定なし」を同じと見ていた
+        ('明示の 0.1 と指定なし（yml 1）を違うと見る',
+         _resolve({'cfg': 'pusher_gearonly_real', 'robot_param_scale': '0.1'})['robot_param_scale']
+         != _resolve({'cfg': 'pusher_gearonly_real'})['robot_param_scale']),
+        ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
+         _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
+    ]
+    for name, ok in cases:
+        print(f'  {"✅" if ok else "⛔"} {name}')
+    return 0 if all(ok for _, ok in cases) else 1
 
 
 def audit(r):
@@ -469,7 +555,10 @@ def main() -> int:
     ap.add_argument('runs', nargs='*')
     ap.add_argument('--all', action='store_true', help='完走した run 全部')
     ap.add_argument('--pair', nargs=2, metavar=('A', 'B'), help='2 本の起動行を比べる（xml_name・cfg 以外の差）')
+    ap.add_argument('--reproduce', action='store_true', help='既知の失敗（Bug 74・75）を拾えるかを確かめる')
     a = ap.parse_args()
+    if a.reproduce:
+        return reproduce()
     if a.pair:
         d = diff_runs(a.pair[0], a.pair[1], {'xml_name', 'cfg'})
         print('\n'.join(d) if d else ('起動行が読めない' if d is None else '✅ xml_name・cfg 以外は同じ'))
@@ -488,4 +577,4 @@ def main() -> int:
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
