@@ -24,6 +24,9 @@ import sys
 import os
 
 RUN_DIR = 'single_run'
+# ⛔ 2026-10-22（系譜 9-283 ⑤）: 学習の best は −1000 から始まり（`genesis_agent.py` の best_rewards）、それを超えるまで
+#   best.p が無い。その間の順位・帯は代表値が無いので「確定」に数えない（以前は −1000 以下の値どうしで順位を付けていた）
+NO_BEST = -1000.0
 
 
 def running_best(run):
@@ -81,7 +84,8 @@ def settle_epoch(runs, labels):
 
     settled = None
     for e in epochs:
-        if rank([c[e] for c in curves]) == final_rank:
+        vals = [c[e] for c in curves]
+        if min(vals) > NO_BEST and rank(vals) == final_rank:
             if settled is None:
                 settled = e
         else:
@@ -140,6 +144,8 @@ def band_settle(A, B):
 
     def sep(e):
         la, lb = [c[e] for c in a], [c[e] for c in b]
+        if min(la + lb) <= NO_BEST:
+            return None
         return 'A' if min(la) > max(lb) else ('B' if min(lb) > max(la) else None)
     final, st = sep(eps[-1]), None
     for e in eps:
