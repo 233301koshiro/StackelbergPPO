@@ -190,6 +190,25 @@ def reach_annulus(lengths):
 # bone_offset の探索範囲（cfg の body_params.offset、rel: true・±OFFSET_HALF）
 OFFSET_HALF = 0.5
 
+
+def link_box(l, offset_half):
+    """リンク 1 本の bone_offset の箱 (横の下限, 横の上限, 沿う向きの下限, 沿う向きの上限) [m]。
+
+    offset_half が数なら初期値相対 ±offset_half（`rel: true`）。('rel_frac', 下, 上, 横) なら
+    リンク長の倍率（9-150 の `rel_frac`、縦型の cfg は [0.5, 2.93, 0.5]。`xml_robot.py` と同じ箱）。
+    ⛔ 2026-10-22（系譜 9-283 ⑤）: 以前は rel_frac を知らず ±0.5 m の箱を仮定し、長いリンクの上限を
+    小さく見積もって、届く形態を棄却しえた（「棄却の側だけが確実」が崩れる）。"""
+    if isinstance(offset_half, tuple):
+        _, f_lo, f_up, f_lat = offset_half
+        return -f_lat * l, f_lat * l, f_lo * l, f_up * l
+    return -offset_half, offset_half, l - offset_half, l + offset_half
+
+
+def link_max(l, offset_half):
+    """リンク 1 本が設計で取りうる最大の長さ（箱の最も遠い角）。"""
+    lat_lo, lat_hi, b_lo, b_hi = link_box(l, offset_half)
+    return float(np.hypot(max(abs(b_lo), abs(b_hi)), max(abs(lat_lo), abs(lat_hi))))
+
 # zonotope_chain_reach（9-91）の関節角格子の総点数の目安。多関節ほど1軸あたりの
 # 分解能を落として予算に収める（steps ≈ ZONO_GRID_BUDGET ** (1/n)）。
 # 実測: n=3, steps=15（3375点）で 1.4 秒（lsq_linear を素朴にループで呼んだ場合）。
@@ -207,7 +226,7 @@ def max_reach_after_design(lengths, offset_half=OFFSET_HALF):
     根ボディの offset が運動学的に不活性なこと等が効いていると見られるが、
     正確な上限は解析していない。したがって本関数の値は「これ以上は絶対に届かない」
     という上限としてのみ使い、「届く」の断定には使わない。"""
-    return sum(float(np.hypot(l + offset_half, offset_half)) for l in lengths)
+    return sum(link_max(l, offset_half) for l in lengths)
 
 
 # ⭐ **機械可読の助言**（2026-09-27、指摘12 の連結子のため）。
@@ -424,8 +443,7 @@ def zonotope_chain_reach(lengths, ranges_deg, d, dz, offset_half, budget=ZONO_GR
     lo = np.empty(2 * n)
     hi = np.empty(2 * n)
     for i, l in enumerate(lengths):
-        lo[2 * i], hi[2 * i] = -offset_half, offset_half
-        lo[2 * i + 1], hi[2 * i + 1] = l - offset_half, l + offset_half
+        lo[2 * i], hi[2 * i], lo[2 * i + 1], hi[2 * i + 1] = link_box(l, offset_half)
     target = np.array([d, dz])
 
     dmin = math.inf
@@ -587,7 +605,7 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                 shoulder_z = float(base[2]) + sum(par)
                 grow_note = ''
             else:
-                l_h = sum(float(np.hypot(l + offset_half, offset_half)) for l in perp)
+                l_h = sum(link_max(l, offset_half) for l in perp)
                 shoulder_z = float(base[2]) + sum(par)
                 grow_note = (f'（水平に効くリンクだけを最大まで伸ばした場合。'
                              f'伸ばす前は {sum(perp):.3f} m）')
@@ -1169,8 +1187,13 @@ def main():
         # ⭐ 9-72: 探索幅はスクリプトに直書きせず**その run の cfg から読む**。
         #   直書きだと cfg を変えても判定器が追随せず、また食い違いが生まれる。
         if args.offset_half is None:
-            ub = ((bp.get('offset') or {}).get('ub')) or []
-            if ub:
+            _off = bp.get('offset') or {}
+            ub = _off.get('ub') or []
+            if _off.get('rel_frac') is not None:      # ⛔ 9-283 ⑤: 縦型の cfg は幅がリンク長の倍率
+                _f = [float(v) for v in _off['rel_frac']]
+                args.offset_half = ('rel_frac', _f[0], _f[1], _f[2] if len(_f) > 2 else _f[0])
+                print(f'[diagnose] リンク長の探索範囲: 設計長の {_f[0]:g}〜{_f[1]:g} 倍・横 ±{args.offset_half[3]:g} 倍（rel_frac）', flush=True)
+            elif ub:
                 args.offset_half = max(abs(float(v)) for v in ub)
 
     geo = parse_arm_xml(os.path.join(ASSET_DIR, f'{args.xml}.xml'))
