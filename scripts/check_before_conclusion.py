@@ -218,11 +218,33 @@ def ck_version(r):
     return True, '版の混入なし'
 
 
+def _queue_launches(t, r):
+    """キューの文字列 t が run 名 r を起動するか。名前をそのまま書いた行のほか、
+    ⛔ 2026-10-23: 変数で組み立てた名前（`tripo_pjp_mid_frozen_phys_fx$X`）と、引数に接尾辞を足す形（`RUN=$1_ws`）を拾えず、
+    R1 の `_fx_s2` と seed1 の取り直し `_ws` を「事前登録が見つからない」にしていた。"""
+    if r in t:
+        return True
+    # 変数は、末尾なら seed の接尾辞（`$X` ＝ 空か `_s2`）、途中なら 1〜2 語（`tripo_${1}_phys_s2` の `pjp_long`）にだけ一致させる。
+    #   何にでも一致させると `tripo_pjp_mid_phys$X` が `tripo_pjp_mid_phys_nosync` まで拾う
+    var = r'\$\{?\w+\}?'
+    for m in re.finditer(rf'[A-Za-z0-9_]{{4,}}(?:{var}[A-Za-z0-9_]*)+', t):
+        parts = re.split(var, m.group(0))
+        pat = ''.join(re.escape(p) + ('' if i == len(parts) - 1 else
+                      ('(?:_s\\d+)?' if i == len(parts) - 2 and not parts[-1] else '[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?'))
+                      for i, p in enumerate(parts))
+        if re.fullmatch(pat, r):
+            return True
+    for suf in set(re.findall(r'\$\{?1\}?(_[A-Za-z0-9_]+)', t)):
+        if r.endswith(suf) and re.search(rf'(?<![\w]){re.escape(r[:-len(suf)])}(?![\w])', t):
+            return True
+    return False
+
+
 def ck_prereg(r):
     """事前登録（読み）がキューか台帳にあるか。"""
     for q in (ROOT / 'scripts').glob('queue_*.sh'):
         t = q.read_text(encoding='utf-8')
-        if r in t and ('読み' in t or '停止条件' in t):
+        if _queue_launches(t, r) and ('読み' in t or '停止条件' in t):
             return True, f'{q.name} に読みあり'
     led = (ROOT / 'docs/研究応用/台帳/実験系譜.md').read_text(encoding='utf-8')
     for m in re.finditer(r'^### .*$', led, re.M):
@@ -619,6 +641,10 @@ def reproduce():
         ('⚠️ だけなら最後の行は ✅ にならない', _verdict(0, 1).startswith('⚠️') and _verdict(0, 0).startswith('✅')),
         ('⚠️ だけの run（tripo_pjd_dist_phys_cg の報酬の桁）を ✅ にしない',
          _tally('tripo_pjd_dist_phys_cg')[:2] == (0, 1)),
+        # ⭐ 10-23: 変数で組み立てた run 名（`$X`）と接尾辞（`$1_ws`）も事前登録として拾う。無い名前は拾わない
+        ('変数で名前を組むキューの run（R1 の `_fx_s2`）の事前登録を拾う', ck_prereg('tripo_pjp_mid_frozen_phys_fx_s2')[0] is True),
+        ('接尾辞を足すキューの run（`tripo_pjp_long_phys_s2_ws`）の事前登録を拾う', ck_prereg('tripo_pjp_long_phys_s2_ws')[0] is True),
+        ('どのキューにも無い名前は拾わない', ck_prereg('tripo_pjp_mid_frozen_phys_zz_s9')[0] is False),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
