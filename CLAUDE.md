@@ -318,6 +318,7 @@ python3 scripts/check_open_gaps.py      # ⭐ 埋まった穴の印が残って�
 python3 scripts/check_env_claims.py        # ⭐ 道具と環境の主張を実際に動かして確かめる（約 1 分半）。コンテナで回す（docker exec akita_sp_ppo …。ホストには Choreonoid が無く、止まる）
 python3 scripts/check_open_gaps.py --status   # ④層（進捗・引き継ぎ・方針）の「⏳ / 🔄 / 稼働中」の行を並べ、1 行ずつ本当にまだかを見る
 python3 scripts/check_rule_zombies.py          # 訂正の注記の前後に、古い命令が残っていないか（指示の層）
+python3 scripts/doc_tree.py                    # どの根（提出・審査・運用）からも辿れない md・遠い md（刈る候補。消す前に全文を読む）
 ```
 
 > **2026-10-09: 機械判定が全部通ったのに、状態の行が 12 日〜5 週間止まっていた**（引き継ぎの表 09-27・進捗の現在地サマリー 09-02・解決済みの反発係数が ⛔ のまま）。
