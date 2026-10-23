@@ -106,6 +106,64 @@ def find_gaps(headings: list):
     return gaps, singles
 
 
+# ⭐ 派生の md（2026-10-23 追加）。本文の外から修論の節を指している md。
+# 10-21 夜の棚卸しで想定問答に「今は無い節」への参照が 15 か所見つかったが、本検査は PDF に入る本文しか
+# 見ていなかったので拾えなかった（10-23 に手で直した、目次の記録）。D-6 で節を刈るとまた起きるので検査にする。
+# 見出し（想定問答なら Q）ごとに出す — 親の節を失った Q が分かる（md の木の段 2、引き継ぎ 10-23）。
+DERIVED = [
+    Path(__file__).resolve().parent.parent / 'docs/研究応用/執筆/想定問答.md',
+]
+
+# 修論の節を指していると読める形だけを拾う。数値（2.19 倍）や表番号（表 4.12）と区別するため、
+# 2 桁の番号は「修論」「第N章」「付録」の接頭辞か「節」「項」の接尾辞があるものだけ、3 桁以上は裸でも拾う
+REF_PATTERNS = [
+    r'(?:修論|第\d+章)\s*(?:付録\s*)?(?:[A-D]\s+)?([0-9A-D]+(?:\.[0-9]+)+)',
+    r'付録\s*[A-D]?\s*([A-D](?:\.[0-9]+)+)',
+    r'(?<![0-9A-Za-z.])([0-9A-D]+(?:\.[0-9]+)+)\s*(?:節|項)',
+    r'(?<![0-9A-Za-z.\-])([1-5](?:\.[0-9]+){2,3})(?![0-9.])',
+]
+# 直前にあれば節参照ではない（表・図の番号、系譜の段、Bug、CLAUDE.md の節、版）
+NOT_SECTION = re.compile(r'(表|図|式|系譜|Bug|§|v|版)\s*$')
+
+
+def derived_refs(text: str, sections: set) -> list:
+    """派生の md から、実在しない修論の節への参照を (見出し, 行, 番号, 行の頭) で返す。
+
+    「旧 4.3.5」のように**外したことを明記した経緯の文**と、取り消し線（~~…~~）の中は数えない。
+    """
+    bad, head = [], ''
+    for i, line in enumerate(text.splitlines(), 1):
+        if re.match(r'^#{1,2}\s', line) or re.match(r'^#{3,4}\s+Q', line):
+            head = line.lstrip('#').strip()[:40]
+        body = re.sub(r'~~.*?~~', lambda m: ' ' * len(m.group(0)), line)
+        seen = set()
+        for pat in REF_PATTERNS:
+            for m in re.finditer(pat, body):
+                num, pos = m.group(1), m.start(1)
+                if num in sections or (num, pos) in seen:
+                    continue
+                seen.add((num, pos))
+                before = body[max(0, m.start() - 14):m.start()]
+                if '旧' in before or '旧' in body[m.start():pos] or NOT_SECTION.search(body[:m.start()]):
+                    continue
+                if num.split('.')[0] in '6789':   # 章は 5 と付録まで。6 以上は数値（6.3 N·m）
+                    continue
+                bad.append((head, i, num, line.strip()[:90]))
+    return bad
+
+
+def reproduce_derived(sections: set) -> int:
+    """10-23 に手で直す前の想定問答（0ee8504 の親）から、既知の古い参照を拾えるかを確かめる。"""
+    import subprocess
+    old = subprocess.run(['git', 'show', '0ee8504^:docs/研究応用/執筆/想定問答.md'],
+                         capture_output=True, text=True, cwd=DRAFT.parent.parent.parent).stdout
+    got = {num for _, _, num, _ in derived_refs(old, sections)}
+    want = {'4.3.3.2', '5.4.2', '5.7.2'}
+    ok = bool(old) and want <= got
+    print(('✅' if ok else '⛔') + f' 派生の md: 直す前の想定問答から {sorted(want)} → 検出 {sorted(got)}')
+    return 0 if ok else 1
+
+
 def reproduce() -> int:
     """既知の欠番（2026-10-21 の第4章）を拾えるかを確かめる。"""
     known = ['1', '2', '3', '4', '4.1', '4.2', '4.3', '4.3.2', '4.3.3', '4.3.3.1', '4.3.3.3',
@@ -118,8 +176,9 @@ def reproduce() -> int:
 
 
 def main() -> int:
-    if '--reproduce' in sys.argv:
-        return reproduce()
+    reproduce_mode = '--reproduce' in sys.argv
+    if reproduce_mode and reproduce():
+        return 1
     texts = {}
     for name in BODY:
         p = DRAFT / name
@@ -129,6 +188,8 @@ def main() -> int:
         texts[name] = strip_memo(p.read_text(encoding='utf-8'))
 
     sections = collect_sections(texts)
+    if reproduce_mode:
+        return reproduce_derived(sections)
     # 章そのものへの参照（「第4章」）は節集合では持たないので別に許す
     chapters = {n.split('.')[0] for n in sections}
 
@@ -172,6 +233,20 @@ def main() -> int:
     for s in singles:
         print(f'⚠️ {s} は項が 1 つだけ（分ける必要があるか、判定 md 型 26）')
 
+    dbad = []
+    for p in DERIVED:
+        for head, i, num, line in derived_refs(p.read_text(encoding='utf-8'), sections):
+            dbad.append((p.name, head, i, num, line))
+    if dbad:
+        print(f'⛔ 派生の md から、実在しない節への参照 {len(dbad)} 件（見出しごと。外した節なら「旧 N.M」と書くか、今の節へ）\n')
+        last = None
+        for name, head, i, num, line in dbad:
+            if (name, head) != last:
+                print(f'  {name} — {head}')
+                last = (name, head)
+            print(f'      L{i}  「{num}」  {line}')
+        print()
+
     if bad:
         print(f'⛔ 実在しない節への参照 {len(bad)} 件\n')
         for name, i, num, line in bad:
@@ -180,11 +255,12 @@ def main() -> int:
         print(f'\n⭐ 実在する節: {len(sections)} 個 / 章: {sorted(chapters)}')
         return 1
 
-    if depth_bad or gaps:
+    if depth_bad or gaps or dbad:
         return 1
     print(f'✅ 節参照はすべて実在する節を指している（参照先候補 {len(sections)} 節）')
     print('✅ 見出しの深さと節番号の桁数も一致している')
     print('✅ 欠番は無い（意図したものを除く）')
+    print(f'✅ 派生の md（{"・".join(p.stem for p in DERIVED)}）の節参照も実在する')
     return 0
 
 
