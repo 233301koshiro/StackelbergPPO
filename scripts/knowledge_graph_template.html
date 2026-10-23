@@ -120,7 +120,7 @@ const nodesDS = new vis.DataSet();
 const edgesDS = new vis.DataSet();
 const net = new vis.Network(document.getElementById('net'), { nodes: nodesDS, edges: edgesDS }, {
   physics: { solver: 'forceAtlas2Based', forceAtlas2Based: { gravitationalConstant: -60, springLength: 70, avoidOverlap: 0.3 },
-    stabilization: { iterations: 160 } },
+    stabilization: { iterations: 160 }, minVelocity: 1.5, maxVelocity: 30 },
   interaction: { hover: true, tooltipDelay: 250 },
   nodes: { shape: 'dot', scaling: { min: 6, max: 34, label: { enabled: true, min: 10, max: 18, drawThreshold: 7 } } },
   edges: { smooth: false, selectionWidth: 1.5 },
@@ -177,7 +177,13 @@ function render(focusIds) {
   net.stabilize(140);
   if (focusIds) setTimeout(() => net.focus(focusIds, { scale: Math.max(net.getScale(), 0.9), animation: { duration: 500 } }), 350);
 }
-net.on('stabilized', () => net.setOptions({ physics: { enabled: false } }));
+// 600 ノードでは速度が止まりきらず「stabilized」が来ないまま回り続けた（10-23、ユーザー指摘）。
+// 決まった回数の計算を終えたら物理を切る。念のため 4 秒でも切る
+const freeze = () => net.setOptions({ physics: { enabled: false } });
+let freezeTimer = null;
+net.on('stabilizationIterationsDone', freeze);
+net.on('stabilized', freeze);
+net.on('startStabilizing', () => { clearTimeout(freezeTimer); freezeTimer = setTimeout(freeze, 4000); });
 
 function reveal(i) {
   anc[i].forEach(a => expanded.add(a));
