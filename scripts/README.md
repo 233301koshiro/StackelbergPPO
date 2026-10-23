@@ -121,6 +121,7 @@
 | ⭐ `queue_hockey_goal_rate.sh` | ⭐ **ホッケーの取り直し 2 本のゴール率を 20 話（全話）で測る**（9-237）。完走を待って `trace/arm_trace_20.npz` を作る。学習はしない |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
 | ⭐ **`doc_refs.py`** | **識別子の逆引き。「ここを変えたらどこも変わる」を出す。** `--hubs` で影響の広い識別子、`--undefined` で壊れ参照 |
+| `doc_tree.py` | **md の木**（2026-10-23）。提出・審査・運用の 3 つの根から参照（リンク・ファイル名・`系譜`・`修論`・`Bug`・`想定問答 Q`）を辿り、**どの根からも辿れない md と遠い md**を出す。棚卸しで刈る候補を探す用。`--drawio` で `docs/リポジトリ説明/md_の木.drawio`、`--reproduce` で既知の参照を辿れるか。⚠️ 波及の確認は `doc_refs.py`（木は親を 1 つしか持たない） |
 | `dump_thesis_outline.py` | 修論の見出しを書き出す。`--write` で 構成.md の一覧を再生成、`--check` で食い違い検査 |
 | `eval_cnoid_numerical.py` | 数値で成功率・報酬を確認 |
 | `eval_cnoid_visual.py` | 動画（mp4）で記録 |
