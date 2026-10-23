@@ -108,12 +108,21 @@ def strip_heading_number(title: str) -> str:
     title = re.sub(r'^第\d+章(?:前段)?\s+', '', title)
     return title
 
+# md の目印の絵文字（⭐ ⚠️ ⛔ ✅ ❌ 📝 など）。PDF のフォントに字形が無く「�」になっていた
+# （2026-10-23 に 43 箇所。ユーザー「反映されていないなら論文から消して」）。md には残し、PDF でだけ落とす。
+# → ← ≤ ①〜⑩ ▲ は意味のある記号で字形もあるので残す。
+PDF_DROP_SYMBOLS = re.compile(r'(?:[\u26A0\u26D4\u2705\u274C\u2B50]|[\U0001F000-\U0001FFFF])\uFE0F?[ \u3000]?')
+
+def strip_pdf_symbols(md_text: str) -> str:
+    return PDF_DROP_SYMBOLS.sub('', md_text).replace('\uFE0F', '')
+
 def md_to_latex_body(md_text: str, unnumbered: bool = False,
                      merge: bool = False, title_override: str = None) -> str:
     r"""
     unnumbered=True のとき、すべての見出しを starred コマンド（\chapter*）にし、
     LaTeX の章カウンタに影響を与えない。章タイトル（レベル1）のみ TOC に追加する。
     """
+    md_text = strip_pdf_symbols(md_text)
     lines = md_text.split('\n')
     out = []
     in_code = False
@@ -398,6 +407,10 @@ def main():
         # 本文中の「> 📝 **執筆メモ（本文に残さない）**」も同じく落とす（2026-10-19、PDF に 4 箇所出ていた）
         md_text = re.sub(r'^> 📝 \*\*執筆メモ.*?(?=\n(?!>)|\Z)', '',
                          md_text, flags=re.DOTALL | re.M)
+        # 本文の md に引用（> で始まる行）の正当な使い道は無く、残っているのは執筆用の注記だけ。
+        # 「ドラフト管理」「📝 執筆メモ」以外の頭（⛔⛔ 2026-10-13 … など）の注記が PDF に灰色で出ていた
+        # （2026-10-23、第5章と付録D の 2 箇所）。頭の言葉で拾うと次の新しい頭がまた漏れるので、全部落とす。
+        md_text = re.sub(r'(?m)^>.*(?:\n|\Z)', '', md_text)
         latex_body = md_to_latex_body(md_text, unnumbered=unnumbered,
                                       merge=opts.get('merge', False),
                                       title_override=opts.get('title'))
