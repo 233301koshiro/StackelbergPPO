@@ -77,6 +77,13 @@ cfg.restore_dir = restore_dir
 replay_robot_param_scale(cfg, restore_dir)   # 9-283: Bug 74 の修正前の run は学習時の値で
 cfg.control_prior = False
 cfg.morph_prior = False
+# ⭐ 学習時と違う XML で再生する口（2026-10-24、系譜 9-297。箱の質量・減衰を変えて押しの順位が保たれるかを見る）。
+#   例: TRACE_XML=_cf_tmp/tripo_arm_v2c_pj_mid_phys_arm171_cubeden50（assets/mujoco_envs/ からの相対、.xml なし）
+#   ⚠️ 腕の形は checkpoint から来るので、XML で変わるのは腕以外（箱・床など）。使ったら必ず記録に書く
+_tx = os.environ.get('TRACE_XML')
+if _tx:
+    print(f'[trace] ⚠️ XML を差し替えた: {cfg.xml_name} → {_tx}', flush=True)
+    cfg.xml_name = _tx
 # ⭐ 学習時と違う env_specs で再生する口（2026-10-09、系譜 9-234）。例: TRACE_ENV_SPECS='{"cube_x_offset": 100}'
 #   ⚠️ 学習時の設定と違う環境で再生することになるので、使ったら必ず記録に書く
 _es = os.environ.get('TRACE_ENV_SPECS')
