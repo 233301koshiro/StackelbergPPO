@@ -11,8 +11,12 @@
 
 使い方:
     python3 scripts/rank_settle.py                # 既定のコホート（実在の物理 *_phys）を全部測る
+    python3 scripts/rank_settle.py --ws           # 既定のコホートの seed 1 を新しい種の取り直し（*_s2_ws、Bug 76）に替えて測る
     python3 scripts/rank_settle.py --old          # 旧い物理のコホート（撤回、9-246。再現用）
     python3 scripts/rank_settle.py runA runB ...  # 任意の run を比較（引数順は無関係）
+
+⭐ 2026-10-26: `--ws` を足した。既定の seed 1（`*_s2`）はワーカーの乱数を seed 0 と共有していた（Bug 76）ので、
+修論（新しい帯）はこちらで測る。`<run>_s2` に `<run>_s2_ws` があればそれに替える（無ければ `_s2` のまま）。
 
 ⭐ 2026-10-20（系譜 9-269）: 既定を実在の物理の run に替えた。完走していない run（`training done!` が無い）は
 SKIP する（学習中の run を途中の値で測ると、確定エポックが短く出る）。
@@ -188,8 +192,16 @@ COHORTS_OLD = [
 
 def main():
     args = sys.argv[1:]
+    bands = BANDS
     if args == ['--old']:
         cohorts = COHORTS_OLD
+    elif args == ['--ws']:
+        def ws(r):
+            return r + '_ws' if r.endswith('_s2') and os.path.isdir(os.path.join(RUN_DIR, r + '_ws')) else r
+        cohorts = [([ws(r) for r in runs], labels, name) for runs, labels, name in COHORTS]
+        bands = [([ws(r) for r in A], [ws(r) for r in B], name) for A, B, name in BANDS]
+        print('⭐ --ws: seed 1 を新しい種の取り直し（*_s2_ws）に替えた: '
+              + '・'.join(sorted({ws(r) for runs, _, _ in COHORTS for r in runs if ws(r) != r})) + '\n')
     elif args:
         cohorts = [(args, args, '指定 run')]
     else:
@@ -212,9 +224,9 @@ def main():
             print(f'{name:40s} {ep_s:>8s}  {order:24s} {vals}  {rng}')
         except (FileNotFoundError, ValueError) as e:
             print(f'{name:40s} {"SKIP":>8s}  {type(e).__name__}: {e}')
-    if cohorts is COHORTS:
+    if cohorts is COHORTS or args == ['--ws']:
         print()
-        for A, B, name in BANDS:
+        for A, B, name in bands:
             try:
                 final, st, last = band_settle(A, B)
                 msg = '最後に重なる（区別できない）' if final is None else \
