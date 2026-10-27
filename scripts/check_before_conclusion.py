@@ -27,6 +27,8 @@
   13. ⭐ **起動行の robot_param_scale が学習に届いたか**（Bug 74・Bug 75）。記録された値と、
       `log_train.txt` の「⭐ robot_param_scale = …」の行（無い run は当時の config.py が読んだ yml の値）を比べる。
       `--reproduce` で、既知の失敗（凍結が効かなかった R1）と既定値の取り違えを拾えるかを確かめる
+  14. ⭐ **根元を固定したタスクの話が、学習の終わりに短くなっていないか**（Bug 82。2026-10-27）。
+      実行フェーズは状態が非有限のときしか終わらないので、短い話は物理の発散で切れている
 """
 import argparse
 import re
@@ -281,6 +283,29 @@ def ck_entered_exec(r):
                        f'1 エピソードも execution へ入っていない疑い（9-211）。'
                        f'⭐ stdout を `grep arm_safe_init` し、`transit_execution` の例外を見ること')
     return True, f'exec_R_eps が非ゼロの epoch {len(vals)-zeros}/{len(vals)}'
+
+
+def ck_ep_len(r):
+    """⭐ 根元を固定したアームの話が、学習の終わりに短くなっていないか（2026-10-27、Bug 82・系譜 9-310）。
+
+    根元を固定したアーム（XML の根元に free joint が無い。`pusher.py` の `is_fixed_base`。この研究のアームは全部）と到達（`use_reach`）の
+    実行フェーズは、状態が非有限になったときしか終わらない（`pusher.py`）。起動行の `fix_base=true` の有無では決まらない（平面アームには無い）。
+    話の長さは max_nsteps（既定 1000）になるはずで、短いなら物理が発散して切れている。到達の報酬は毎 step 負なので、
+    切れるほど合計が良くなり、方策がそれを学ぶ（D-5 は 2 seed とも約 1000 → 30〜70 step）。exec_R_eps の「良化」に見える。
+    1 話の step 数は exec_R_eps ÷ exec_R で見積もる（|exec_R| が小さい epoch は割り算が暴れるので飛ばす）。
+    """
+    log = run_dir(r) / 'log' / 'log_train.txt'
+    if not log.exists():
+        return None, '⚠️ 学習ログが無い'
+    rows = re.findall(r'exec_R\s+(-?[\d.]+)\s+exec_R_eps\s+(-?[\d.]+)', log.read_text(encoding='utf-8', errors='ignore'))
+    lens = [float(b) / float(a) for a, b in rows if abs(float(a)) >= 0.01]
+    if len(lens) < 10:
+        return True, f'報酬が小さく話の長さを見積もれる epoch が {len(lens)} 個（10 未満なので見ない）'
+    last = float(np.median(lens[-10:]))
+    if last < 500:
+        return False, (f'⛔ 学習の終わり 10 epoch の話の長さ（exec_R_eps ÷ exec_R）の中央値 {last:.0f} step（max_nsteps 1000）。'
+                       f'物理が発散して話が切れている疑い。exec_R_eps の良化は話が短くなっただけかもしれない（Bug 82）')
+    return True, f'学習の終わりの話の長さ 約 {last:.0f} step'
 
 
 def _launch_env(r):
@@ -606,7 +631,7 @@ def ck_effective(r):
 CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg),
-          ('⭐⭐ exec 到達', ck_entered_exec),
+          ('⭐⭐ exec 到達', ck_entered_exec), ('⭐ 話の長さ', ck_ep_len),
           ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 折り返し', ck_fold), ('⭐ 台座', ck_base),
           ('⭐ 比べる相手', ck_pair), ('⭐ 不変条件', ck_invariants), ('⭐ 効いた値', ck_effective)]
 
@@ -645,6 +670,9 @@ def reproduce():
         ('変数で名前を組むキューの run（R1 の `_fx_s2`）の事前登録を拾う', ck_prereg('tripo_pjp_mid_frozen_phys_fx_s2')[0] is True),
         ('接尾辞を足すキューの run（`tripo_pjp_long_phys_s2_ws`）の事前登録を拾う', ck_prereg('tripo_pjp_long_phys_s2_ws')[0] is True),
         ('どのキューにも無い名前は拾わない', ck_prereg('tripo_pjp_mid_frozen_phys_zz_s9')[0] is False),
+        # ⭐ Bug 82（10-27）: 柱に食い込んで NaN で切れる D-5 は ⛔、柱なしの到達は ✅
+        ('話が NaN で切れて短くなった D-5（Bug 82）を ⛔', ck_ep_len('e2e_a1v_obspen_reach_phys')[0] is False),
+        ('柱なしの到達は話の長さ ✅', ck_ep_len('e2e_a1v_reach_phys')[0] is True),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
