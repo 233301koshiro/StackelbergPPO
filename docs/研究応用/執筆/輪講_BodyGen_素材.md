@@ -78,6 +78,7 @@
 | 7 | **「MoSAT を外す」で何に置き換えたかが書いていない** | p.8 の 5.2 (i) | 性能が 1/10 以下になる（Crawler 818.92）のは、注意をただ外しただけなら大きすぎる。中身が分からないので解釈が難しい |
 | 8 | **設計段の優位度に割引が無い理由** | p.7 式 4.9 | δ には γ を掛けるが U_t には掛けない。「設計の 1 手は話の全 step に効く」が理由（p.7 本文）。良い点として紹介できる |
 | 9 | **計算資源** | p.16 A.3.1 | 1 モデル 20 コア＋RTX 3090 1 枚で約 30 時間。1000 epoch、1 回の更新に 50,000 step（表 3 の PPO Batch Size） |
+| 9b | **公開コードには論文に無い正規化がある** | p.7 式 4.9 と公開コード `genesis_agent.py` の `estimate_advantages` | 設計段のリターン（割引なしの和）を走りながらの統計で正規化し、優位度も段ごとに平均 0・分散 1 へそろえる。論文の式 4.9 には出てこない。割引なしの和は話の長さで桁が変わるので、正規化なしでは設計段と制御段の勾配の大きさがそろわないはず。「式 4.9 だけで再現できるか」と聞かれうる（§4、10-21 に確かめた） |
 | 10 | 細かい誤字 | p.1 要旨 "Body achieves"、p.6 図 4 "mythologies"（morphologies） | 言わなくてよい |
 
 ---
@@ -89,7 +90,7 @@
 | MoSAT（自己注意の方策・価値） | `design_opt/models/bodygen_policy.py`・`bodygen_critic.py`・`transformer.py` | そのまま使う |
 | トポロジー設計の段（5 step） | — | **使っていない。**トポロジーは手描きのスケッチで決まるので固定する（`fix_skeleton=true`） |
 | 属性設計の段 | 同上 | リンク長・太さ・ギア比の設計変数を出す |
-| Enhanced-TCA（式 4.9） | `design_opt/agents/genesis_agent.py` の `estimate_advantages`（326 行: 設計段のリターンは割引なしの和、328 行: それから価値を引く） | 式どおり。⚠️ さらに段ごとのリターンの正規化と優位度の正規化（331〜341 行）が入っているが、**論文の式には無い**（BodyGen の公開コード由来か、Stackelberg PPO が足したものかは未確認） |
+| Enhanced-TCA（式 4.9） | `design_opt/agents/genesis_agent.py` の `estimate_advantages`（326 行: 設計段のリターンは割引なしの和、328 行: それから価値を引く） | 式どおり。⚠️ さらに段ごとのリターンの正規化と優位度の正規化（331〜341 行）が入っているが、**論文の式には無い**。✅ **BodyGen の公開コード由来**（10-21 に確かめた: [Josh00-Lu/BodyGen](https://github.com/Josh00-Lu/BodyGen)（genesisorigin/bodygen からの転送先）の `design_opt/agents/genesis_agent.py`、コミット `4e0bdc0`（2025-02-11）の `estimate_advantages` と、このリポジトリの関数は、Stackelberg PPO が足した引数 `c_reward` の受け渡し以外は同一。設計段は `design_ret_norm`（`planner_demean` で平均を引くか決める）、制御段は `control_ret_norm`、優位度は段ごとに平均 0・分散 1 へ（`cfg.norm_advantage`）） |
 | 段ごとに別の価値ネットワーク | `design_opt/models/bodygen_critic.py` の `BodyGenValue` | 論文どおり。外からは 1 つの `value_net` だが、中に段ごとの Transformer と出力層が 3 組ある（`skel_transformer`／`attr_transformer`／`control_transformer`、`*_value_head`）。各状態はその段の組だけを通る |
 
 Stackelberg PPO（前回の輪講）は、この上に「設計がリーダー、制御がフォロワー」の順序を入れて、設計段の勾配に制御の応答を反映させた（`genesis_agent.py` の leader / follower の分割、489〜493 行）。**BodyGen の TCA は「設計段に報酬を届ける」、Stackelberg PPO は「届いた報酬で設計を動かすとき、制御がどう追従するかまで見る」**、という 2 段の改良として説明できる。
@@ -98,6 +99,6 @@ Stackelberg PPO（前回の輪講）は、この上に「設計がリーダー�
 
 ## 5. まだやっていないこと
 
-- [ ] §4 の表の「未確認」1 つ（段ごとのリターンと優位度の正規化が BodyGen の公開コードにもあるか）。価値ネットワークの分け方は論文どおりと確かめた（10-21）。論文のサイト https://genesisorigin.github.io （p.1）から公開コードを辿って見れば分かる
+- [x] §4 の表の「未確認」1 つ → ✅ 10-21: 段ごとのリターンと優位度の正規化は BodyGen の公開コードにある（Stackelberg PPO が足したものではない）。§3 の 9b に突っ込みどころとして足した
 - [ ] 図の切り出し（図 2・3・4・5・6、表 4）。ユーザーが PDF からスクショする
 - [ ] スライドができたらスクショで照合する（数字と出典のページ）

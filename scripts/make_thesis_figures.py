@@ -69,12 +69,13 @@ def running_best(y):
     return np.maximum.accumulate(y)
 
 
-# ── 図1: マトリクス判定の順位反転（4.3.3.3） ──────────────────────────────────
+# ── 図1: マトリクス判定の順位反転（4.4.3.2） ──────────────────────────────────
 def fig_matrix_reversal():
     labels = ['短腕 0.403 m', '中間 0.887 m', '長腕 1.451 m']
     cols = [C_SHORT, C_MID, C_LONG]
-    runs_r = ['tripo_pj_short', 'tripo_pj_mid', 'tripo_pj_long']
-    runs_p = ['tripo_pjp_short', 'tripo_pjp_mid', 'tripo_pjp_long']
+    # 実在の物理のシード 0（系譜 9-246）。短腕は Bug 72 の門を直した取り直し（9-271）
+    runs_r = ['tripo_pj_short_phys_cg', 'tripo_pj_mid_phys', 'tripo_pj_long_phys']
+    runs_p = ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys']
     best_r = [running_best(curve(r)[1])[-1] for r in runs_r]
     best_p = [running_best(curve(r)[1])[-1] for r in runs_p]
 
@@ -160,14 +161,15 @@ def fig_transfer_decomposition():
 
 # ── 図3: 診断 M7 の三層検証（3.12.4） ──────────────────────────────────────
 def fig_diagnosis_validation():
-    # 各セルは single_run/diag_validation/*.txt の実出力を要約したもの
+    # 各セルは三層診断を今の物理の best（シード 0）にかけ直した出力の要約（系譜 9-292、2026-10-23）。
+    # 順位・値はシード 0 の best exec_R_eps（log_train.txt）。2 シードの帯は修論 表 4.12（d6_bands.py 4.4.3.2）
     rows = [
-        ('Reach / 短腕',  'bad',  '届かない\n2.19 倍推奨', 'warn', '下限張り付き\n判定不能', 'bad',  '397 mm 離れ', '達成不可', '3 位', '−396.92'),
-        ('Reach / 中間',  'ok',   '余裕 10%',              'warn', '下限張り付き\n判定不能', 'ok',   '誤差 0.9 mm',      '障害なし', '1 位', '−3.42'),
-        ('Reach / 長腕',  'warn', '余裕 45%\n長すぎ', 'ok',   '内部解',                'warn', '誤差 7 mm',        '障害なし', '2 位', '−12.48'),
-        ('Pusher / 短腕', 'bad',  '触れない\n2.32 倍推奨', 'ok',   '内部解（誤）',          'warn', '対象が\n動かない',   '達成不可', '3 位', '−0.00'),
-        ('Pusher / 中間', 'ok',   '届く\nめり込まない',    'ok',   '内部解',                'ok',   '1.48 m 移動',      '障害なし', '2 位', '34.32'),
-        ('Pusher / 長腕', 'warn', 'めり込み警告',           'ok',   '内部解',                'ok',   '4.05 m 移動',      '障害なし', '1 位', '96.18'),
+        ('Reach / 短腕',  'bad',  '届かない\n1.99 倍推奨', 'ok',   '範囲の内側\n（誤）',   'bad',  '397 mm 離れ',      '達成不可', '3 位', '−397.20'),
+        ('Reach / 中間',  'ok',   '余裕 10%',              'ok',   '下限\n（到達では正常）', 'ok',   '誤差 0.5 mm\n16 step', '障害なし', '1 位', '−1.85'),
+        ('Reach / 長腕',  'warn', '余裕 45%\n長すぎ',      'ok',   '下限\n（到達では正常）', 'ok',   '誤差 0.5 mm\n38 step', '障害なし', '2 位', '−9.68'),
+        ('Pusher / 短腕', 'bad',  '触れない\n2.11 倍推奨', 'ok',   '範囲の内側\n（誤）',   'warn', '対象が\n動かない',   '達成不可', '3 位', '−0.00'),
+        ('Pusher / 中間', 'ok',   '届く',                  'warn', '上限の警告\n（出力不足）', 'ok', '0.47 m 移動',      '障害なし', '2 位', '10.42'),
+        ('Pusher / 長腕', 'warn', 'めり込み警告',           'ok',   '範囲の内側',           'ok',   '1.09 m 移動',      '障害なし', '1 位', '24.92'),
     ]
     FC = {'ok': '#d5f0dc', 'warn': '#fdf0d0', 'bad': '#f8d7da'}
     EC = {'ok': '#27ae60', 'warn': '#e0a800', 'bad': '#c0392b'}
@@ -209,16 +211,16 @@ def fig_diagnosis_validation():
 
     ax.set_xlim(-1.30, x[4] + w[4] + 0.06)
     ax.set_ylim(-0.75, len(rows) + 0.95)
-    ax.text(x[1] + w[1] / 2, -0.52, '破線 = 第2層の誤判定（この形態は対象に触れていない）',
+    ax.text(x[1] + w[1] / 2, -0.52, '破線 = 第2層の見逃し（範囲の内側と報告したが届かない）',
             fontsize=10.5, color=EC['bad'], ha='center')
-    ax.text(x[4] + w[4] / 2, -0.55, '総合判定は 6/6 一致', ha='center',
+    ax.text(x[4] + w[4] / 2, -0.55, '達成不可の 2 条件はともに最下位', ha='center',
             fontsize=11, color='#1e6b3a', fontweight='bold')
     fig.savefig(os.path.join(OUT, 'diagnosis_validation.png'))
     plt.close(fig)
     return 'diagnosis_validation.png'
 
 
-# ── 図4: タスク別の収束形態の分離（4.3.2） ───────────────────────────────────
+# ── 図4: タスク別の収束形態の分離（4.4.2） ───────────────────────────────────
 def fig_task_separation():
     # ②台帳（第4章 表4.5）の確定値。morph dump 由来で①原本には無いため転記。
     # 値を直すときは第4章 表4.5 と 形態比較.md を同時に直すこと。
@@ -270,7 +272,7 @@ def fig_task_separation():
 
 
 
-# ── 図5: 関節検出の色ドリフト許容幅（4.2.2 = 軸1） ──────────────────────────
+# ── 図5: 関節検出の色ドリフト許容幅（4.3.2 = 軸1） ──────────────────────────
 def fig_marker_tolerance():
     """`eval_pipeline_robustness.py` の実測値をそのまま図にする。
     値を変えるときはスクリプトを走らせ直して両方を直すこと（表 4.4・4.5 と対）。"""
@@ -311,7 +313,7 @@ def fig_marker_tolerance():
 
 
 def fig_margin_ladder():
-    """余裕の梯子（9-11）＋制御コスト対照（9-15）。S8-(3) と第4章 4.4.3 の図。
+    """余裕の梯子（9-11）＋制御コスト対照（9-15）。S8-(3) と第4章 4.5.3 の図。
 
     ⚠️ **①原本（log_train.txt の best）から読む。** 値を手で書かない。
     到達タスクは残存距離のほうが直感的なので、best を 1000 step で割って mm に直す。
@@ -356,7 +358,61 @@ def fig_margin_ladder():
     return 'margin_ladder.png'
 
 
+def fig_arm_forms():
+    """修論 4.1.1 の図: 検証に用いた水平 3 関節アーム（2026-10-22、ユーザー指摘「肝心のロボットの画像の一つもない」）。
+
+    (a) M2 が生成したメッシュ（`data/tripo_arm_colorful2`、系譜 第5段の v2c の元）を横から。
+    (b) 比較に用いた 7 形態を上から。リンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
+    """
+    import xml.etree.ElementTree as ET
+    sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+    import glb_to_links as G
+    mesh = G._apply_yup_zup(G._load_concat(os.path.join(ROOT, 'data/tripo_arm_colorful2/colorful stacking rod 3d model.glb')))
+    V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
+    idx = np.random.default_rng(0).choice(len(V), min(30000, len(V)), replace=False)
+    k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
+
+    forms = [('短腕（0.5 倍）', 'short'), ('中間（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
+             ('根元重（配分）', 'prox'), ('先端重（配分）', 'dist'),
+             ('指針の 1.99 倍', 'rec199'), ('指針の 2.11 倍', 'rec211')]
+    col = ['#888888', '#d94040', '#3070d0', '#30a050']        # 台座・1・2・3 本目
+    fig, ax = plt.subplots(1, 2, figsize=(9.2, 4.6), gridspec_kw={'width_ratios': [0.42, 2.6]})
+    a = ax[0]
+    a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.4)
+    a.set_aspect('equal'); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]')
+    a.set_title('(a) 生成したメッシュ（横から）', fontsize=11)
+    a = ax[1]
+    for row, (lab, n) in enumerate(forms):
+        y = -row * 0.3
+        body = ET.parse(os.path.join(ROOT, f'assets/mujoco_envs/tripo_arm_v2c_pj_{n}_phys_arm171.xml')).getroot().find('worldbody/body')
+        a.add_patch(plt.Circle((0, y), 0.1, color=col[0], alpha=0.6))
+        x, j = 0.0, 1
+        for g in body.iter('geom'):
+            if g.get('fromto') is None:
+                continue
+            ft = list(map(float, g.get('fromto').split())); r = float(g.get('size'))
+            L = float(np.linalg.norm(np.subtract(ft[3:], ft[:3])))
+            a.add_patch(Rectangle((x, y - r), L, 2 * r, color=col[j], alpha=0.8, lw=0))
+            for q in (x, x + L):
+                a.add_patch(plt.Circle((q, y), r, color=col[j], alpha=0.8, lw=0))
+            a.plot(x, y, 'k.', ms=4)
+            x += L; j += 1
+        a.text(-0.14, y, lab, ha='right', va='center', fontsize=10)
+        a.text(x + 0.06, y, f'{x:.3f} m', va='center', fontsize=9)
+    for xv, lab in ((0.80, '到達の目標\n0.80 m'), (0.85, '押しの対象の\n手前の面 0.85 m')):
+        a.axvline(xv, color='k', ls='--' if xv == 0.80 else ':', lw=1)
+        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5)
+    a.set_xlim(-1.0, 1.85); a.set_ylim(-6 * 0.3 - 0.2, 0.42); a.set_aspect('equal')
+    a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
+    a.set_title('(b) 比較に用いた形態（上から）', fontsize=11)
+    fig.tight_layout()
+    fig.savefig(os.path.join(OUT, 'arm_forms.png'))
+    plt.close(fig)
+    return 'arm_forms.png'
+
+
 FIGS = {'matrix': fig_matrix_reversal,
+        'arm': fig_arm_forms,
         'transfer': fig_transfer_decomposition,
         'diagnosis': fig_diagnosis_validation,
         'separation': fig_task_separation,

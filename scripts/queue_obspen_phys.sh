@@ -1,4 +1,6 @@
 #!/bin/bash
+# ⛔ 10-22 22 時 24 分に止めた（ユーザー承認「全部この案で」）。後継は scripts/queue_hockey_fs_obspen.sh（ホッケーを Bug 78 を直して両 seed 取り直し → この D-5 の 2 本を同じ起動行で）。
+#    下の見込みの時刻とホッケー seed1（_blk3d_s2）の起動は古い。系譜 9-288
 # ⭐ 障害物 Reach（D-5）を今の物理で 2 seed 回し直す（ユーザー決定 10-21、系譜 9-274・進捗 D-5）。
 #   「柱を避けて届く」まで学習させない。「避けて届く姿勢は幾何的にあるのに、学習が届かない」（9-144・9-161）を
 #   結果として扱う。旧い 2 本（e2e_a1v_obspen_reach / _s2）は旧い物理（armature 1・密度 5・自己干渉なし・
@@ -27,9 +29,12 @@
 #      ㉒-c 届くが ㉑ を満たさない → 通り抜けで届いた。㉑ に戻る
 #   予想（確かめていない）: ㉒-a。すり抜けの道が閉じるので、旧い seed1 の「届くが柱を通る」は出ない（9-274）
 #
-# ⭐ 順番: 本キュー（queue_phys.sh）の最後の付録D（tripo_arm_v3_pusher_phys_s2）が起動した後、枠が空き次第入る
-#   （10-21 7 時 50 分の見込みで 10-27 8 時ごろ）。ホッケー seed1（queue_hockey_phys_g10_blk3d.sh）・D-7 との順は未定。
-#   ⛔ 投入はユーザーの確認の後（10-21 ユーザー）
+# ⭐ 順番（10-21 ユーザー「ホッケーの後で」）: 本キュー（queue_phys.sh）の最後の付録D（tripo_arm_v3_pusher_phys_s2）が
+#   起動した後 → ホッケー seed1 → 本キューの 2 本。ホッケー seed1 は 10-20 に hockey キューの bash を止めたので起動役がいない。
+#   そこで queue_hockey_phys_g10_blk3d.sh を**書き換えずにそのまま 1 回呼ぶ**（seed0 は log/ があるので飛ばされ、seed1 だけが
+#   空き枠を待って入る。起動行は hockey キューのものがそのまま使われる）。ホッケー seed1 が起動してから本キューの 2 本が枠を待つ。
+#   見込み（10-21 7 時 50 分の計算）: 10-27 8 時ごろ 1 枠目 → ホッケー seed1、16 時ごろ 2 枠目 → obspen seed0、seed1 はその次の空き。
+#   D-7 は未定（決めたら後ろに足す）。✅ 投入はユーザーの確認済み（10-21 11 時「キューも投入して」）
 set -u
 cd /userdir/StackelbergPPO
 Q=single_run/queue_obspen_phys.log
@@ -51,9 +56,14 @@ FB="+fix_base=true"
 REACH8="+reward_specs.use_reach=true +reward_specs.target_x=0.8 +reward_specs.target_y=0.0 +reward_specs.target_z=0.15 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false +env_specs.cube_x_offset=100"
 OBS="+reward_specs.obstacle_penalty_scale=1.0"
 
-log "=== 障害物 Reach を今の物理で 2 seed（D-5、系譜 9-274）HEAD=$(git rev-parse --short HEAD)。tripo_arm_v3_pusher_phys_s2 の起動を待つ"
-until [ -d single_run/tripo_arm_v3_pusher_phys_s2/log ]; do sleep 60; done
-log "本キューの最後が起動した。枠が空き次第入る"
+log "=== 障害物 Reach を今の物理で 2 seed（D-5、系譜 9-274）HEAD=$(git rev-parse --short HEAD)。e2e_a1_fix3_pusher_phys_s2 の起動 → ホッケー seed1 の起動を待つ"
+# ⛔ 10-21 17 時台に待つ相手を直した: 元は tripo_arm_v3_pusher_phys_s2（付録D.5 の v3）を待っていたが、a7bbb57 で
+#   その 4 本を queue_phys.sh から外したので起動せず、ここで止まり続けていた。いまの本キューの最後の起動は e2e_a1_fix3_pusher_phys_s2。
+until [ -d single_run/e2e_a1_fix3_pusher_phys_s2/log ]; do sleep 60; done
+log "本キューの最後が起動した。先にホッケー seed1（queue_hockey_phys_g10_blk3d.sh をそのまま呼ぶ）"
+bash scripts/queue_hockey_phys_g10_blk3d.sh
+until [ -d single_run/hockey_bank9_phys_g10_blk3d_s2/log ]; do sleep 60; done
+log "ホッケー seed1 が起動した。枠が空き次第入る"
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
   launch e2e_a1v_obspen_reach_phys$X cfg=pusher_tripo_v3_reallen xml_name=e2e_a1v_obs_tall2_phys_arm171 max_epoch_num=200 seed=$S $C $REACH8 +reward_specs.init_contact_penalty=1900 $FB $OBS
 done

@@ -108,12 +108,21 @@ def strip_heading_number(title: str) -> str:
     title = re.sub(r'^第\d+章(?:前段)?\s+', '', title)
     return title
 
+# md の目印の絵文字（⭐ ⚠️ ⛔ ✅ ❌ 📝 など）。PDF のフォントに字形が無く「�」になっていた
+# （2026-10-23 に 43 箇所。ユーザー「反映されていないなら論文から消して」）。md には残し、PDF でだけ落とす。
+# → ← ≤ ①〜⑩ ▲ は意味のある記号で字形もあるので残す。
+PDF_DROP_SYMBOLS = re.compile(r'(?:[\u26A0\u26D4\u2705\u274C\u2B50]|[\U0001F000-\U0001FFFF])\uFE0F?[ \u3000]?')
+
+def strip_pdf_symbols(md_text: str) -> str:
+    return PDF_DROP_SYMBOLS.sub('', md_text).replace('\uFE0F', '')
+
 def md_to_latex_body(md_text: str, unnumbered: bool = False,
                      merge: bool = False, title_override: str = None) -> str:
     r"""
     unnumbered=True のとき、すべての見出しを starred コマンド（\chapter*）にし、
     LaTeX の章カウンタに影響を与えない。章タイトル（レベル1）のみ TOC に追加する。
     """
+    md_text = strip_pdf_symbols(md_text)
     lines = md_text.split('\n')
     out = []
     in_code = False
@@ -244,11 +253,32 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 if max_cell_w > 22 or ncols >= 5:
                     # 長文セル（比較表等）は折り返し可能な固定幅列にする。
                     # l| のままだと1行に収まらず紙面外へはみ出す（Overfull \hbox）。
-                    col_w = f'{0.92 / ncols:.3f}\\textwidth'
-                    col_spec = '|' + (f'p{{{col_w}}}|') * ncols
+                    # 列幅は列の文字量の平方根に比例させる（2026-10-21）。等分だと短い列（「判定」「報告」）が
+                    #   長い列と同じ幅を取り、長い列が細く折り返されて表が縦に伸びていた（表 3.2 が 1 ページ近く）。
+                    #   高さ ≒ 文字量 ÷ 幅 の和を最小にする幅は √文字量 に比例する。最小は本文幅の 8 %。
+                    tot = [sum(_disp_width(r[j]) if j < len(r) else 0 for r in table_rows) for j in range(ncols)]
+                    wts = [max(t, 1) ** 0.5 for t in tot]
+                    fr = [w / sum(wts) for w in wts]
+                    fr = [max(x, 0.08) for x in fr]
+                    fr = [x / sum(fr) * 0.92 for x in fr]
+                    col_spec = '|' + ''.join(f'p{{{x:.3f}\\textwidth}}|' for x in fr)
                 else:
                     col_spec = '|' + 'l|' * ncols
-                out.append(r'\begin{center}')
+                # 直前の段落が表の題（**表 N.M**: …）なら、題と表を 1 つの minipage に入れて同じページに置く。
+                # 分けて出すと、題だけがページの下に残り表が次のページへ送られる（2026-10-22、表 4.3）。
+                j = len(out) - 1
+                while j >= 0 and not out[j].strip():
+                    j -= 1
+                caption = None
+                if j >= 0 and out[j].startswith(r'\textbf{表 '):
+                    caption = out[j]
+                    del out[j:]
+                if caption:
+                    out.append('')
+                    out.append(r"\par\vspace{8pt}\noindent\begin{minipage}[t]{\textwidth}")
+                    out.append(caption + r'\par\vspace{4pt}\centering')
+                else:
+                    out.append(r'\begin{center}')
                 out.append(r'\begin{tabular}{' + col_spec + '}')
                 out.append(r'\hline')
                 for row in table_rows:
@@ -257,7 +287,11 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                     out.append(cells_tex + r' \\')
                     out.append(r'\hline')
                 out.append(r'\end{tabular}')
-                out.append(r'\end{center}')
+                if caption:
+                    out.append(r"\end{minipage}\par\vspace{8pt}")
+                    out.append('')
+                else:
+                    out.append(r'\end{center}')
             continue
 
         # 箇条書き（ネスト対応: 先頭スペースで深さを判定）
@@ -304,6 +338,9 @@ PREAMBLE = r"""
 \documentclass[12pt,a4paper]{report}
 \usepackage{fontspec}
 \usepackage{xeCJK}
+% 丸数字（①〜）と図形記号（▲）は既定で欧文扱いになり、TeX Gyre Termes に字形が無く黙って消える（2026-10-21、図 3.2 の ①〜③）。和文の字として Noto で組む
+\xeCJKsetcharclass{"2460}{"24FF}{1}
+\xeCJKsetcharclass{"25A0}{"25FF}{1}  % ▲■○ などの図形記号も同じ（図 3.3 のキャプションの ▲ が消えた）
 \setCJKmainfont{Noto Serif CJK JP}
 \setCJKsansfont{Noto Sans CJK JP}
 \setCJKmonofont{Noto Sans Mono CJK JP}
@@ -370,6 +407,10 @@ def main():
         # 本文中の「> 📝 **執筆メモ（本文に残さない）**」も同じく落とす（2026-10-19、PDF に 4 箇所出ていた）
         md_text = re.sub(r'^> 📝 \*\*執筆メモ.*?(?=\n(?!>)|\Z)', '',
                          md_text, flags=re.DOTALL | re.M)
+        # 本文の md に引用（> で始まる行）の正当な使い道は無く、残っているのは執筆用の注記だけ。
+        # 「ドラフト管理」「📝 執筆メモ」以外の頭（⛔⛔ 2026-10-13 … など）の注記が PDF に灰色で出ていた
+        # （2026-10-23、第5章と付録D の 2 箇所）。頭の言葉で拾うと次の新しい頭がまた漏れるので、全部落とす。
+        md_text = re.sub(r'(?m)^>.*(?:\n|\Z)', '', md_text)
         latex_body = md_to_latex_body(md_text, unnumbered=unnumbered,
                                       merge=opts.get('merge', False),
                                       title_override=opts.get('title'))

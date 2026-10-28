@@ -118,9 +118,7 @@ for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
   launch e2e_a1_pusher_phys$X       xml_name=e2e_a1_phys_arm171      seed=$S $P
   launch e2e_a1_fix3_pusher_phys$X  xml_name=e2e_a1_fix3_phys_arm171 seed=$S $P
 done
-# 付録D: 非平面 4 関節（1000 epoch、最後に回す）
-for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
-  launch tripo_v3_reach2_phys$X   cfg=pusher_tripo_v3_reallen xml_name=tripo_arm_v3_phys_arm171 max_epoch_num=1000 seed=$S $C $REACHV3 $FB
-  launch tripo_arm_v3_pusher_phys$X cfg=pusher_tripo_v3_reallen xml_name=tripo_arm_v3_phys_arm171 max_epoch_num=1000 seed=$S $C $PUSH $FB
-done
+# 付録D の非平面 4 関節（tripo_arm_v3、1000 epoch × 4 本）は 10-21 に外した（ユーザー「外す。必要だと思ったらやる」）。
+#   修論から付録D D.5 を外したため（a68ce7f）。起動行は git show a68ce7f:scripts/queue_phys.sh にある。
+# 10-21 再投入時の HEAD: a68ce7f（既にある run は launch が飛ばす）
 log "=== キュー終了"

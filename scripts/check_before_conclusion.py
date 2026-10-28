@@ -2,7 +2,7 @@
 """**結論を書く前に必ず通す検査**（実験系譜 9-114）。
 
 ⚠️⚠️ **なぜ要るか**: CLAUDE.md に書いた規律のうち、
-**散文だけのものは今週 10 件破られ、スクリプトがあるものは 0 件だった。**
+**散文だけのものは 9-114 の 1 週間で 10 件破られ、スクリプトがあるものは 0 件だった。**
 ⭐ **「md に書く」では守られない。実行できる検査に変換する。**
 
 本スクリプトは、**ある run について結論を書いてよいか**を機械で判定する。
@@ -22,7 +22,13 @@
   10. ⭐ **縦型アームの台座が倒れていないか**（Bug 58。9-235）
   12. ⭐ **物理的にありえない値が無いか**（`check_invariants.py`。2026-10-12）
   11. ⭐ **比べる相手と起動行が、比べる変数以外で違わないか**（Bug 59。9-238）。組は COMPARISONS。
-      任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）
+      任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）。
+      ⭐ 起動行に出ないワーカーの乱数の種も比べる（Bug 76。直す前の seed 1 は 2〜5、直した後は 1001〜1004。2026-10-22）
+  13. ⭐ **起動行の robot_param_scale が学習に届いたか**（Bug 74・Bug 75）。記録された値と、
+      `log_train.txt` の「⭐ robot_param_scale = …」の行（無い run は当時の config.py が読んだ yml の値）を比べる。
+      `--reproduce` で、既知の失敗（凍結が効かなかった R1）と既定値の取り違えを拾えるかを確かめる
+  14. ⭐ **根元を固定したタスクの話が、学習の終わりに短くなっていないか**（Bug 82。2026-10-27）。
+      実行フェーズは状態が非有限のときしか終わらないので、短い話は物理の発散で切れている
 """
 import argparse
 import re
@@ -113,6 +119,8 @@ def ck_achieved(r):
     # ⛔⛔ 9-138: 固定 body と接触するタスクは、同じ checkpoint でも再生ごとに揺れる
     #   （ホッケー 64〜308 mm・障害物 254 %）。1 エピソードで達成を判定してはいけない。
     static = has_static_body(r)
+    # ⛔ 取り下げ（9-237）: 下の「1 話目は当てにならない」は取り下げた読み。頭の話に特別な性質は無く、捨てない（既定 0）。
+    #   残っている意味は「1 話だけで量を比べない」こと（話はどれも初期状態のくじ）
     # ⛔⛔ Bug 47 / 9-142: 軌跡は「読み込み直後の 1 話目」であり、その 1 話は当てにならない
     #   （対照 Pusher で 1 話目 15.11 m 対 3〜6 話 6.54〜15.97 m）。
     #   ⚠️ 反復しても検出できない（毎回 1 話目をやり直すだけ）。
@@ -161,6 +169,28 @@ def ck_achieved(r):
     if is_reach:
         tgt = d['target']
         dist = np.linalg.norm(tip - tgt, axis=1)
+        # ⭐ 2026-10-22（系譜 9-283）: 判定は代表の話のまま、全話の最小距離を添える（押しの「話ごとの対象移動」と同じ）。
+        #   何話届けば「到達」とするかは判断が要るので、ここでは変えない
+        try:
+            z = np.load(p, allow_pickle=True)
+            if 'ep_xpos' in z.files and 'ep_bone' in z.files:
+                mins = []
+                for e in range(len(z['ep_xpos'])):
+                    x_e = np.asarray(z['ep_xpos'][e], float)
+                    if x_e.ndim != 3 or len(x_e) == 0:
+                        continue
+                    t_e = x_e[:, -1, :] + np.einsum('tij,j->ti', np.asarray(z['ep_xmat'][e], float)[:, -1],
+                                                     np.asarray(z['ep_bone'][e], float)[-1])
+                    dd = np.linalg.norm(t_e - tgt, axis=1)
+                    mins.append(float(np.nanmin(dd)) if np.isfinite(dd).any() else float('nan'))
+                if mins:
+                    ok_n = sum(m < 0.01 for m in mins)
+                    warn += (f'  ⭐ 話ごとの最小 [{", ".join(f"{m*1000:.0f}" for m in mins)}] mm'
+                             f'（{ok_n}/{len(mins)} 話で 10 mm 以内） ')
+                    if ok_n not in (0, len(mins)):
+                        warn += '⚠️ **届く話と届かない話がある。代表の 1 話で到達を言わないこと** '
+        except Exception as ex:   # 添える情報なので判定は止めないが、黙らない
+            warn += f'  ⚠️ 話ごとの最小を出せない（{type(ex).__name__}） '
         if dist.min() < 0.01:
             return True, f'到達（最小 {dist.min()*1000:.0f} mm）' + warn
         return False, (f'⛔ **未到達**（最小 {dist.min()*1000:.0f} mm・最終 {dist[-1]*1000:.0f} mm）。'
@@ -190,11 +220,33 @@ def ck_version(r):
     return True, '版の混入なし'
 
 
+def _queue_launches(t, r):
+    """キューの文字列 t が run 名 r を起動するか。名前をそのまま書いた行のほか、
+    ⛔ 2026-10-23: 変数で組み立てた名前（`tripo_pjp_mid_frozen_phys_fx$X`）と、引数に接尾辞を足す形（`RUN=$1_ws`）を拾えず、
+    R1 の `_fx_s2` と seed1 の取り直し `_ws` を「事前登録が見つからない」にしていた。"""
+    if r in t:
+        return True
+    # 変数は、末尾なら seed の接尾辞（`$X` ＝ 空か `_s2`）、途中なら 1〜2 語（`tripo_${1}_phys_s2` の `pjp_long`）にだけ一致させる。
+    #   何にでも一致させると `tripo_pjp_mid_phys$X` が `tripo_pjp_mid_phys_nosync` まで拾う
+    var = r'\$\{?\w+\}?'
+    for m in re.finditer(rf'[A-Za-z0-9_]{{4,}}(?:{var}[A-Za-z0-9_]*)+', t):
+        parts = re.split(var, m.group(0))
+        pat = ''.join(re.escape(p) + ('' if i == len(parts) - 1 else
+                      ('(?:_s\\d+)?' if i == len(parts) - 2 and not parts[-1] else '[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?'))
+                      for i, p in enumerate(parts))
+        if re.fullmatch(pat, r):
+            return True
+    for suf in set(re.findall(r'\$\{?1\}?(_[A-Za-z0-9_]+)', t)):
+        if r.endswith(suf) and re.search(rf'(?<![\w]){re.escape(r[:-len(suf)])}(?![\w])', t):
+            return True
+    return False
+
+
 def ck_prereg(r):
     """事前登録（読み）がキューか台帳にあるか。"""
     for q in (ROOT / 'scripts').glob('queue_*.sh'):
         t = q.read_text(encoding='utf-8')
-        if r in t and ('読み' in t or '停止条件' in t):
+        if _queue_launches(t, r) and ('読み' in t or '停止条件' in t):
             return True, f'{q.name} に読みあり'
     led = (ROOT / 'docs/研究応用/台帳/実験系譜.md').read_text(encoding='utf-8')
     for m in re.finditer(r'^### .*$', led, re.M):
@@ -231,6 +283,29 @@ def ck_entered_exec(r):
                        f'1 エピソードも execution へ入っていない疑い（9-211）。'
                        f'⭐ stdout を `grep arm_safe_init` し、`transit_execution` の例外を見ること')
     return True, f'exec_R_eps が非ゼロの epoch {len(vals)-zeros}/{len(vals)}'
+
+
+def ck_ep_len(r):
+    """⭐ 根元を固定したアームの話が、学習の終わりに短くなっていないか（2026-10-27、Bug 82・系譜 9-310）。
+
+    根元を固定したアーム（XML の根元に free joint が無い。`pusher.py` の `is_fixed_base`。この研究のアームは全部）と到達（`use_reach`）の
+    実行フェーズは、状態が非有限になったときしか終わらない（`pusher.py`）。起動行の `fix_base=true` の有無では決まらない（平面アームには無い）。
+    話の長さは max_nsteps（既定 1000）になるはずで、短いなら物理が発散して切れている。到達の報酬は毎 step 負なので、
+    切れるほど合計が良くなり、方策がそれを学ぶ（D-5 は 2 seed とも約 1000 → 30〜70 step）。exec_R_eps の「良化」に見える。
+    1 話の step 数は exec_R_eps ÷ exec_R で見積もる（|exec_R| が小さい epoch は割り算が暴れるので飛ばす）。
+    """
+    log = run_dir(r) / 'log' / 'log_train.txt'
+    if not log.exists():
+        return None, '⚠️ 学習ログが無い'
+    rows = re.findall(r'exec_R\s+(-?[\d.]+)\s+exec_R_eps\s+(-?[\d.]+)', log.read_text(encoding='utf-8', errors='ignore'))
+    lens = [float(b) / float(a) for a, b in rows if abs(float(a)) >= 0.01]
+    if len(lens) < 10:
+        return True, f'報酬が小さく話の長さを見積もれる epoch が {len(lens)} 個（10 未満なので見ない）'
+    last = float(np.median(lens[-10:]))
+    if last < 500:
+        return False, (f'⛔ 学習の終わり 10 epoch の話の長さ（exec_R_eps ÷ exec_R）の中央値 {last:.0f} step（max_nsteps 1000）。'
+                       f'物理が発散して話が切れている疑い。exec_R_eps の良化は話が短くなっただけかもしれない（Bug 82）')
+    return True, f'学習の終わりの話の長さ 約 {last:.0f} step'
 
 
 def _launch_env(r):
@@ -283,6 +358,24 @@ def ck_far_pen(r):
     return True, msg
 
 
+def ck_fold(r):
+    """⭐ 系譜 9-287: **隣り合うリンクを 120° を超えて折り返す姿勢を使っていないか**（同じ平面に並べた実機では当たる）。
+
+    学習は隣り合う組を判定しない（関節で必ず重なる）ので、ここは止めずに ⚠️ を出す。使っていれば、結論に
+    「実機では段違いの取り付けが要る」を添える（禁じたときの成績は学習し直さないと分からない）。
+    """
+    if not (run_dir(r) / 'trace' / 'arm_trace.npz').exists():
+        return False, '⛔ 再生していない'
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from check_self_penetration import fold, FOLD_DEG
+    mx, fr, pr, ne = fold(r)
+    msg = f'隣り合う組の最大の曲げ {mx:.1f}°、{FOLD_DEG:.0f}° 超は全 {ne} 話の step の {fr*100:.1f} %'
+    if fr > 0.01:
+        return None, (f'⚠️ {msg}（{"×".join(pr)}）。同じ平面の実機では当たる姿勢を使っている → 結論に'
+                      '「実機では段違いの取り付けが要る」を添える（想定問答 Q18・Q33）')
+    return True, msg
+
+
 def ck_base(r):
     """⭐ 系譜 9-235・Bug 58: **縦型アームの台座が倒れていないか**。"""
     import json as _j
@@ -315,32 +408,35 @@ def ck_base(r):
 #   各組: (名前, run の列, 違ってよいキー)。'TASK' は到達 対 押し＝報酬のキーは違って当然なので COMMON だけ比べる。
 COMPARISONS = [
     # ⭐ 9-246: 実在の物理で全部やり直した *_phys（それ以前の *_scgc は 9-232〜9-245）
-    ('押しの柱（4.3.3）', ['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys'], {'xml_name'}),
+    ('押しの柱（4.4.3）', ['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys'], {'xml_name'}),
     ('armature 1.71 対 1（long）', ['tripo_pjp_long_phys', 'tripo_pjp_long_phys_arm1'], {'xml_name'}),
     ('armature 1.71 対 1（mid）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_arm1'], {'xml_name'}),
-    ('R1 形の凍結（4.1.4）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys'], {'robot_param_scale'}),
+    # ⛔ Bug 74: tripo_pjp_mid_frozen_phys は凍結が効いていなかった（mid と全 epoch 一致）ので組から外し、_fx で取り直す（9-281）。
+    #   same_curve はこの旧い組で「200 epoch すべて一致」を拾うことを 10-22 に確かめた（組に残すと正しい mid まで ⛔ になる）
+    ('R1 形の凍結（4.4.1）', ['tripo_pjp_mid_phys', 'tripo_pjp_mid_frozen_phys_fx'], {'robot_param_scale'}),
     ('R2 縦型の到達 対 押し', ['e2e_a1v_reach_phys', 'e2e_a1v_pusher_phys'], 'TASK'),
     # ⭐ Bug 72（10-21）: 短腕も 11 のはみ出しで台座に食い込んでいたので、門を直して取り直す（queue_short_capgate.sh）
-    ('到達マトリクス（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('到達マトリクス（4.4.3.2）', ['tripo_pj_mid_phys', 'tripo_pj_long_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
     ('短腕 到達 門の修正の前後（Bug 72）', ['tripo_pj_short_phys', 'tripo_pj_short_phys_cg'], {'env_specs.init_self_contact_caps'}),
-    ('マトリクス 到達 対 押し（4.3.3.3）', ['tripo_pj_mid_phys', 'tripo_pjp_mid_phys'], 'TASK'),
-    ('配分・到達（4.3.3.4）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys'], {'xml_name'}),
+    ('マトリクス 到達 対 押し（4.4.3.2）', ['tripo_pj_mid_phys', 'tripo_pjp_mid_phys'], 'TASK'),
+    ('配分・到達（4.4.3.3）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys'], {'xml_name'}),
     # ⭐ Bug 72: 門を本当のカプセルで測る取り直し（queue_dist_capgate.sh）。prox は構造上食い込めないので設定の有無で環境は同じ
-    ('配分・到達 門の修正後（4.3.3.4、Bug 72）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('配分・到達 門の修正後（4.4.3.3、Bug 72）', ['tripo_pjd_prox_phys', 'tripo_pjd_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
     ('配分・押し 門の修正後（Bug 72）', ['tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
     ('dist 到達 門の修正の前後（Bug 72）', ['tripo_pjd_dist_phys', 'tripo_pjd_dist_phys_cg'], {'env_specs.init_self_contact_caps'}),
-    ('閉ループ 1.99 倍（4.4）', ['tripo_pjr199_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
-    ('閉ループ 関節固定（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'], {'xml_name'}),
+    ('閉ループ 1.99 倍（4.5）', ['tripo_pjr199_phys', 'tripo_pj_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('閉ループ 関節固定（4.5.5）', ['e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'], {'xml_name'}),
     ('付録D 到達 対 押し', ['tripo_v3_reach2_phys', 'tripo_arm_v3_pusher_phys'], 'TASK'),
-    ('マトリクス 押し（4.3.3.3）', ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys'], {'xml_name', 'env_specs.init_self_contact_caps'}),
-    ('閉ループ 2.11 倍 押し（4.4.4）', ['tripo_pjr211p_phys', 'tripo_pjp_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
-    ('閉ループ 関節固定 押し（4.4.5）', ['e2e_a1_pusher_phys', 'e2e_a1_fix3_pusher_phys'], {'xml_name'}),
-    ('関節固定 到達 対 押し（4.4.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
+    ('マトリクス 押し（4.4.3.2）', ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('閉ループ 2.11 倍 押し（4.5.4）', ['tripo_pjr211p_phys', 'tripo_pjp_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('閉ループ 関節固定 押し（4.5.5）', ['e2e_a1_pusher_phys', 'e2e_a1_fix3_pusher_phys'], {'xml_name'}),
+    ('関節固定 到達 対 押し（4.5.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
           'env_specs.init_self_contact', 'max_epoch_num', 'num_threads', 'launch_env'}
 # 指定が無いときにコードが使う値（pusher.py）。⛔ Bug 59 は「書いていない＝既定値」が見えなかった
+# ⛔ Bug 75: これは yml にも無いときの値。run の cfg の yml にあればそちらが効く（_yml_defaults）
 DEFAULTS = {'reward_specs.ctrl_cost_coeff': '0.0001', 'reward_specs.contact_weight': '1.0',
             'reward_specs.init_contact_penalty': '50.0', 'env_specs.arm_safe_init': 'False',
             'fix_base': 'False', 'env_specs.init_self_contact': 'False', 'robot_param_scale': '0.1'}
@@ -356,7 +452,7 @@ def _norm(v):
         return str(v).lower()
 
 
-def _overrides(r):
+def _raw_overrides(r):
     import yaml
     p = run_dir(r) / '.hydra' / 'overrides.yaml'
     if not p.exists():
@@ -368,8 +464,61 @@ def _overrides(r):
     # ⭐ 自分自身からの再開（restore_dir が自分のフォルダ）は条件の違いではないので外す
     if o.get('restore_dir', '').rstrip('/').endswith('/' + r):
         o.pop('restore_dir'); o.pop('epoch', None)
+    return o
+
+
+@lru_cache(maxsize=None)
+def _yml_defaults(cfg):
+    """⭐ Bug 75: 起動行に無いキーで効く値のうち、cfg の yml が決めるもの（config.py と同じ読み方）。"""
+    import yaml
+    p = ROOT / 'design_opt' / 'cfg' / f'{cfg}.yml'
+    if not p.exists():
+        return {}
+    y = yaml.safe_load(p.read_text(encoding='utf-8')) or {}
+    out = {}
+    if 'robot_param_scale' in y:
+        out['robot_param_scale'] = y['robot_param_scale']
+    if (y.get('robot') or {}).get('fix_base') is not None:
+        out['fix_base'] = y['robot']['fix_base']
+    for s in ('reward_specs', 'env_specs'):
+        for k, v in (y.get(s) or {}).items():
+            out[f'{s}.{k}'] = v
+    return out
+
+
+_EFF_SCALE = re.compile(r'⭐ robot_param_scale = (\S+?)（')
+
+
+def _effective_scale(r, o):
+    """学習に効いた robot_param_scale と、その出どころ。
+
+    Bug 74 の修正（c86c04e）より後の run は train.py が ⭐ の行を出す。その行が無い run は、
+    当時の config.py が起動行を捨てて yml だけを読んでいた。r=None は修正後のコードで走らせた場合。
+    """
+    yml = _yml_defaults(o.get('cfg', ''))
+    log = run_dir(r) / 'log' / 'log_train.txt' if r else None
+    if log is not None and log.exists():
+        m = _EFF_SCALE.search(log.read_text(encoding='utf-8', errors='ignore'))
+        if m:
+            return m.group(1), 'log_train.txt'
+        return yml.get('robot_param_scale', 0.1), 'yml（Bug 74 の修正前の run）'
+    return o.get('robot_param_scale', yml.get('robot_param_scale', 0.1)), '起動行か yml'
+
+
+def _resolve(o, r=None):
+    """起動行の上書きを、効いた値の辞書にする: コードの既定 → cfg の yml → 起動行。robot_param_scale は効いた値。"""
     full = {k: _norm(v) for k, v in DEFAULTS.items()}
+    full.update({k: _norm(v) for k, v in _yml_defaults(o.get('cfg', '')).items()})
     full.update({k: _norm(v) for k, v in o.items()})
+    full['robot_param_scale'] = _norm(_effective_scale(r, o)[0])
+    return full
+
+
+def _overrides(r):
+    o = _raw_overrides(r)
+    if o is None:
+        return None
+    full = _resolve(o, r)
     full['launch_env'] = str(sorted((_launch_env(r) or {}).items()))
     return full
 
@@ -386,6 +535,34 @@ def diff_runs(a, b, allowed):
         if va != vb and (a, k) not in ACCEPTED and (b, k) not in ACCEPTED:
             out.append(f'{k}: {va} 対 {vb}')
     return out
+
+
+def _exec_curve(r):
+    log = run_dir(r) / 'log' / 'log_train.txt'
+    return re.findall(r'exec_R_eps\s+(-?[\d.]+)', log.read_text(encoding='utf-8', errors='ignore')) if log.exists() else []
+
+
+def same_curve(a, b, n_min=5):
+    """⛔ Bug 74（系譜 9-281）: 同じ seed で比べる変数だけ違うのに exec_R_eps が全 epoch 一致 ＝ その変数が学習に届いていない。"""
+    ca, cb = _exec_curve(a), _exec_curve(b)
+    n = min(len(ca), len(cb))
+    return n >= n_min and ca[:n] == cb[:n], n
+
+
+def _worker_seeds(r):
+    """⛔ Bug 76: ワーカーの乱数の種。起動行には出ない変数で、直す前の seed 1（2〜5）と直した後（1001〜1004）が違う。
+    stdout の「ワーカーの乱数の種 [...]」の行（直した後の run）か、無ければ直す前の式 seed + 番号 + 1 から。→ (種の列, 出どころ)"""
+    out = run_dir(r) / 'stdout.log'
+    if out.exists():
+        m = re.search(r'ワーカーの乱数の種 \[([0-9, ]+)\]', out.read_text(encoding='utf-8', errors='ignore'))
+        if m:
+            return [int(x) for x in m.group(1).split(',')], 'stdout'
+    o = _overrides(r) or {}
+    try:
+        seed, n = int(float(o.get('seed', 0))), int(float(o.get('num_threads', 4)))
+    except (TypeError, ValueError):
+        return None, '起動行から読めない'
+    return [seed + i + 1 for i in range(n)], '直す前の式'
 
 
 def ck_pair(r):
@@ -407,8 +584,16 @@ def ck_pair(r):
             if d:
                 bad = True
                 msgs.append(f'{name} の {o + s2} と: {"; ".join(d)}')
+            (wa, sa), (wb, sb) = _worker_seeds(r), _worker_seeds(o + s2)
+            if wa is not None and wb is not None and wa != wb:
+                bad = True
+                msgs.append(f'{name} の {o + s2} とワーカーの乱数の種が違う（{wa}〔{sa}〕対 {wb}〔{sb}〕。起動行には出ない、Bug 76）')
+            same, m = same_curve(r, o + s2)
+            if same:
+                bad = True
+                msgs.append(f'⛔⛔ {name} の {o + s2} と exec_R_eps が {m} epoch すべて一致（比べる変数が学習に届いていない、Bug 74）')
     if bad:
-        return False, '⛔ 比べる相手と起動行が違う（Bug 59）: ' + ' ／ '.join(msgs)
+        return False, '⛔ 比べる相手との比較が成り立たない（起動行の違い Bug 59・曲線の一致 Bug 74）: ' + ' ／ '.join(msgs)
     return True, (f'比べる相手 {n} 本と、比べる変数以外は同じ' if n else '比べる相手が無い・まだ無い（COMPARISONS に無い組は見ない）')
 
 
@@ -425,25 +610,108 @@ def ck_invariants(r):
     return True, f'{len(res)} 項目とも成り立つ'
 
 
+def _inv_item(r, name):
+    """不変条件の 1 項目だけの判定（--reproduce 用）"""
+    from check_invariants import run as inv
+    return {n: ok for n, ok, _ in inv(r)}[name]
+
+
+def ck_effective(r):
+    """⭐ 13. 起動行（無ければ yml）の robot_param_scale と、学習に効いた値が同じか（Bug 74・Bug 75）。"""
+    o = _raw_overrides(r)
+    if o is None:
+        return None, '⚠️ 起動行の記録（.hydra）が無い'
+    rec = o.get('robot_param_scale', _yml_defaults(o.get('cfg', '')).get('robot_param_scale', 0.1))
+    eff, src = _effective_scale(r, o)
+    if _norm(rec) != _norm(eff):
+        return False, f'⛔ 指定は {rec}、効いた値は {eff}（{src}）。起動行が学習に届いていない（Bug 74）'
+    return True, f'robot_param_scale {eff}（{src}）'
+
+
 CHECKS = [
     ('完走', ck_done), ('再生', ck_trace), ('⭐⭐ 目視', ck_seen), ('⭐ 達成', ck_achieved),
           ('版', ck_version), ('事前登録', ck_prereg),
-          ('⭐⭐ exec 到達', ck_entered_exec),
-          ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 台座', ck_base),
-          ('⭐ 比べる相手', ck_pair), ('⭐ 不変条件', ck_invariants)]
+          ('⭐⭐ exec 到達', ck_entered_exec), ('⭐ 話の長さ', ck_ep_len),
+          ('⭐ 再生の環境', ck_replay_env), ('⭐ 離れた組', ck_far_pen), ('⭐ 折り返し', ck_fold), ('⭐ 台座', ck_base),
+          ('⭐ 比べる相手', ck_pair), ('⭐ 不変条件', ck_invariants), ('⭐ 効いた値', ck_effective)]
+
+
+def reproduce():
+    """既知の失敗を拾えるか（拾えない検査の ✅ は根拠にならない）。"""
+    cases = [
+        ('凍結が効かなかった R1（Bug 74）を ⛔', ck_effective('tripo_pjp_mid_frozen_phys')[0] is False),
+        ('凍結しない mid は ✅', ck_effective('tripo_pjp_mid_phys')[0] is True),
+        # ⛔ Bug 75: yml が 1 の cfg で「0.1 を明示」と「指定なし」を同じと見ていた
+        ('明示の 0.1 と指定なし（yml 1）を違うと見る',
+         _resolve({'cfg': 'pusher_gearonly_real', 'robot_param_scale': '0.1'})['robot_param_scale']
+         != _resolve({'cfg': 'pusher_gearonly_real'})['robot_param_scale']),
+        ('到達の長腕 seed1 の手首の折り返し（9-287）を ⚠️', ck_fold('tripo_pj_long_phys_s2')[0] is None),
+        ('折り返さない中間は ✅', ck_fold('tripo_pj_mid_phys')[0] is True),
+        # ⛔ Bug 76: 種を直した後の seed 1 と直す前の seed 1 は、起動行が 1 変数違いでもワーカーの種が違う
+        ('R1 の凍結 seed1（新しい種）と凍結しない mid seed1（古い種）の種の違いを拾う',
+         _worker_seeds('tripo_pjp_mid_frozen_phys_fx_s2')[0] != _worker_seeds('tripo_pjp_mid_phys_s2')[0]),
+        ('seed0 どうしは種が同じ（直す前後で 1〜4）',
+         _worker_seeds('tripo_pjp_mid_frozen_phys_fx')[0] == _worker_seeds('tripo_pjp_mid_phys')[0] == [1, 2, 3, 4]),
+        # ⭐ 9-288: 割合は小さいが深い床下（ホッケー seed0 の開始の姿勢、先端 66 mm）
+        ('床の深く短い沈み込み（9-288）を ⛔', ck_invariants('hockey_bank9_phys_g10_wfix')[0] is False),
+        ('押しの中間は不変条件 ✅', ck_invariants('tripo_pjp_mid_phys')[0] is True),
+        # ⭐ 壁の判定に高さを足した（10-22）: 壁の上空を通るのは壁に入っていない。浮いた壁の下へ入るのは入っている（=3d が箱を床まで伸ばすのはこれを止めるため、Bug 71 の対処）
+        ('ホッケー blk3d の腕は壁の上空（z 0.31 以上）を通るだけ → 壁は ✅', _inv_item('hockey_bank9_phys_g10_blk3d', '壁') is True),
+        ('ホッケー wfix の腕は浮いた壁の下を通る（|y| 0.89）→ 壁は ⛔', _inv_item('hockey_bank9_phys_g10_wfix', '壁') is False),
+        # ⭐ 話の途中の「腕から離れて加速」（10-22、9-283 ③ の残り）: Bug 70 の跳ね返り（g10 の話 3、+3.05 → −5.08 m/s）は ⛔、
+        #   ふつうの跳ね返り（blk3d の話 2・5、比 0.73。衝突の step で速さが一度落ちて戻る）は ✅
+        ('Bug 70 のエネルギーが増える跳ね返り（g10 の話 3）を ⛔', _inv_item('hockey_bank9_phys_g10', '触れる前') is False),
+        ('ふつうの跳ね返り（blk3d の話 2・5）は ✅', _inv_item('hockey_bank9_phys_g10_blk3d', '触れる前') is True),
+        # ⭐ 10-23（9-283 ③ の E）: ⚠️ だけの run を ✅ にしない。実在の物理の完走 run で当たっていたのは dist の門の取り直し seed0 の 1 本（報酬の桁）
+        ('⚠️ だけなら最後の行は ✅ にならない', _verdict(0, 1).startswith('⚠️') and _verdict(0, 0).startswith('✅')),
+        ('⚠️ だけの run（tripo_pjd_dist_phys_cg の報酬の桁）を ✅ にしない',
+         _tally('tripo_pjd_dist_phys_cg')[:2] == (0, 1)),
+        # ⭐ 10-23: 変数で組み立てた run 名（`$X`）と接尾辞（`$1_ws`）も事前登録として拾う。無い名前は拾わない
+        ('変数で名前を組むキューの run（R1 の `_fx_s2`）の事前登録を拾う', ck_prereg('tripo_pjp_mid_frozen_phys_fx_s2')[0] is True),
+        ('接尾辞を足すキューの run（`tripo_pjp_long_phys_s2_ws`）の事前登録を拾う', ck_prereg('tripo_pjp_long_phys_s2_ws')[0] is True),
+        ('どのキューにも無い名前は拾わない', ck_prereg('tripo_pjp_mid_frozen_phys_zz_s9')[0] is False),
+        # ⭐ Bug 82（10-27）: 柱に食い込んで NaN で切れる D-5 は ⛔、柱なしの到達は ✅
+        ('話が NaN で切れて短くなった D-5（Bug 82）を ⛔', ck_ep_len('e2e_a1v_obspen_reach_phys')[0] is False),
+        ('柱なしの到達は話の長さ ✅', ck_ep_len('e2e_a1v_reach_phys')[0] is True),
+        ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
+         _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
+    ]
+    for name, ok in cases:
+        print(f'  {"✅" if ok else "⛔"} {name}')
+    return 0 if all(ok for _, ok in cases) else 1
+
+
+def _verdict(ng, warn):
+    # ⭐ 10-23（系譜 9-283 ③ の E、ユーザー判断）: ⚠️（測れない・記録が無い・要確認）を合格に数えない。
+    #   以前は ⛔ の数だけを見ていたので、⚠️ がいくつあっても「✅ 結論を書いてよい」になった（Bug 72 と同じ「持っていない量を 0 と読む」型）
+    if ng:
+        return '⛔ 結論を書く前に上を直すこと'
+    if warn:
+        return f'⚠️ 結論の前に ⚠️ の {warn} 件を人が確かめること（測れない・記録が無いは合格ではない）'
+    return '✅ 結論を書いてよい'
+
+
+def _run_check(fn, r):
+    # 検査が例外で落ちたら ⚠️（測れていない）。以前は --all が古い軌跡（ep_bone が無い hockey_bank7）で止まり、後ろの run を 1 本も見なかった
+    try:
+        return tuple(fn(r))
+    except Exception as ex:
+        return None, f'⚠️ 検査が例外で落ちた（{type(ex).__name__}: {str(ex)[:80]}）'
+
+
+def _tally(r):
+    rows = [(name,) + _run_check(fn, r) for name, fn in CHECKS]
+    return (sum(ok is False for _, ok, _ in rows), sum(ok is None for _, ok, _ in rows), rows)
 
 
 def audit(r):
     print(f'\n=== {r}')
-    ng = 0
-    for name, fn in CHECKS:
-        ok, msg = fn(r)
+    ng, warn, rows = _tally(r)
+    for name, ok, msg in rows:
         mark = '✅' if ok else ('⚠️' if ok is None else '⛔')
-        if ok is False:
-            ng += 1
         print(f'  {mark} {name:<8} {msg}')
-    print(f'  → {"⛔ 結論を書く前に上を直すこと" if ng else "✅ 結論を書いてよい"}')
-    return ng
+    print(f'  → {_verdict(ng, warn)}')
+    return ng, warn
 
 
 def main() -> int:
@@ -451,7 +719,10 @@ def main() -> int:
     ap.add_argument('runs', nargs='*')
     ap.add_argument('--all', action='store_true', help='完走した run 全部')
     ap.add_argument('--pair', nargs=2, metavar=('A', 'B'), help='2 本の起動行を比べる（xml_name・cfg 以外の差）')
+    ap.add_argument('--reproduce', action='store_true', help='既知の失敗（Bug 74・75・76、⚠️ を合格に数えない ほか）を拾えるかを確かめる')
     a = ap.parse_args()
+    if a.reproduce:
+        return reproduce()
     if a.pair:
         d = diff_runs(a.pair[0], a.pair[1], {'xml_name', 'cfg'})
         print('\n'.join(d) if d else ('起動行が読めない' if d is None else '✅ xml_name・cfg 以外は同じ'))
@@ -464,10 +735,10 @@ def main() -> int:
                           encoding='utf-8', errors='ignore'))
     if not runs:
         ap.error('run 名か --all を指定してください')
-    tot = sum(audit(r) for r in runs)
-    print(f'\n合計 {tot} 件の要対応')
+    res = [audit(r) for r in runs]
+    print(f'\n合計 {sum(n for n, _ in res)} 件の要対応・⚠️ {sum(w for _, w in res)} 件の要確認')
     return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

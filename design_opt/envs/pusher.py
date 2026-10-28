@@ -570,6 +570,29 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
                 or not self.is_fixed_base):
             return False
         margin = self.env_specs.get('floor_penetration_margin', 0.0)
+        if self.env_specs.get('floor_by_surface', False):
+            # ⭐ Bug 78: 動くリンクのカプセルの表面（線分の低い端 − 半径）で測る。根元（台座の球）と縦の柱は除く
+            #   （床に据えてあり、表面で測ると必ず床の下になる。`check_invariants.py` の床と同じ扱い）
+            bodies = list(self.robot.bodies)
+            zlow, worst = [], None
+            for body in bodies:
+                if body.parent not in bodies:
+                    continue                                  # 根元
+                pos, R = self._body_xpos.get(body.name), self._body_xmat.get(body.name)
+                if pos is None or R is None or not getattr(body, 'geoms', None):
+                    continue
+                pos = np.asarray(pos, dtype=float)
+                bone = np.asarray(R, dtype=float).reshape(3, 3) @ np.asarray(body.bone_offset, dtype=float)
+                if body.parent.parent not in bodies and abs(bone[2]) > 0.9 * np.linalg.norm(bone) + 1e-9:
+                    continue                                  # 根元の直下の縦の柱
+                z = min(pos[2], pos[2] + bone[2]) - float(np.asarray(body.geoms[0].size, dtype=float).flatten()[0])
+                if np.isfinite(z):
+                    zlow.append(z)
+                    if worst is None or z < worst[1]:
+                        worst = (body.name, z)
+            if worst is not None and worst[1] < margin:
+                self._init_contact_link = f'床（{worst[0]} の表面が {-worst[1]*1000:.0f} mm 下）'
+            return bool(zlow) and min(zlow) < margin
         zs = []
         for body in self.robot.bodies:
             pos = self._body_xpos.get(body.name)
@@ -1150,6 +1173,19 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         #   ⚠️ **既定では無効**（`arm_init_pitch_search` を指定したときだけ）。既存 run は無影響。
         # ⭐ 床からの最小クリアランス [m]。⚠️ 台座の高さ 0.020 m を下回らせない
         FLOOR_CLEAR = float(self.env_specs.get('arm_init_floor_clear', 0.02))
+        # ⭐ Bug 78（2026-10-22、系譜 9-288）: `floor_by_surface=true` なら床を**カプセルの表面**（軸 − 半径）で測る。
+        #   ⛔ 軸で測ると、学習が先端を太くした形（`_wfix` は半径 0.0997 m）で軸は床の 3〜5 cm 上でも表面は 5〜7 cm 下に入った。
+        #   箱との隙間（`arm_init_box_gap`）は既に表面で測っており、床だけ軸だった。縦の柱（連鎖の最初のリンク）は台座の上に
+        #   立っていて表面で測ると必ず床の下になるので、軸のまま（`check_invariants.py` の床も柱を除く）。既定は無効
+        _floor_surf = bool(self.env_specs.get('floor_by_surface', False))
+        _rad_f = np.array([float(lk.get('rad', 0.0)) for lk in chain])
+        _b0 = np.asarray(chain[0]['bone'], float)
+        if abs(_b0[2]) > 0.9 * np.linalg.norm(_b0) + 1e-9:
+            _rad_f[0] = 0.0                       # 縦の柱は軸で測る
+        if _floor_surf and getattr(self, '_floor_surf_logged', None) != key:
+            self._floor_surf_logged = key
+            print(f'[arm_init] ⭐ 床は表面で測る（floor_by_surface、Bug 78）: 床から ≥ {FLOOR_CLEAR} m / '
+                  f'引く半径 {_rad_f.round(4).tolist()}（縦の柱は 0＝軸）', flush=True)
         _pitch = self.env_specs.get('arm_init_pitch_search', False)
         _p_cands = (np.linspace(-np.pi / 2, np.pi / 2, 61) if _pitch else np.zeros(1))
 
@@ -1170,7 +1206,10 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             Pp, Qq = self._fk_points_batch(chain, A)
             ok = np.abs(np.concatenate([Pp[:, :, 1], Qq[:, :, 1]], 1)).max(1) <= clear_y
             if floor is not None:
-                ok &= np.minimum(Pp[:, :, 2], Qq[:, :, 2]).min(1) >= floor
+                _zlo = np.minimum(Pp[:, :, 2], Qq[:, :, 2])
+                if _floor_surf:
+                    _zlo = _zlo - _rad_f[None, :]
+                ok &= _zlo.min(1) >= floor
             if _exact:
                 idx = np.nonzero(ok)[0]          # ⭐ 安い条件を通った角だけ測る（速さ）
                 if len(idx):

@@ -25,7 +25,7 @@ import torch
 import yaml
 from omegaconf import OmegaConf
 
-from design_opt.utils.config import Config
+from design_opt.utils.config import Config, replay_robot_param_scale
 from design_opt.utils.tools import set_global_seed
 from design_opt.agents.genesis_agent import BodyGenAgent, tensorfy
 
@@ -41,6 +41,7 @@ def extract(run_dir, ckpt):
     d.pop('restore_dir', None)
     cfg = Config(OmegaConf.create(d), PROJECT, run_dir)
     cfg.restore_dir = run_dir
+    replay_robot_param_scale(cfg, run_dir)   # 9-283: Bug 74 の修正前の run は学習時の値で
     # Bug 10: 完走 run 自身の再評価では転用フィルタを無効化しないと重みが読まれない
     cfg.control_prior = False
     cfg.morph_prior = False
