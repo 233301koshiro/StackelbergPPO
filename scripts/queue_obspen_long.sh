@@ -1,5 +1,5 @@
 #!/bin/bash
-# 障害物 Reach（D-5）の追加の実験 — 柱を越えて届く形（長い腕）で、学習が届くか（系譜 9-313。ユーザー判断 2026-10-28「Cで。」）
+# 障害物 Reach（D-5）の追加の実験 — 柱を越えて届く形（長い腕）から共設計を始めて、届くか（系譜 9-313。ユーザー判断 2026-10-28「Cで。」「共設計でいいよ」）
 #
 # ⭐ なぜ: 取り直し `_sub5` / `_sub5_s2` は 2 seed とも全話で届かなかったが、初期の形でも学習した形でも、柱と床を避けて
 #   目標に届く姿勢はもともと無かった（9-312。「避けて届く姿勢は幾何的にある」は判定器の欠陥 Bug 83）。
@@ -10,20 +10,23 @@
 #   届いた 59 個の 1 つ（9-312）。一様に伸ばすだけでは届く形にならない（1.0〜3.0 倍のどれも 0 個）。
 #   直した判定器: 「避けて目標に届く姿勢があります（57 個のうち 57 個、最大の余裕 61 mm）」。
 #   自重による肩のトルクは水平に伸ばして約 37 N·m（ギア 100 の内側）。
-# ⭐ 設計は固定する（`+robot_param_scale=0.0001`、R1 の `tripo_pjp_mid_frozen_phys_fx` と同じ）。判定器が答えるのは
-#   「この形で届くか」なので、学習中に形が変わらないようにする。比べる相手は無く、読みは絶対値（届いたか）。
-#   ⚠️ `_sub5` との違いは XML と設計の固定の 2 つ（比べないので交絡にはしない）。それ以外の起動行（刻み 5 分割・報酬・罰）は同じ。
+# ⭐ 共設計のまま（`+robot_param_scale=1`）。⭐ `_sub5` / `_sub5_s2` との起動行の違いは**初期の形（XML）だけ**。
+#   ユーザー判断（10-28）: 設計の固定も考えたが、共設計にする。「形のせいか制御のせいか」の切り分けは先行研究からの
+#   ずっとのテーマで、この実験で決着させるものではない。共設計の系として、届く形から始めたら届くかを見る。
+#   ⚠️ 設計の範囲（9-150 の rel_frac）は初期の長さに比例するので、範囲も長い腕に合わせて広がる（tripo_pjr199 と同じ扱い）。
 #
 # ⭐ 事前登録した読み（結果を見てから変えない）。判定は best の再生 5 話（check_before_conclusion.py・check_obstacle_clearance.py）:
 #   ㉑ 柱が効く（前提）: 全話・全 step でリンクの中心線が柱に入らない、不変条件（「有限」を含む）と「話の長さ」が ✅
 #   ㉓ 到達（閾値は check_before_conclusion の 10 mm）:
-#      ㉓-a どちらかの seed で 5 話中 3 話以上が届く（㉑ を満たしたまま）→ 判定器（直した版）と学習が両側で一致した:
-#            初期の形は「見つからない」で学習も届かず（9-312）、長い腕は「ある」で学習も届く
-#      ㉓-b 2 seed とも届かない（㉑ を満たしたまま）→ 幾何的に届く形でも学習が届かない（判定器は「ある」と言うが学習は届かない）。
-#            9-161 が言おうとした「両立する姿勢があるのに学習が届かない」を、この形で初めて言える
+#      ㉓-a どちらかの seed で 5 話中 3 話以上が届く（㉑ を満たしたまま）→ 届く形から始めれば、共設計は届く。
+#            初期の形だけが違う `_sub5`（届かない、9-312）と並べて「始める形で結果が分かれた」と書く
+#      ㉓-b 2 seed とも届かない（㉑ を満たしたまま）→ 届く形から始めても、共設計は届かない
 #      ㉓-c 届くが ㉑ を満たさない → 通り抜けで届いた。㉑ に戻る
+#   あわせて必ず出す（読みの補助。結果で読みを変えない）: 学習後の形（best の再生の骨）に、直した判定器の柱の目撃が
+#   「ある」と言うか。㉓-b で「ない」なら、形が届く範囲の外へ動いた（共設計が形を縮めた）、「ある」なら形は届くのに制御が届かない。
 #   seed で割れたら割れたと書く。
-#   予想（確かめていない）: ㉓-b 寄り。余裕 61 mm の細い姿勢の族で、柱を越えて先端を真下へ下ろす必要がある。
+#   予想（確かめていない）: ㉓-b 寄り。余裕 61 mm の細い姿勢の族で、柱を越えて先端を真下へ下ろす必要があり、
+#   `_sub5` では共設計が肩のリンクを最短まで縮めた。
 #   判定: python3 scripts/check_before_conclusion.py e2e_a1v_obspen_reach_phys_long ・ check_obstacle_clearance.py
 #   ⚠️ 完走後の自動再生（queue_postrun_replay.sh）の一覧に無いので、完走後に手で再生する
 #
@@ -44,14 +47,14 @@ launch(){ local RUN=$1 EXTRA=$2; shift 2
     hydra.run.dir=single_run/$RUN > single_run/$RUN/stdout.log 2>&1 &
   local PID=$!
   log "$RUN launched (PID $PID)"; sleep 180
-  # ⭐ 起動後に、設定が届いたこと（種・刻み・設計の固定）を出す（Bug 74・76 の型）。ワーカーのログはこの run の PID のものだけを見る
+  # ⭐ 起動後に、設定が届いたこと（種・刻み・robot_param_scale）を出す（Bug 74・76 の型）。ワーカーのログはこの run の PID のものだけを見る
   log "$RUN: $(grep -a -m1 'ワーカーの乱数の種' single_run/$RUN/stdout.log | cut -c1-80)"
   log "$RUN: 刻み $(grep -a -h -m1 -o '物理の刻み[^（]*' single_run/$RUN/stdout.log /tmp/cnoid_worker_${PID}_*.log 2>/dev/null | head -1 | cut -c1-60)"
   log "$RUN: launch_env.json の刻み $(grep -o '"CNOID_SUBSTEPS": "[0-9]*"' single_run/$RUN/launch_env.json)"
   log "$RUN: $(grep -a -h -m1 -o 'robot_param_scale = [^（]*' single_run/$RUN/log/log_train.txt single_run/$RUN/stdout.log 2>/dev/null | head -1)"; }
 
-log "=== 障害物 Reach（D-5）の追加の実験: 柱を越えて届く長い腕・設計は固定（9-313）。HEAD=$(git rev-parse --short HEAD)"
-C="num_threads=4 enable_wandb=false fix_skeleton=true +robot_param_scale=0.0001"
+log "=== 障害物 Reach（D-5）の追加の実験: 柱を越えて届く長い腕から共設計（9-313）。HEAD=$(git rev-parse --short HEAD)"
+C="num_threads=4 enable_wandb=false fix_skeleton=true +robot_param_scale=1"
 REACH8="+reward_specs.use_reach=true +reward_specs.target_x=0.8 +reward_specs.target_y=0.0 +reward_specs.target_z=0.15 +reward_specs.ctrl_cost_coeff=0.2 +env_specs.check_init_contact=false +env_specs.cube_x_offset=100"
 OBS="+reward_specs.obstacle_penalty_scale=1.0"
 for S in 0 1; do X=$([ $S = 1 ] && echo _s2)
