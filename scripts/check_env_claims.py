@@ -6,7 +6,10 @@
 他の検査も見ない（ログと md の数値の突き合わせでも、既知の古い主張の検索でもない）。
 実際に 2 件が古いか誤っていた: 起動 105 秒（実測 2 秒）・「sys.exit(0) のせいで exit 137」（実際は Choreonoid が自分では終わらず timeout が殺す）。
 
-    python3 scripts/check_env_claims.py          # 約 1 分半（Choreonoid を 4 回起動）
+    docker exec akita_sp_ppo bash -c 'cd /userdir/StackelbergPPO && python3 scripts/check_env_claims.py'   # 約 1 分半（Choreonoid を 4 回起動）
+
+⚠️ コンテナで回す。ホストには Choreonoid が無く、以前は 3 件とも exit 127 のまま「⛔ 成り立たない」と出ていた（2026-10-22）。
+   Choreonoid が無いときは主張を判定せずに止まる（終了コード 2）。
 
 主張を足すときは CLAIMS に 1 行（主張・書いてある場所・確かめ方）。確かめられない主張は足さない（プロンプト ② の G で人が見る）。
 """
@@ -80,16 +83,26 @@ CLAIMS = [
 
 
 def main():
-    bad = 0
+    if not Path(CHOREONOID).exists():   # 無いまま回すと exit 127 を「主張が誤り」と読んでしまう
+        print(f'⛔ {CHOREONOID} が無い（ホストで回した？）。主張は判定していない。コンテナで回す:\n'
+              "    docker exec akita_sp_ppo bash -c 'cd /userdir/StackelbergPPO && python3 scripts/check_env_claims.py'")
+        return 2
+    bad = unknown = 0
     for claim, where, fn in CLAIMS:
         try:
             ok, msg = fn()
         except Exception as ex:   # 確かめられなかったことを黙らない
             ok, msg = None, f'確かめられない: {type(ex).__name__}: {ex}'
-        bad += ok is not True
+        bad += ok is False
+        unknown += ok is None
         print(f"{'✅' if ok else ('⚠️' if ok is None else '⛔')} {claim}\n    場所: {where}\n    実測: {msg}")
-    print(f'\n{"✅ 主張はすべて今も成り立つ" if not bad else f"⛔ {bad} 件が成り立たない → 書いてある場所を直す"}')
-    return 1 if bad else 0
+    if bad:
+        print(f'\n⛔ {bad} 件が成り立たない → 書いてある場所を直す')
+    if unknown:
+        print(f'\n⚠️ {unknown} 件は確かめられなかった → 原因を見て回し直す')
+    if not bad and not unknown:
+        print('\n✅ 主張はすべて今も成り立つ')
+    return 1 if bad or unknown else 0
 
 
 if __name__ == '__main__':

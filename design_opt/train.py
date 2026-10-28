@@ -52,6 +52,10 @@ def main_loop(FLAGS, job_dir):
 
     """create agent"""
     agent = BodyGenAgent(cfg=cfg, dtype=dtype, device=device, seed=cfg.seed, num_threads=FLAGS.num_threads, training=True, checkpoint=load_epoch)
+    # Bug 74: 効いた値と出どころを一次ログに残す（起動行の値が捨てられても ep0 で分かるように）
+    agent.logger.info(f'⭐ robot_param_scale = {cfg.robot_param_scale}（{cfg.robot_param_scale_src} から）')
+    for w in getattr(cfg, 'unread_warnings', []):   # 系譜 9-285: 読まれない設定（Bug 74 の型）を一次ログにも残す
+        agent.logger.info(f'⚠️ {w}')
 
     if FLAGS.render:
         agent.pre_epoch_update(start_epoch)

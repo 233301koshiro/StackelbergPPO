@@ -11,8 +11,12 @@
 
 使い方:
     python3 scripts/rank_settle.py                # 既定のコホート（実在の物理 *_phys）を全部測る
+    python3 scripts/rank_settle.py --ws           # 既定のコホートの seed 1 を新しい種の取り直し（*_s2_ws、Bug 76）に替えて測る
     python3 scripts/rank_settle.py --old          # 旧い物理のコホート（撤回、9-246。再現用）
     python3 scripts/rank_settle.py runA runB ...  # 任意の run を比較（引数順は無関係）
+
+⭐ 2026-10-26: `--ws` を足した。既定の seed 1（`*_s2`）はワーカーの乱数を seed 0 と共有していた（Bug 76）ので、
+修論（新しい帯）はこちらで測る。`<run>_s2` に `<run>_s2_ws` があればそれに替える（無ければ `_s2` のまま）。
 
 ⭐ 2026-10-20（系譜 9-269）: 既定を実在の物理の run に替えた。完走していない run（`training done!` が無い）は
 SKIP する（学習中の run を途中の値で測ると、確定エポックが短く出る）。
@@ -24,6 +28,9 @@ import sys
 import os
 
 RUN_DIR = 'single_run'
+# ⛔ 2026-10-22（系譜 9-283 ⑤）: 学習の best は −1000 から始まり（`genesis_agent.py` の best_rewards）、それを超えるまで
+#   best.p が無い。その間の順位・帯は代表値が無いので「確定」に数えない（以前は −1000 以下の値どうしで順位を付けていた）
+NO_BEST = -1000.0
 
 
 def running_best(run):
@@ -81,7 +88,8 @@ def settle_epoch(runs, labels):
 
     settled = None
     for e in epochs:
-        if rank([c[e] for c in curves]) == final_rank:
+        vals = [c[e] for c in curves]
+        if min(vals) > NO_BEST and rank(vals) == final_rank:
             if settled is None:
                 settled = e
         else:
@@ -93,7 +101,7 @@ def settle_epoch(runs, labels):
     return settled, order, [round(v, 2) for v in final_vals], epochs[-1], epochs[0], truncated
 
 
-# (runs, labels, コホート名) — 較正の根拠として修論 4.5.3・付録D.6 が参照する（実在の物理、9-246）
+# (runs, labels, コホート名) — 較正の根拠として修論 4.6.3・付録D.4 が参照する（実在の物理、9-246）
 # A: 同一条件・別シード対（差は乱数のみ）。B: 形態が異なる対。C: 3 形態同時（マトリクスの各列）
 # ⚠️ 配分 dist と短腕は Bug 72（台座への食い込み）で取り直し（_cg）。到達は _cg / _cg_s2、押しの seed0 は _cg と既存の _s2 を使う
 _A = [('tripo_pj_mid_phys', '到達 中間'), ('tripo_pj_long_phys', '到達 長腕'), ('tripo_pjd_prox_phys', '到達 prox'),
@@ -120,7 +128,7 @@ COHORTS += [
     (['tripo_pjp_long_phys', 'tripo_pjp_mid_phys', 'tripo_pjp_short_phys_cg'], ['long', 'mid', 'short'], 'C マトリクス 押し 3 形態 s0'),
 ]
 
-# D: 2 seed の帯（修論 4.1.4 の判定の単位）が離れたまま最後まで続く最小 epoch。(上位側の 2 run, 下位側の 2 run, 名前)
+# D: 2 seed の帯（修論 4.2.2 の判定の単位）が離れたまま最後まで続く最小 epoch。(上位側の 2 run, 下位側の 2 run, 名前)
 BANDS = [
     (['tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2'], ['tripo_pj_long_phys', 'tripo_pj_long_phys_s2'], 'D 帯 到達 中間 vs 長腕'),
     (['tripo_pjp_long_phys', 'tripo_pjp_long_phys_s2'], ['tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2'], 'D 帯 押し 長腕 vs 中間'),
@@ -140,6 +148,8 @@ def band_settle(A, B):
 
     def sep(e):
         la, lb = [c[e] for c in a], [c[e] for c in b]
+        if min(la + lb) <= NO_BEST:
+            return None
         return 'A' if min(la) > max(lb) else ('B' if min(lb) > max(la) else None)
     final, st = sep(eps[-1]), None
     for e in eps:
@@ -182,8 +192,16 @@ COHORTS_OLD = [
 
 def main():
     args = sys.argv[1:]
+    bands = BANDS
     if args == ['--old']:
         cohorts = COHORTS_OLD
+    elif args == ['--ws']:
+        def ws(r):
+            return r + '_ws' if r.endswith('_s2') and os.path.isdir(os.path.join(RUN_DIR, r + '_ws')) else r
+        cohorts = [([ws(r) for r in runs], labels, name) for runs, labels, name in COHORTS]
+        bands = [([ws(r) for r in A], [ws(r) for r in B], name) for A, B, name in BANDS]
+        print('⭐ --ws: seed 1 を新しい種の取り直し（*_s2_ws）に替えた: '
+              + '・'.join(sorted({ws(r) for runs, _, _ in COHORTS for r in runs if ws(r) != r})) + '\n')
     elif args:
         cohorts = [(args, args, '指定 run')]
     else:
@@ -206,9 +224,9 @@ def main():
             print(f'{name:40s} {ep_s:>8s}  {order:24s} {vals}  {rng}')
         except (FileNotFoundError, ValueError) as e:
             print(f'{name:40s} {"SKIP":>8s}  {type(e).__name__}: {e}')
-    if cohorts is COHORTS:
+    if cohorts is COHORTS or args == ['--ws']:
         print()
-        for A, B, name in BANDS:
+        for A, B, name in bands:
             try:
                 final, st, last = band_settle(A, B)
                 msg = '最後に重なる（区別できない）' if final is None else \

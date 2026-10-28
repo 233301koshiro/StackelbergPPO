@@ -37,8 +37,21 @@ def scores_from_pattern(pattern):
     """
     dirs = sorted(d for d in glob.glob(pattern)
                   if os.path.exists(f'{d}/log/log_train.txt'))
+    # ⛔ 2026-10-22（系譜 9-283 ③）: glob は未完走と旧い物理の run まで帯に混ぜていた（help の例で「🟡 重なる」、
+    #   実在の物理だけなら「✅ 離れる」）。未完走は外して名前を出し、物理の世代（*_phys とそれ以外）が混ざれば止める
+    running = [d for d in dirs if 'training done' not in open(f'{d}/log/log_train.txt', errors='ignore').read()]
+    for d in running:
+        print(f'⚠️ 未完走なので外した: {d}')
+    dirs = [d for d in dirs if d not in running]
     if not dirs:
-        raise SystemExit(f'{pattern}: ログのある run が無い')
+        raise SystemExit(f'{pattern}: 完走した run が無い')
+    gens = {'_phys' in os.path.basename(d) for d in dirs}
+    if len(gens) > 1:
+        raise SystemExit(f'⛔ {pattern}: 実在の物理（*_phys）とそれ以外の run が混ざっている → glob を絞る: {dirs}')
+    names = [os.path.basename(d) for d in dirs]
+    if any(n.endswith('_s2_ws') for n in names) and any(n.endswith('_s2') for n in names):
+        # Bug 76: _s2 は直す前のワーカーの種（2〜5）、_s2_ws は直した後（1001〜1004）。同じ seed 1 が 2 本入る
+        raise SystemExit(f'⛔ {pattern}: seed 1 の古い種（*_s2）と取り直し（*_s2_ws）が混ざっている → どちらかに絞る: {dirs}')
     return [best_score(d) for d in dirs], dirs
 
 

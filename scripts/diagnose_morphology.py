@@ -190,6 +190,25 @@ def reach_annulus(lengths):
 # bone_offset の探索範囲（cfg の body_params.offset、rel: true・±OFFSET_HALF）
 OFFSET_HALF = 0.5
 
+
+def link_box(l, offset_half):
+    """リンク 1 本の bone_offset の箱 (横の下限, 横の上限, 沿う向きの下限, 沿う向きの上限) [m]。
+
+    offset_half が数なら初期値相対 ±offset_half（`rel: true`）。('rel_frac', 下, 上, 横) なら
+    リンク長の倍率（9-150 の `rel_frac`、縦型の cfg は [0.5, 2.93, 0.5]。`xml_robot.py` と同じ箱）。
+    ⛔ 2026-10-22（系譜 9-283 ⑤）: 以前は rel_frac を知らず ±0.5 m の箱を仮定し、長いリンクの上限を
+    小さく見積もって、届く形態を棄却しえた（「棄却の側だけが確実」が崩れる）。"""
+    if isinstance(offset_half, tuple):
+        _, f_lo, f_up, f_lat = offset_half
+        return -f_lat * l, f_lat * l, f_lo * l, f_up * l
+    return -offset_half, offset_half, l - offset_half, l + offset_half
+
+
+def link_max(l, offset_half):
+    """リンク 1 本が設計で取りうる最大の長さ（箱の最も遠い角）。"""
+    lat_lo, lat_hi, b_lo, b_hi = link_box(l, offset_half)
+    return float(np.hypot(max(abs(b_lo), abs(b_hi)), max(abs(lat_lo), abs(lat_hi))))
+
 # zonotope_chain_reach（9-91）の関節角格子の総点数の目安。多関節ほど1軸あたりの
 # 分解能を落として予算に収める（steps ≈ ZONO_GRID_BUDGET ** (1/n)）。
 # 実測: n=3, steps=15（3375点）で 1.4 秒（lsq_linear を素朴にループで呼んだ場合）。
@@ -207,7 +226,7 @@ def max_reach_after_design(lengths, offset_half=OFFSET_HALF):
     根ボディの offset が運動学的に不活性なこと等が効いていると見られるが、
     正確な上限は解析していない。したがって本関数の値は「これ以上は絶対に届かない」
     という上限としてのみ使い、「届く」の断定には使わない。"""
-    return sum(float(np.hypot(l + offset_half, offset_half)) for l in lengths)
+    return sum(link_max(l, offset_half) for l in lengths)
 
 
 # ⭐ **機械可読の助言**（2026-09-27、指摘12 の連結子のため）。
@@ -299,75 +318,94 @@ def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61, floor_dz=None):
     return True, dmin <= slack, dmin, slack
 
 
-def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=25):
+def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=None, floor_dz=None):
     """⭐ **柱を避けて目標に届く姿勢が存在するか**を、姿勢を 1 つ**目撃**して示す（9-144）。
 
     `planar_chain_reach` と同じ平面チェーンの規約（零姿勢は +Z、関節 i は累積角）。
     `box` は目標方向の平面へ射影した柱 `(d_lo, d_hi, z_lo, z_hi)`。
 
     ⚠️⚠️ **この関数は「棄却」を出さない。**
-    格子は連続な姿勢空間の標本でしかないので、**見つからないことは存在しないことを意味しない**。
+    標本は連続な姿勢空間の一部でしかないので、**見つからないことは存在しないことを意味しない**。
     ⭐ **第1層の「棄却側だけが確実」という保証（9-78）を壊さないため、
     見つかったときだけ確実なことを言う。**
 
-    返り値: (判定したか, 到達姿勢の数, そのうち柱に触れない数, 最小の余裕[m])
+    ⛔ Bug 83（2026-10-28）: 渡すのは**目標方向の鉛直面の中で振れるリンクだけ**（自分の関節軸に平行な根元の縦の
+    リンクは除き、その長さは肩の高さとして `dz`・`box` から引いておく）。旧い作りは全リンクを渡して根元のヨー関節を
+    ±180° のピッチとして数え、「到達」の許容も格子の余地（4 関節・刻み 15° で 644 mm）だったので、縦型アームで
+    存在しない「避けて届く姿勢」を目撃していた（9-144 → 9-312）。
+    ⭐ 到達姿勢は格子で探さず、**最後の 2 リンクを逆運動学で解いて作る**（先端は目標にちょうど届く）。
+    関節角の格子に先端が 10 mm 以内で乗る姿勢は、届く姿勢の集合が細い（3 リンクなら 1 次元）ので、腕が長いほど
+    ほとんど見つからない（3 倍に伸ばしても 0〜1 個だった）。前の n−2 関節は `steps` 刻みで走査する。
+    `floor_dz` を渡すと、半径込みで床を割る姿勢を数えない。
+
+    返り値: (判定したか, 到達姿勢の数, そのうち柱に触れない数, 最大の余裕[m])
     """
     n = len(lengths)
-    if n == 0 or n > 4:
+    if n < 2 or n > 4:
         return False, 0, 0, 0.0
-    R = float(sum(lengths))
-    if R <= 1e-9:
-        return False, 0, 0, 0.0
-    grids = []
-    for i in range(n):
-        r = ranges_deg[i] if i < len(ranges_deg) and ranges_deg[i] else (-180.0, 180.0)
-        grids.append(np.deg2rad(np.linspace(r[0], r[1], steps)))
+    if steps is None:
+        steps = {2: 1, 3: 721, 4: 121}[n]
+    rng = [np.deg2rad(ranges_deg[i] if i < len(ranges_deg) and ranges_deg[i] else (-180.0, 180.0))
+           for i in range(n)]
+    # 前の n−2 関節の格子（累積角と、そこまでの関節の位置）
+    if n > 2:
+        g = [np.linspace(rng[i][0], rng[i][1], steps) for i in range(n - 2)]
+        Q = np.stack(np.meshgrid(*g, indexing='ij'), -1).reshape(-1, n - 2)
+    else:
+        Q = np.zeros((1, 0))
+    acc = np.zeros(len(Q))
+    xs, ys = [np.zeros(len(Q))], [np.zeros(len(Q))]
+    for i in range(n - 2):
+        acc = acc + Q[:, i]
+        xs.append(xs[-1] + lengths[i] * np.sin(acc))
+        ys.append(ys[-1] + lengths[i] * np.cos(acc))
+    a, b = float(lengths[-2]), float(lengths[-1])
+    vx, vy = d - xs[-1], dz - ys[-1]
+    r = np.hypot(vx, vy)
+    can = (r <= a + b) & (r >= abs(a - b)) & (r > 1e-12)
+    beta = np.arctan2(vx, vy)                      # P→目標の向き（累積角の規約）
+    cg = np.clip((a * a + r * r - b * b) / (2 * a * np.maximum(r, 1e-12)), -1.0, 1.0)
+    gam = np.arccos(cg)
 
-    # 各関節の位置を順に積み上げる（先端だけでなく全部持つ）
-    acc = grids[0]
-    xs = [np.zeros_like(acc)]
-    ys = [np.zeros_like(acc)]
-    px = lengths[0] * np.sin(grids[0])
-    py = lengths[0] * np.cos(grids[0])
-    xs.append(px); ys.append(py)
-    for i in range(1, n):
-        acc = (acc[:, None] + grids[i][None, :]).reshape(-1)
-        xs = [np.repeat(a, len(grids[i])) for a in xs]
-        ys = [np.repeat(a, len(grids[i])) for a in ys]
-        px = xs[-1] + lengths[i] * np.sin(acc)
-        py = ys[-1] + lengths[i] * np.cos(acc)
-        xs.append(px); ys.append(py)
-
-    dist = np.hypot(xs[-1] - d, ys[-1] - dz)
-    step_rad = max(float(np.deg2rad(((ranges_deg[i][1] - ranges_deg[i][0]) if i < len(ranges_deg)
-                                     and ranges_deg[i] else 360.0)) / (steps - 1))
-                   for i in range(n))
-    slack = R * step_rad * n / 2.0
-    ok = dist <= max(slack, 0.01)
-    n_reach = int(ok.sum())
-    if n_reach == 0:
-        return True, 0, 0, 0.0
-
+    def wrap(x):
+        return (x + np.pi) % (2 * np.pi) - np.pi
+    sols = []
+    for sgn in (1.0, -1.0):                        # 肘の 2 つの向き
+        al = beta + sgn * gam                      # リンク n−1 の累積角
+        ex, ey = xs[-1] + a * np.sin(al), ys[-1] + a * np.cos(al)
+        de = np.arctan2(d - ex, dz - ey)           # リンク n の累積角
+        q1, q2 = wrap(al - acc), wrap(de - al)
+        okj = (can & (q1 >= rng[n - 2][0] - 1e-9) & (q1 <= rng[n - 2][1] + 1e-9)
+               & (q2 >= rng[n - 1][0] - 1e-9) & (q2 <= rng[n - 1][1] + 1e-9))
+        sols.append((okj, ex, ey))
+    n_reach, n_free, best = 0, 0, 0.0
     d_lo, d_hi, z_lo, z_hi = box
-    P = 9
-    free = np.ones(n_reach, dtype=bool)
-    margin = np.full(n_reach, np.inf)
-    for i in range(n):
-        ax, ay = xs[i][ok], ys[i][ok]
-        bx, by = xs[i + 1][ok], ys[i + 1][ok]
-        rad = radii[i] if i < len(radii) else 0.0
-        for t in np.linspace(0.0, 1.0, P):
-            qx = ax + (bx - ax) * t
-            qy = ay + (by - ay) * t
-            # 柱を半径ぶん膨らませて点と比べる
-            inside = ((qx >= d_lo - rad) & (qx <= d_hi + rad) &
-                      (qy >= z_lo - rad) & (qy <= z_hi + rad))
-            free &= ~inside
-            out = np.maximum.reduce([d_lo - rad - qx, qx - (d_hi + rad),
-                                     z_lo - rad - qy, qy - (z_hi + rad)])
-            margin = np.minimum(margin, out)
-    n_free = int(free.sum())
-    best = float(margin[free].max()) if n_free else 0.0
+    for okj, ex, ey in sols:
+        m = int(okj.sum())
+        if m == 0:
+            continue
+        n_reach += m
+        pts = [(x[okj], y[okj]) for x, y in zip(xs, ys)] + [(ex[okj], ey[okj]), (np.full(m, d), np.full(m, dz))]
+        free = np.ones(m, dtype=bool)
+        margin = np.full(m, np.inf)
+        for i in range(n):
+            (ax, ay), (bx, by) = pts[i], pts[i + 1]
+            rad = radii[i] if i < len(radii) else 0.0
+            for t in np.linspace(0.0, 1.0, 15):
+                qx = ax + (bx - ax) * t
+                qy = ay + (by - ay) * t
+                # 柱を半径ぶん膨らませて点と比べる
+                inside = ((qx >= d_lo - rad) & (qx <= d_hi + rad) &
+                          (qy >= z_lo - rad) & (qy <= z_hi + rad))
+                free &= ~inside
+                if floor_dz is not None:
+                    free &= qy - rad >= floor_dz - 0.005
+                out = np.maximum.reduce([d_lo - rad - qx, qx - (d_hi + rad),
+                                         z_lo - rad - qy, qy - (z_hi + rad)])
+                margin = np.minimum(margin, out)
+        n_free += int(free.sum())
+        if free.any():
+            best = max(best, float(margin[free].max()))
     return True, n_reach, n_free, best
 
 
@@ -424,8 +462,7 @@ def zonotope_chain_reach(lengths, ranges_deg, d, dz, offset_half, budget=ZONO_GR
     lo = np.empty(2 * n)
     hi = np.empty(2 * n)
     for i, l in enumerate(lengths):
-        lo[2 * i], hi[2 * i] = -offset_half, offset_half
-        lo[2 * i + 1], hi[2 * i + 1] = l - offset_half, l + offset_half
+        lo[2 * i], hi[2 * i], lo[2 * i + 1], hi[2 * i + 1] = link_box(l, offset_half)
     target = np.array([d, dz])
 
     dmin = math.inf
@@ -587,7 +624,7 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                 shoulder_z = float(base[2]) + sum(par)
                 grow_note = ''
             else:
-                l_h = sum(float(np.hypot(l + offset_half, offset_half)) for l in perp)
+                l_h = sum(link_max(l, offset_half) for l in perp)
                 shoulder_z = float(base[2]) + sum(par)
                 grow_note = (f'（水平に効くリンクだけを最大まで伸ばした場合。'
                              f'伸ばす前は {sum(perp):.3f} m）')
@@ -835,6 +872,21 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
         d_t = float(np.linalg.norm(tgt[:2] - base[:2]))
         dz_t = float(tgt[2] - base[2])
         rng_deg = [r if r else (-180.0, 180.0) for r in (geo.get('ranges') or [])]
+        # ⛔ Bug 83: 自分の関節軸に平行なリンク（縦型の根元の柱。ヨー関節）は面の中で振れず、肩の高さを上げるだけ。
+        #   B（`planar_chain_reach`）と同じ規則で外し、その長さを肩の高さへ回す
+        o_len, o_rad, o_rng, par_h = [], [], [], 0.0
+        _ax = geo.get('axes') or []
+        _dirs = geo.get('dirs') or []
+        for i, l in enumerate(lengths):
+            if i < len(_ax) and i < len(_dirs):
+                a = np.array(_ax[i], dtype=float); a = a / (np.linalg.norm(a) + 1e-12)
+                if abs(float(np.dot(_dirs[i], a))) > 0.99:
+                    par_h += l
+                    continue
+            o_len.append(l)
+            o_rad.append(geo['radii'][i] if i < len(geo['radii']) else 0.0)
+            o_rng.append(rng_deg[i] if i < len(rng_deg) else (-180.0, 180.0))
+        floor_rel = -float(base[2]) - par_h
         for ob in obstacles:
             op, oh = np.asarray(ob['pos'], float), np.asarray(ob['half'], float)
             # 目標方向の鉛直平面へ射影する。⚠️ 柱が目標方向から横に外れていれば無関係
@@ -853,9 +905,9 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                     f'腕の通り道から外れています'))
                 continue
             box = (d_o - lat_half, d_o + lat_half,
-                   float(op[2] - oh[2] - base[2]), float(op[2] + oh[2] - base[2]))
+                   float(op[2] - oh[2] - base[2]) - par_h, float(op[2] + oh[2] - base[2]) - par_h)
             okf, n_reach, n_free, best = obstacle_free_reach(
-                lengths, geo['radii'], rng_deg, d_t, dz_t, box)
+                o_len, o_rad, o_rng, d_t, dz_t - par_h, box, floor_dz=floor_rel)
             if not okf:
                 continue
             if n_reach == 0:
@@ -1169,8 +1221,13 @@ def main():
         # ⭐ 9-72: 探索幅はスクリプトに直書きせず**その run の cfg から読む**。
         #   直書きだと cfg を変えても判定器が追随せず、また食い違いが生まれる。
         if args.offset_half is None:
-            ub = ((bp.get('offset') or {}).get('ub')) or []
-            if ub:
+            _off = bp.get('offset') or {}
+            ub = _off.get('ub') or []
+            if _off.get('rel_frac') is not None:      # ⛔ 9-283 ⑤: 縦型の cfg は幅がリンク長の倍率
+                _f = [float(v) for v in _off['rel_frac']]
+                args.offset_half = ('rel_frac', _f[0], _f[1], _f[2] if len(_f) > 2 else _f[0])
+                print(f'[diagnose] リンク長の探索範囲: 設計長の {_f[0]:g}〜{_f[1]:g} 倍・横 ±{args.offset_half[3]:g} 倍（rel_frac）', flush=True)
+            elif ub:
                 args.offset_half = max(abs(float(v)) for v in ub)
 
     geo = parse_arm_xml(os.path.join(ASSET_DIR, f'{args.xml}.xml'))
@@ -1291,7 +1348,7 @@ def _run_layers23(run, task, geo=None, target=None):
     import yaml
     import torch
     from omegaconf import OmegaConf
-    from design_opt.utils.config import Config
+    from design_opt.utils.config import Config, replay_robot_param_scale
     from design_opt.agents.genesis_agent import BodyGenAgent, tensorfy
     from design_opt.utils.tools import set_global_seed
 
@@ -1300,6 +1357,7 @@ def _run_layers23(run, task, geo=None, target=None):
     d.pop('restore_dir', None)
     cfg = Config(OmegaConf.create(d), os.getcwd(), run)
     cfg.restore_dir = run
+    replay_robot_param_scale(cfg, run)   # 9-283: Bug 74 の修正前の run は学習時の値で
     cfg.control_prior = False   # Bug 10: 再評価時に転用フィルタが残ると重みが読まれない
     cfg.morph_prior = False
     torch.set_default_dtype(torch.float64)
@@ -1372,7 +1430,10 @@ def _run_layers23(run, task, geo=None, target=None):
             break
     print(f'[diagnose] 第3層の行動: {len(xs) or len(dists)} step（打ち切り {cfg.done_condition.get("max_nsteps", 1000)}）', flush=True)
     if xs:
-        v = [abs(xs[i+1]-xs[i]) / 0.01 for i in range(len(xs)-1)]
+        # ⛔ 9-283: 以前は 0.01 s で割り、4 倍の速さを出していた（1 step は timestep 0.01 × frame_skip 4 ＝ env.dt 0.04 s）。
+        #   tripo_pjp_long_phys の 2.55〜2.81 m/s が 10.2〜11.2 m/s と出て、「一撃で吹き飛ばす」に化けていた
+        v = [abs(xs[i+1]-xs[i]) / env.dt for i in range(len(xs)-1)]
+        print(f'[diagnose] 第3層の速さは 1 step {env.dt:g} s で計算', flush=True)
         trace['cube_x'] = xs
         trace['peak_v'] = max(v) if v else 0.0
         trace['move_start'] = next((i for i, d in enumerate(v) if d > 0.05), None)

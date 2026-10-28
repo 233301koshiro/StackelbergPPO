@@ -16,6 +16,9 @@ set -u
 cd /userdir/StackelbergPPO
 OUT=single_run/midrun_check.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" >> $OUT; }
+# ⛔ 2026-10-22（系譜 9-283 ③）: cut -c はバイトで切るので日本語の途中で切れて UTF-8 が壊れ、ugrep がログを二進とみなして
+#   「⛔⛔」を 0 件と返していた（実際は 17 件。10-22 以前の行は壊れたまま残っている、読むときは grep -a）。文字で切る。
+trunc(){ python3 -c 'import sys; n = int(sys.argv[1]); [print(l.rstrip("\n")[:n]) for l in sys.stdin]' "$1"; }
 log "=== 途中の見張りを開始（PID $$）"
 idle=0
 while [ $idle -lt 6 ]; do
@@ -32,6 +35,14 @@ while [ $idle -lt 6 ]; do
     EVAL_RESTORE_DIR=$D EVAL_CHECKPOINT=$E TRACE_OUT=$T.npz USE_CHOREONOID=1 OMP_NUM_THREADS=1 \
       timeout -k 30 2400 /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/record_arm_trace.py \
       > $T.log 2>&1
+    rc=$?
+    # ⛔ 2026-10-22（系譜 9-283 ③）: 再生に失敗すると不変条件が ⚠️ になるだけで「✅」と書いていた。失敗は失敗として書く
+    #   （.txt を残すので同じ epoch を何度も回さない）
+    if [ ! -f $T.npz ]; then
+      echo "⚠️ 再生に失敗（exit $rc）" > $T.txt
+      log "⚠️ $R ep$E: 再生に失敗（exit $rc）。$(tail -1 $T.log | trunc 120)"
+      continue
+    fi
     python3 scripts/check_invariants.py --trace $T.npz $R > $T.txt 2>&1
     # ⭐ 2026-10-21（系譜 9-272、ユーザー「はい」）: 離れたリンクどうしのめり込みも見る（完走後の検査 ck_far_pen と同じ量・同じ 50 mm）。
     #   短腕（tripo_pj_short_phys）は ep10 で 118 mm・全 step だったのに、ここでは不変条件しか見ず完走後に気づいた（Bug 72、約 8 時間）
@@ -46,9 +57,10 @@ print(f'  {mark} 離れた組のめり込み {mm:.0f} mm（step の {pct:.1f} %�
 " >> $T.txt 2>&1
     bad=$(grep -c '⛔' $T.txt)
     if [ "$bad" -gt 0 ]; then
-      log "⛔⛔ $R ep$E: $(grep '⛔' $T.txt | sed 's/^ *//' | cut -c1-160 | paste -sd'／')"
+      log "⛔⛔ $R ep$E: $(grep '⛔' $T.txt | sed 's/^ *//' | trunc 160 | paste -sd'／')"
     else
-      log "✅ $R ep$E: $(grep -h '話ごとの' $T.log | tail -1 | cut -c1-80)"
+      warn=$(grep -c '⚠️' $T.txt)
+      log "✅ $R ep$E: $(grep -h '話ごとの' $T.log | tail -1 | trunc 80)$([ "$warn" -gt 0 ] && echo "  （⚠️ $warn 件は $T.txt）")"
     fi
   done
   sleep 600

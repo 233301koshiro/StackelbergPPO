@@ -12,7 +12,7 @@
 | 報酬の桁（学習ログの 1 step 平均が、その run の中央値の 20 倍を超える epoch） | Bug 60（ep0 の −367） |
 | 制御入力（再生の |ctrl| が ±1 を超え、しかも切っていない） | Bug 60 |
 | 触れる前に動かない（対象が速く動き出した step で、腕が離れている）・置いた瞬間に重ならない | Bug 55・Bug 6 |
-| 床（可動リンクの下面が床より 10 mm 以上下の step が 1 % を超える） | 9-154 |
+| 床（可動リンクの下面が床より 10 mm 以上下の step が 1 % を超える。⭐ 10-22: 割合によらず 50 mm 以上下なら ⛔） | 9-154・9-288 |
 | 壁（ホッケー: パック・腕の先端が側壁の内面を越える） | Bug 39・9-93 |
 | 有限（軌跡の位置に NaN・inf が無い。NaN は比較が偽になり、床・壁の検査を黙って素通りする） | Bug 68（hockey_bank9_phys） |
 | 置いた瞬間に静的な箱（板・壁）に重ならない | Bug 69（初期姿勢の探索が板を見ず、重なった話が発散した） |
@@ -35,7 +35,11 @@ from check_cube_penetration import cube_half  # noqa: E402
 
 FLOOR_TOL = 0.010   # 床より下の許容 [m]
 FLOOR_FRAC = 0.01   # 床下にいてよい step の割合
+# ⭐ 2026-10-22（系譜 9-283 ③・9-288）: 割合だけでは深く短い沈み込み（打撃の一瞬・開始の姿勢）を素通りした。
+#   0.5 % の step だけ 182 mm 沈めた軌跡が ✅ だった。深さは離れた組のめり込みの ⛔ と同じ 50 mm
+FLOOR_DEEP = 0.050
 START_V = 0.5       # 「動き出した」とみなす対象の速さ [m/s]
+JUMP_V = 0.5        # 話の途中で「加速した」とみなす 1 記録 step の速さの増え [m/s]（judge_hockey_goal.py の JUMP と同じ）
 DT = 0.04           # 記録 1 step
 
 
@@ -93,13 +97,19 @@ def _touch(d, xml):
         idx = np.nonzero(v > START_V)[0]
         if not len(idx):
             continue
-        k = int(idx[0])                          # c[k] → c[k+1] で速く動いた
-        # 標本の刻み（Bug 48）: その間に腕の点が動いた距離までは「触れていない」と言えない
+        # 調べる step: 最初に動き出した step と、⭐ 話の途中で速さが JUMP_V 以上増えた step（2026-10-22、系譜 9-283 ③:
+        # 以前は最初の 1 回だけで、50 step 目で腕に触れずに箱を 0.1 m 動かした軌跡が ✅ だった。Bug 39・9-93・Bug 70 の型）
+        # ⚠️ 跳ね返り（壁・板・可動域の端）は、衝突を含む記録 step で速さが一度落ち、次の step で戻るので「加速」に見える
+        #   （_blk3d の話 2・5: 1.49 → 0.52 → 1.05 m/s、比 0.73）。衝突の前（2 step 前）の速さも超えたときだけ数える
+        prev = np.maximum(v[1:-1], v[:-2])                   # v[k-1] と v[k-2]（k = 2…）
+        ks = sorted({int(idx[0])} | {int(k) for k in np.nonzero(v[2:] - prev > JUMP_V)[0] + 2 if v[k] > START_V})
         ends = xp + np.einsum('tlij,lj->tli', xm, bo)
-        res = float(np.linalg.norm(ends[k + 1] - ends[k], axis=1).max())
-        g = min(gap(xp[j], xm[j], bo, rad, c[j], half) for j in (k, k + 1))
-        if g > res + 0.02:
-            out.append((e + 1, k, round(g * 1000), round(res * 1000)))
+        for k in ks:                             # c[k] → c[k+1] で速く動いた
+            # 標本の刻み（Bug 48）: その間に腕の点が動いた距離までは「触れていない」と言えない
+            res = float(np.linalg.norm(ends[k + 1] - ends[k], axis=1).max())
+            g = min(gap(xp[j], xm[j], bo, rad, c[j], half) for j in (k, k + 1))
+            if g > res + 0.02:
+                out.append((e + 1, k, round(g * 1000), round(res * 1000)))
     # ⭐ 置いた瞬間に重なっていないか（Bug 55: 重なりの押し出しは「触れてから動く」を満たしてしまう）
     over = []
     for e in range(len(d['ep_init'])):
@@ -116,8 +126,9 @@ def _touch(d, xml):
     if over:
         return False, f'⛔ 置いた瞬間に腕と対象が重なっている話: (話, 隙間 mm) {over[:3]}（Bug 55 型。動いても打撃ではない）'
     if out:
-        return False, f'⛔ 腕が離れているのに対象が動き出した話: (話, step, 隙間 mm, 刻み mm) {out[:3]}（Bug 55 型）'
-    return True, '対象は腕に触れてから動き出す'
+        return False, (f'⛔ 腕が離れているのに対象が動き出した・加速した: (話, step, 隙間 mm, 刻み mm) {out[:3]}'
+                       f'{f" ほか {len(out) - 3} 件" if len(out) > 3 else ""}（Bug 55・Bug 70 型）')
+    return True, '対象は腕に触れてから動き出し、途中で腕から離れて加速しない'
 
 
 def _finite(d):
@@ -169,6 +180,8 @@ def _floor(d):
         frac = max(frac, float((z < -FLOOR_TOL).mean()))
     if frac > FLOOR_FRAC:
         return False, f'⛔ 可動リンクが床より {-worst*1000:.0f} mm 下、{frac*100:.1f} % の step（9-154 型）'
+    if worst < -FLOOR_DEEP:
+        return False, f'⛔ 可動リンクが床より {-worst*1000:.0f} mm 下（{FLOOR_DEEP*1000:.0f} mm 超。床下は {frac*100:.1f} % の step だけ、9-288 型）'
     return True, f'床: 最も下 {worst*1000:.0f} mm・床下 {frac*100:.1f} % の step（一瞬の接触まで）'
 
 
@@ -178,12 +191,18 @@ def _walls(d, xml):
     if not side:
         return True, '壁なし'
     inner = float(side[0].get('pos').split()[1]) - float(side[0].find('geom').get('size').split()[1])
+    # 壁の上端。腕の表面（点の z − 半径）がこれより上なら壁の上空を通っただけで、壁には入っていない（_blk3d は z 0.31 以上で越えていた）
+    top = float(side[0].get('pos').split()[2]) + float(side[0].find('geom').get('size').split()[2])
     _, half, _ = cube_half(xml)
     py = max(float(np.abs(np.asarray(c, float)[:, 1]).max()) for c in d['ep_cubes'])
-    ty = 0.0
+    ty = over = 0.0
     for e in range(len(d['ep_xpos'])):
-        xp, xm, bo, _ = _caps(d, e)
-        ty = max(ty, float(np.abs((xp + np.einsum('tlij,lj->tli', xm, bo))[:, 1:, 1]).max()))
+        xp, xm, bo, rad = _caps(d, e)
+        tip = (xp + np.einsum('tlij,lj->tli', xm, bo))[:, 1:]
+        ay = np.abs(tip[:, :, 1])
+        below = tip[:, :, 2] - rad[None, 1:] < top
+        ty = max(ty, float(np.where(below, ay, 0.0).max()))
+        over = max(over, float(np.where(below, 0.0, ay).max()))
     bad = []
     if py > inner - half[1] + 0.02:
         bad.append(f'パック |y| {py:.2f}')
@@ -191,7 +210,8 @@ def _walls(d, xml):
         bad.append(f'腕 |y| {ty:.2f}')
     if bad:
         return False, f'⛔ 側壁の内面 {inner:.2f} を越えた: {", ".join(bad)}（Bug 39・9-93 型）'
-    return True, f'壁の内側（パック |y| ≤ {py:.2f}・腕 ≤ {ty:.2f}、内面 {inner:.2f}）'
+    up = f'。壁の上空（上端 {top:.3f} より上）は |y| {over:.2f} まで' if over > inner + 0.02 else ''
+    return True, f'壁の内側（パック |y| ≤ {py:.2f}・腕 ≤ {ty:.2f}、内面 {inner:.2f}）{up}'
 
 
 def run(r, trace=None):

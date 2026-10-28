@@ -726,6 +726,26 @@ def mujoco_xml_to_body(xml_str: str):
 # State extraction helpers
 # ---------------------------------------------------------------------------
 
+def _capsule_axis(rot_str):
+    """`.body` のカプセルの `rotation: [ax, ay, az, 角度(度)]` から、カプセルの軸（ローカル Y を回した向き）を返す。
+
+    ⭐ Bug 81（2026-10-26）: 軸と角度から回転行列を作って Y 軸を回す（ロドリゲスの式）。
+    rotation が無ければ Y 軸のまま（書く側は角度 0.01° 以下を省く）。
+    """
+    y = np.array([0.0, 1.0, 0.0])
+    if not rot_str:
+        return y
+    v = [float(x) for x in rot_str.split(',')]
+    k = np.array(v[:3], dtype=float)
+    n = np.linalg.norm(k)
+    if n < 1e-12:
+        return y
+    k /= n
+    th = math.radians(v[3])
+    return (y * math.cos(th) + np.cross(k, y) * math.sin(th)
+            + k * float(np.dot(k, y)) * (1.0 - math.cos(th)))
+
+
 def _rot_to_quat_wxyz(R):
     R = np.asarray(R)
     trace = R[0, 0] + R[1, 1] + R[2, 2]
@@ -1010,7 +1030,9 @@ class ChoreonoidSimWorld:
                     self._arm_caps[j.name] = c
             if os.environ.get('HOCKEY_ARM_BLOCK'):
                 print(f'[choreonoid] 腕のカプセル本体: {len(self._arm_caps)} / '
-                      f'{eb0.numLinks} リンクを捕捉', flush=True)
+                      f'{eb0.numLinks} リンクを捕捉'
+                      + ('（向きは軸と角度で読む、Bug 81）'
+                         if os.environ.get('HOCKEY_ARM_BLOCK') == '3d_axis' else ''), flush=True)
         self._arm_block = bool(os.environ.get('HOCKEY_ARM_BLOCK'))
         self._arm_last_free = None
         if self._arm_block and getattr(self, '_wall_boxes', None):
@@ -1098,6 +1120,13 @@ class ChoreonoidSimWorld:
             self.sim_item.setContactCullingDepth(float(_cd))
             # ⚠️ 読み返しの関数は Python に公開されていない。効いたかは再生で既知の失敗が消えるかで見る
             print(f'[choreonoid] ⭐ 接触を捨てる深さを {float(_cd)} m に設定した（既定 0.05、Bug 57）', flush=True)
+        # ⭐ 2026-10-22（系譜 9-288 の追い調べ）: 接触の力を解く反復（ガウス・ザイデル法）の上限。AIST の既定は 25
+        #   （`ConstraintForceSolver.cpp` の DEFAULT_MAX_NUM_GAUSS_SEIDEL_ITERATION）。ホッケーで先端が床に 30〜48 mm
+        #   入ったまま残るのが、反復が足りずに接触の力が収束しないためかを確かめる口。⚠️ **既定では何もしない**（指定したときだけ）
+        _mi = os.environ.get('CNOID_MAX_ITER')
+        if _mi:
+            self.sim_item.setMaxNumIterations(int(_mi))
+            print(f'[choreonoid] ⭐ 接触の反復の上限を {int(_mi)} 回に設定した（既定 25）', flush=True)
 
         # ⭐⭐ 反発係数（2026-09-26、9-173）。
         #   ⛔⛔ **AISTSimulator は材質ごとの `restitution` を読まない。**
@@ -1206,7 +1235,8 @@ class ChoreonoidSimWorld:
             #   既定（`=1`）は xy のまま（過去の run の再生を変えない）。
             #   ⚠️ 下端は床まで伸ばす: 壁と板は宙に浮いた箱で、その下（台があるはずの所）を腕がくぐれた
             #   （probe_arm_block_scripted.py で z 0.06〜0.09 をくぐった）。上を越えるのだけを許す。
-            d = 3 if os.environ.get('HOCKEY_ARM_BLOCK') == '3d' else 2
+            # ⭐ `=3d_axis` は 3 次元に加えてカプセルの向きを正しく読む（Bug 81）
+            d = 3 if os.environ.get('HOCKEY_ARM_BLOCK') in ('3d', '3d_axis') else 2
             lo, hi = c[:d] - sz[:d], c[:d] + sz[:d]
             if d == 3:
                 lo[2] = -np.inf
@@ -1455,6 +1485,23 @@ class ChoreonoidSimWorld:
                 cap = _re.search(r'translation:\s*\[([^\]]+)\][\s\S]{0,240}?'
                                  r'type:\s*Capsule,\s*radius:\s*([\d.eE+\-]+),\s*'
                                  r'height:\s*([\d.eE+\-]+)', blk)
+                if os.environ.get('HOCKEY_ARM_BLOCK') == '3d_axis':
+                    # ⭐ Bug 81（2026-10-26、系譜 9-309）: カプセルの Shape の中の rotation を軸と角度で読む。
+                    #   書く側（`rot_y_to_vec`）は Y から骨の向きへの回転を書くので、y 成分が 0 の骨は
+                    #   傾きによらず 90° で、軸だけが変わる。下の旧い読み方（90° なら Z）は傾いた骨を
+                    #   真上向きの線分にしていた（端で 4〜7 cm）。`HOCKEY_ARM_BLOCK=3d_axis` のときだけ使う
+                    #   （`=1`・`=3d` の過去の run の再生を変えない）。
+                    cap = _re.search(r'translation:\s*\[([^\]]+)\]\s*'
+                                     r'(?:rotation:\s*\[([^\]]+)\]\s*)?'
+                                     r'geometry:\s*\{\s*type:\s*Capsule,\s*radius:\s*([\d.eE+\-]+),\s*'
+                                     r'height:\s*([\d.eE+\-]+)', blk)
+                    if cap:
+                        ctr = np.array([float(v) for v in cap.group(1).split(',')], dtype=float)
+                        h = float(cap.group(4))
+                        ax = _capsule_axis(cap.group(2))
+                        self._link_caps[(body_key, jnm.group(1))] = (
+                            ctr - 0.5 * h * ax, ctr + 0.5 * h * ax)
+                    continue
                 if cap:
                     ctr = np.array([float(v) for v in cap.group(1).split(',')], dtype=float)
                     h = float(cap.group(3))
@@ -1463,7 +1510,7 @@ class ChoreonoidSimWorld:
                     if rot:
                         v = [float(x) for x in rot.group(1).split(',')]
                         if len(v) == 4 and abs(abs(v[3]) - 90.0) < 1e-6:
-                            ax = np.array([0.0, 0.0, 1.0])   # X 軸まわり 90° で Y → Z
+                            ax = np.array([0.0, 0.0, 1.0])   # X 軸まわり 90° で Y → Z（⛔ Bug 81: 軸を見ていない）
                     self._link_caps[(body_key, jnm.group(1))] = (
                         ctr - 0.5 * h * ax, ctr + 0.5 * h * ax)
 
