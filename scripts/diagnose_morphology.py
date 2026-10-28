@@ -318,11 +318,6 @@ def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61, floor_dz=None):
     return True, dmin <= slack, dmin, slack
 
 
-# ⭐ Bug 83（2026-10-28）: 目撃は「届く」と断定する側なので、許容は格子の余地 slack ではなく到達の閾値（10 mm）。
-#   旧い許容 slack（全長 × 刻み × 関節数 / 2）は 4 関節・刻み 15° で 644 mm あり、目標から 0.6 m 離れた姿勢まで「到達」と数えていた。
-OBSTACLE_REACH_TOL = 0.01
-
-
 def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=None, floor_dz=None):
     """⭐ **柱を避けて目標に届く姿勢が存在するか**を、姿勢を 1 つ**目撃**して示す（9-144）。
 
@@ -330,73 +325,87 @@ def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=None, floo
     `box` は目標方向の平面へ射影した柱 `(d_lo, d_hi, z_lo, z_hi)`。
 
     ⚠️⚠️ **この関数は「棄却」を出さない。**
-    格子は連続な姿勢空間の標本でしかないので、**見つからないことは存在しないことを意味しない**。
+    標本は連続な姿勢空間の一部でしかないので、**見つからないことは存在しないことを意味しない**。
     ⭐ **第1層の「棄却側だけが確実」という保証（9-78）を壊さないため、
     見つかったときだけ確実なことを言う。**
 
-    ⛔ Bug 83: 渡すのは**目標方向の鉛直面の中で振れるリンクだけ**（自分の関節軸に平行な根元の縦のリンクは除き、
-    その長さは肩の高さとして `dz`・`box` から引いておく）。旧い呼び出しは全リンクを渡し、根元のヨー関節を
-    ±180° のピッチとして数えていたので、縦型アームで存在しない「避けて届く姿勢」を目撃していた（9-144 → 9-312）。
+    ⛔ Bug 83（2026-10-28）: 渡すのは**目標方向の鉛直面の中で振れるリンクだけ**（自分の関節軸に平行な根元の縦の
+    リンクは除き、その長さは肩の高さとして `dz`・`box` から引いておく）。旧い作りは全リンクを渡して根元のヨー関節を
+    ±180° のピッチとして数え、「到達」の許容も格子の余地（4 関節・刻み 15° で 644 mm）だったので、縦型アームで
+    存在しない「避けて届く姿勢」を目撃していた（9-144 → 9-312）。
+    ⭐ 到達姿勢は格子で探さず、**最後の 2 リンクを逆運動学で解いて作る**（先端は目標にちょうど届く）。
+    関節角の格子に先端が 10 mm 以内で乗る姿勢は、届く姿勢の集合が細い（3 リンクなら 1 次元）ので、腕が長いほど
+    ほとんど見つからない（3 倍に伸ばしても 0〜1 個だった）。前の n−2 関節は `steps` 刻みで走査する。
     `floor_dz` を渡すと、半径込みで床を割る姿勢を数えない。
 
     返り値: (判定したか, 到達姿勢の数, そのうち柱に触れない数, 最大の余裕[m])
     """
     n = len(lengths)
-    if n == 0 or n > 4:
+    if n < 2 or n > 4:
         return False, 0, 0, 0.0
     if steps is None:
-        steps = 61 if n <= 3 else 25
-    R = float(sum(lengths))
-    if R <= 1e-9:
-        return False, 0, 0, 0.0
-    grids = []
-    for i in range(n):
-        r = ranges_deg[i] if i < len(ranges_deg) and ranges_deg[i] else (-180.0, 180.0)
-        grids.append(np.deg2rad(np.linspace(r[0], r[1], steps)))
+        steps = {2: 1, 3: 721, 4: 121}[n]
+    rng = [np.deg2rad(ranges_deg[i] if i < len(ranges_deg) and ranges_deg[i] else (-180.0, 180.0))
+           for i in range(n)]
+    # 前の n−2 関節の格子（累積角と、そこまでの関節の位置）
+    if n > 2:
+        g = [np.linspace(rng[i][0], rng[i][1], steps) for i in range(n - 2)]
+        Q = np.stack(np.meshgrid(*g, indexing='ij'), -1).reshape(-1, n - 2)
+    else:
+        Q = np.zeros((1, 0))
+    acc = np.zeros(len(Q))
+    xs, ys = [np.zeros(len(Q))], [np.zeros(len(Q))]
+    for i in range(n - 2):
+        acc = acc + Q[:, i]
+        xs.append(xs[-1] + lengths[i] * np.sin(acc))
+        ys.append(ys[-1] + lengths[i] * np.cos(acc))
+    a, b = float(lengths[-2]), float(lengths[-1])
+    vx, vy = d - xs[-1], dz - ys[-1]
+    r = np.hypot(vx, vy)
+    can = (r <= a + b) & (r >= abs(a - b)) & (r > 1e-12)
+    beta = np.arctan2(vx, vy)                      # P→目標の向き（累積角の規約）
+    cg = np.clip((a * a + r * r - b * b) / (2 * a * np.maximum(r, 1e-12)), -1.0, 1.0)
+    gam = np.arccos(cg)
 
-    # 各関節の位置を順に積み上げる（先端だけでなく全部持つ）
-    acc = grids[0]
-    xs = [np.zeros_like(acc)]
-    ys = [np.zeros_like(acc)]
-    px = lengths[0] * np.sin(grids[0])
-    py = lengths[0] * np.cos(grids[0])
-    xs.append(px); ys.append(py)
-    for i in range(1, n):
-        acc = (acc[:, None] + grids[i][None, :]).reshape(-1)
-        xs = [np.repeat(a, len(grids[i])) for a in xs]
-        ys = [np.repeat(a, len(grids[i])) for a in ys]
-        px = xs[-1] + lengths[i] * np.sin(acc)
-        py = ys[-1] + lengths[i] * np.cos(acc)
-        xs.append(px); ys.append(py)
-
-    dist = np.hypot(xs[-1] - d, ys[-1] - dz)
-    ok = dist <= OBSTACLE_REACH_TOL
-    n_reach = int(ok.sum())
-    if n_reach == 0:
-        return True, 0, 0, 0.0
-
+    def wrap(x):
+        return (x + np.pi) % (2 * np.pi) - np.pi
+    sols = []
+    for sgn in (1.0, -1.0):                        # 肘の 2 つの向き
+        al = beta + sgn * gam                      # リンク n−1 の累積角
+        ex, ey = xs[-1] + a * np.sin(al), ys[-1] + a * np.cos(al)
+        de = np.arctan2(d - ex, dz - ey)           # リンク n の累積角
+        q1, q2 = wrap(al - acc), wrap(de - al)
+        okj = (can & (q1 >= rng[n - 2][0] - 1e-9) & (q1 <= rng[n - 2][1] + 1e-9)
+               & (q2 >= rng[n - 1][0] - 1e-9) & (q2 <= rng[n - 1][1] + 1e-9))
+        sols.append((okj, ex, ey))
+    n_reach, n_free, best = 0, 0, 0.0
     d_lo, d_hi, z_lo, z_hi = box
-    P = 9
-    free = np.ones(n_reach, dtype=bool)
-    margin = np.full(n_reach, np.inf)
-    for i in range(n):
-        ax, ay = xs[i][ok], ys[i][ok]
-        bx, by = xs[i + 1][ok], ys[i + 1][ok]
-        rad = radii[i] if i < len(radii) else 0.0
-        for t in np.linspace(0.0, 1.0, P):
-            qx = ax + (bx - ax) * t
-            qy = ay + (by - ay) * t
-            # 柱を半径ぶん膨らませて点と比べる
-            inside = ((qx >= d_lo - rad) & (qx <= d_hi + rad) &
-                      (qy >= z_lo - rad) & (qy <= z_hi + rad))
-            free &= ~inside
-            if floor_dz is not None:
-                free &= qy - rad >= floor_dz - 0.005
-            out = np.maximum.reduce([d_lo - rad - qx, qx - (d_hi + rad),
-                                     z_lo - rad - qy, qy - (z_hi + rad)])
-            margin = np.minimum(margin, out)
-    n_free = int(free.sum())
-    best = float(margin[free].max()) if n_free else 0.0
+    for okj, ex, ey in sols:
+        m = int(okj.sum())
+        if m == 0:
+            continue
+        n_reach += m
+        pts = [(x[okj], y[okj]) for x, y in zip(xs, ys)] + [(ex[okj], ey[okj]), (np.full(m, d), np.full(m, dz))]
+        free = np.ones(m, dtype=bool)
+        margin = np.full(m, np.inf)
+        for i in range(n):
+            (ax, ay), (bx, by) = pts[i], pts[i + 1]
+            rad = radii[i] if i < len(radii) else 0.0
+            for t in np.linspace(0.0, 1.0, 15):
+                qx = ax + (bx - ax) * t
+                qy = ay + (by - ay) * t
+                # 柱を半径ぶん膨らませて点と比べる
+                inside = ((qx >= d_lo - rad) & (qx <= d_hi + rad) &
+                          (qy >= z_lo - rad) & (qy <= z_hi + rad))
+                free &= ~inside
+                if floor_dz is not None:
+                    free &= qy - rad >= floor_dz - 0.005
+                out = np.maximum.reduce([d_lo - rad - qx, qx - (d_hi + rad),
+                                         z_lo - rad - qy, qy - (z_hi + rad)])
+                margin = np.minimum(margin, out)
+        n_free += int(free.sum())
+        if free.any():
+            best = max(best, float(margin[free].max()))
     return True, n_reach, n_free, best
 
 
