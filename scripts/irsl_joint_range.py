@@ -7,7 +7,7 @@
    サーボ A のホーン → リンク 1 → サーボ B のホーン → リンク 2 → サーボ C。根元（台）と手先は未設計なので含めない。
 ⭐ 当たりの判定: 部品ごとに当たり判定のメッシュ（`meshes_col`）と箱を局所座標で塗りつぶした格子（既定 1 mm）にし、
    回す側の格子点が、止まっている側の塗りつぶしを表面から DEPTH（既定 1 mm）削った内側に入った数（体積）を数える。
-   組んだ姿勢（回す前）の体積を差し引き、増えた体積が TH（既定 5 mm³）を超えた最初の角度を、その向きの限界とする。
+   組んだ姿勢（回す前）の体積を差し引き、増えた体積が TH（既定 20 mm³）を超えた最初の角度を、その向きの限界とする。
    ⛔ 削らずに数えると、触れて滑っているだけの面が格子の丸めで 0〜8 mm³ を行き来し、当たりと誤る（10-29 の 1 回目: 関節 2 が幅 17° と出た）。
    関節 1 は台が未設計なのでサーボ A の本体だけ、関節 3 は手先が未設計なので Hinge だけを回す（4 種類）。
 ⭐ 角度の向きと 0: 回す軸はサーボ A のホーンの z。q = 0 は「回す側のリンクが止まっている側のリンクの延長にある」（モデルの関節角と同じ）。
@@ -36,9 +36,12 @@ OUT = os.environ.get('OUT', 'data/axis6/irsl_joint_range.csv')
 L1 = float(os.environ.get('L1', '80.5'))
 L2 = float(os.environ.get('L2', '66.0'))
 PITCH = float(os.environ.get('PITCH', '1.0'))      # mm
-TH = float(os.environ.get('TH', '5.0'))            # mm³
+TH = float(os.environ.get('TH', '20.0'))           # mm³。⛔ 5 だと、Hinge が自分のサーボを挟んで滑る接触の丸め（どこでも 2〜5 mm³ で横ばい）を当たりと誤る。本物の当たりは 10° 以内に数百 mm³ へ増える（10-29、一周させて確かめた）
 DEPTH = float(os.environ.get('DEPTH', '1.0'))      # mm。止まっている側をこの深さだけ削ってから数える（触れているだけの面を当たりにしない）
 STEP = float(os.environ.get('STEP', '1.0'))        # 度
+TIP_CONF = os.environ.get('TIP_CONF', 'fixed').split(',')   # 手先の Hinge をホーンに付けるつなぎ方（fixed・invert・rotate90・rotate-90）
+ONLY3 = os.environ.get('ONLY3', '') == '1'
+FULL = os.environ.get('FULL', '') == '1'                    # 1 なら限界で止めずに一周し、曲線を全部残す（確かめ用）                  # 1 なら関節 3 だけ計算する
 NPZ = os.environ.get('NPZ', '')                    # 指定すると、限界の角度での部品の点を保存する（目で見る確かめ用）
 snap = {}
 
@@ -209,12 +212,19 @@ def main():
     def signed(a, b):
         return float(np.degrees(np.arctan2(np.cross(a, b) @ z, a @ b)))
 
-    def sweep(label, fixed, moving, pivot, ref_dir, mov_dir, extra=None):
+    def sweep(label, fixed, moving, pivot, ref_dir, mov_dir, extra=None, pivot_servo=None, horn_part=None):
         """moving の部品を pivot のまわりに z で回し、fixed のどれかとの重なりが回す前より TH 増えたら止める。"""
         fixed = fixed + (extra or [])
         q0 = signed(ref_dir, mov_dir)
         pairs = [(m, f) for m in moving for f in fixed]
         b0 = {pr: overlap(pr[0], T[pr[0]], pr[1], T[pr[1]]) for pr in pairs}
+        # ⛔ 回す前の重なりを差し引いてよいのは、ホーンとそこにねじ止めする Hinge の組（設計どおりに接している）だけ。
+        #    それ以外の組が回す前から重なっていたら、組んだ姿勢がすでに当たっている。差し引くと当たりが隠れ、
+        #    範囲が広く出る（10-29: 手先の Hinge を invert で付けると幅 277° と出た）。
+        bad0 = {pr: v for pr, v in b0.items() if v > TH and pr != (horn_part, pivot_servo)}
+        if bad0:
+            print(f'[{label}] ⛔ 組んだ姿勢ですでに当たっている（この範囲は使えない）: '
+                  + '・'.join(f'{a} × {b} {v:.0f} mm³' for (a, b), v in bad0.items()), flush=True)
         lim, who, curve = {}, {}, []
         for sgn in (+1, -1):
             th = 0.0
@@ -229,17 +239,20 @@ def main():
                     if v > worst[0]:
                         worst = (v, f'{m} × {f}')
                 curve.append([label, sgn * th, q0 + sgn * th, worst[0], worst[1] or ''])
-                if worst[0] > TH:
+                if worst[0] > TH and sgn not in lim:
                     lim[sgn], who[sgn] = sgn * (th - STEP), worst[1]
                     if NPZ:
                         k = f'{label}|{sgn:+d}'
                         snap[k + '|fixed'] = np.vstack([world_pts(f, T[f]) for f in fixed])
                         snap[k + '|moving'] = np.vstack([world_pts(m, Rz @ T[m]) for m in moving])
                         snap[k + '|z'] = z
-                    break
-            else:
+                    if not FULL:
+                        break
+            if sgn not in lim:
                 lim[sgn], who[sgn] = sgn * 360.0, '（一周しても当たらない）'
         lo, hi = q0 + lim[-1], q0 + lim[+1]
+        if bad0:
+            lo = hi = float('nan')
         print(f'[{label}] 組んだ姿勢の関節角 q0 = {q0:+.1f}°・当たらない範囲 q = {lo:+.1f}° 〜 {hi:+.1f}°（幅 {hi - lo:.0f}°）'
               f'\n    + 側で当たる組: {who[+1]}\n    − 側で当たる組: {who[-1]}', flush=True)
         return [label, q0, lo, hi, who[+1], who[-1]], curve
@@ -248,23 +261,23 @@ def main():
     L1n = [n for n in names if n.startswith('L1.')]
     L2n = [n for n in names if n.startswith('L2.')]
     # 関節 2: サーボ B のホーン
-    r, c = sweep('関節 2（リンク 1 対 リンク 2）', ['A'] + L1n + ['B'], L2n + ['C'], pB, proj(pB - pA), proj(pC - pB))
-    out.append(r); curves += c
+    r, c = (None, []) if ONLY3 else sweep('関節 2（リンク 1 対 リンク 2）', ['A'] + L1n + ['B'], L2n + ['C'], pB, proj(pB - pA), proj(pC - pB), pivot_servo='B', horn_part='L2.Hinge')
+    out += [r] if r else []; curves += c
     # 関節 1: サーボ A のホーン（台は未設計なのでサーボ A の本体だけ）
-    r, c = sweep('関節 1（サーボ A の本体だけ。台は未設計）', ['A'], L1n + ['B'] + L2n + ['C'], pA,
-                 proj(pA - (T['A'][:3, :3] @ shp['A'].centroid + T['A'][:3, 3])), proj(pB - pA))
-    out.append(r); curves += c
+    r, c = (None, []) if ONLY3 else sweep('関節 1（サーボ A の本体だけ。台は未設計）', ['A'], L1n + ['B'] + L2n + ['C'], pA,
+                 proj(pA - (T['A'][:3, :3] @ shp['A'].centroid + T['A'][:3, 3])), proj(pB - pA), pivot_servo='A', horn_part='L1.Hinge')
+    out += [r] if r else []; curves += c
     # 関節 3: サーボ C のホーン（手先は未設計なので Hinge だけ、4 種類）
-    for h in ['Hinge_Short_Plug', 'Hinge_Long_Plug', 'Hinge_Short_Socket', 'Hinge_Long_Socket']:
+    for h, tc in [(h, tc) for h in ['Hinge_Short_Plug', 'Hinge_Long_Plug', 'Hinge_Short_Socket', 'Hinge_Long_Socket'] for tc in TIP_CONF]:
         Rt, pt = build()
         Hp = ru.makeParts(h)
-        if not Rt.attach(Hp, Hp.name + '/side_connect_point', pt[-1][2].name + '/horn', 'fixed'):
-            print(f'[関節 3] {h}: 付かない', flush=True)
+        if not Rt.attach(Hp, Hp.name + '/side_connect_point', pt[-1][2].name + '/horn', tc):
+            print(f'[関節 3] {h}（{tc}）: 付かない', flush=True)
             continue
-        n = f'tip.{h}'
+        n = f'tip.{h}' if tc == 'fixed' else f'tip.{h}.{tc}'
         T[n], shp[n] = pose(Hp), Shape(h, P)
         hc = T[n][:3, :3] @ shp[n].centroid + T[n][:3, 3]
-        r, c = sweep(f'関節 3（手先の {h} だけ）', ['A'] + L1n + ['B'] + L2n + ['C'], [n], pC, proj(pC - pB), proj(hc - pC))
+        r, c = sweep(f'関節 3（手先の {h} だけ、{tc}）', ['A'] + L1n + ['B'] + L2n + ['C'], [n], pC, proj(pC - pB), proj(hc - pC), pivot_servo='C', horn_part=n)
         out.append(r); curves += c
 
     os.makedirs(os.path.dirname(OUT) or '.', exist_ok=True)
