@@ -318,7 +318,12 @@ def planar_chain_reach(lengths, ranges_deg, d, dz, steps=61, floor_dz=None):
     return True, dmin <= slack, dmin, slack
 
 
-def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=25):
+# ⭐ Bug 83（2026-10-28）: 目撃は「届く」と断定する側なので、許容は格子の余地 slack ではなく到達の閾値（10 mm）。
+#   旧い許容 slack（全長 × 刻み × 関節数 / 2）は 4 関節・刻み 15° で 644 mm あり、目標から 0.6 m 離れた姿勢まで「到達」と数えていた。
+OBSTACLE_REACH_TOL = 0.01
+
+
+def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=None, floor_dz=None):
     """⭐ **柱を避けて目標に届く姿勢が存在するか**を、姿勢を 1 つ**目撃**して示す（9-144）。
 
     `planar_chain_reach` と同じ平面チェーンの規約（零姿勢は +Z、関節 i は累積角）。
@@ -329,11 +334,18 @@ def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=25):
     ⭐ **第1層の「棄却側だけが確実」という保証（9-78）を壊さないため、
     見つかったときだけ確実なことを言う。**
 
-    返り値: (判定したか, 到達姿勢の数, そのうち柱に触れない数, 最小の余裕[m])
+    ⛔ Bug 83: 渡すのは**目標方向の鉛直面の中で振れるリンクだけ**（自分の関節軸に平行な根元の縦のリンクは除き、
+    その長さは肩の高さとして `dz`・`box` から引いておく）。旧い呼び出しは全リンクを渡し、根元のヨー関節を
+    ±180° のピッチとして数えていたので、縦型アームで存在しない「避けて届く姿勢」を目撃していた（9-144 → 9-312）。
+    `floor_dz` を渡すと、半径込みで床を割る姿勢を数えない。
+
+    返り値: (判定したか, 到達姿勢の数, そのうち柱に触れない数, 最大の余裕[m])
     """
     n = len(lengths)
     if n == 0 or n > 4:
         return False, 0, 0, 0.0
+    if steps is None:
+        steps = 61 if n <= 3 else 25
     R = float(sum(lengths))
     if R <= 1e-9:
         return False, 0, 0, 0.0
@@ -358,11 +370,7 @@ def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=25):
         xs.append(px); ys.append(py)
 
     dist = np.hypot(xs[-1] - d, ys[-1] - dz)
-    step_rad = max(float(np.deg2rad(((ranges_deg[i][1] - ranges_deg[i][0]) if i < len(ranges_deg)
-                                     and ranges_deg[i] else 360.0)) / (steps - 1))
-                   for i in range(n))
-    slack = R * step_rad * n / 2.0
-    ok = dist <= max(slack, 0.01)
+    ok = dist <= OBSTACLE_REACH_TOL
     n_reach = int(ok.sum())
     if n_reach == 0:
         return True, 0, 0, 0.0
@@ -382,6 +390,8 @@ def obstacle_free_reach(lengths, radii, ranges_deg, d, dz, box, steps=25):
             inside = ((qx >= d_lo - rad) & (qx <= d_hi + rad) &
                       (qy >= z_lo - rad) & (qy <= z_hi + rad))
             free &= ~inside
+            if floor_dz is not None:
+                free &= qy - rad >= floor_dz - 0.005
             out = np.maximum.reduce([d_lo - rad - qx, qx - (d_hi + rad),
                                      z_lo - rad - qy, qy - (z_hi + rad)])
             margin = np.minimum(margin, out)
@@ -853,6 +863,21 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
         d_t = float(np.linalg.norm(tgt[:2] - base[:2]))
         dz_t = float(tgt[2] - base[2])
         rng_deg = [r if r else (-180.0, 180.0) for r in (geo.get('ranges') or [])]
+        # ⛔ Bug 83: 自分の関節軸に平行なリンク（縦型の根元の柱。ヨー関節）は面の中で振れず、肩の高さを上げるだけ。
+        #   B（`planar_chain_reach`）と同じ規則で外し、その長さを肩の高さへ回す
+        o_len, o_rad, o_rng, par_h = [], [], [], 0.0
+        _ax = geo.get('axes') or []
+        _dirs = geo.get('dirs') or []
+        for i, l in enumerate(lengths):
+            if i < len(_ax) and i < len(_dirs):
+                a = np.array(_ax[i], dtype=float); a = a / (np.linalg.norm(a) + 1e-12)
+                if abs(float(np.dot(_dirs[i], a))) > 0.99:
+                    par_h += l
+                    continue
+            o_len.append(l)
+            o_rad.append(geo['radii'][i] if i < len(geo['radii']) else 0.0)
+            o_rng.append(rng_deg[i] if i < len(rng_deg) else (-180.0, 180.0))
+        floor_rel = -float(base[2]) - par_h
         for ob in obstacles:
             op, oh = np.asarray(ob['pos'], float), np.asarray(ob['half'], float)
             # 目標方向の鉛直平面へ射影する。⚠️ 柱が目標方向から横に外れていれば無関係
@@ -871,9 +896,9 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                     f'腕の通り道から外れています'))
                 continue
             box = (d_o - lat_half, d_o + lat_half,
-                   float(op[2] - oh[2] - base[2]), float(op[2] + oh[2] - base[2]))
+                   float(op[2] - oh[2] - base[2]) - par_h, float(op[2] + oh[2] - base[2]) - par_h)
             okf, n_reach, n_free, best = obstacle_free_reach(
-                lengths, geo['radii'], rng_deg, d_t, dz_t, box)
+                o_len, o_rad, o_rng, d_t, dz_t - par_h, box, floor_dz=floor_rel)
             if not okf:
                 continue
             if n_reach == 0:
