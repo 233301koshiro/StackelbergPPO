@@ -1,0 +1,62 @@
+# pusher_ra15: 軸6 L-4 の β（長さだけ学習）。研究室の部品（XL430）で組んだお辞儀型の A1v の 1/5（`e2e_a1v_ra15`、系譜 9-326〜9-328）。
+#   ⭐ `robot:` 以外は pusher_tripo_v3_reallen と同じ（タスク・学習の設定）。⚠️ ブランチ feat/layer4-robotassembler にだけある。
+#   ⭐ α（形を固定・制御だけ学習）はこの cfg に起動行で `+robot_param_scale=0.0001`（R1 の `_fx`・系譜 9-320 と同じ凍結）。
+#   ⚠️ 既存の E2E とはスケールも設計変数の組も違うので直接比べない。
+#
+# 以下は pusher_tripo_v3_reallen の説明:
+#
+# 元の説明:
+# pusher_tripo_v3: tripo_arm_v3（colorful2 忠実・縦型 4 関節）用。pusher.yml との差分は
+# offset type 'xz'・max_body_depth・床貫通チェック（2026-07-17 作成、経緯は 実験系譜.md）
+env_specs:
+  check_floor_penetration: true   # 縦型: Leader の床めり込み形態にペナルティ（-init_contact_penalty）
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 6
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  # ⭐ 軸6（系譜 9-328）: カプセルの骨の線からの横のずれを保つ（部品は関節の線から前後に 8〜11 mm ずれる）
+  capsule_lateral: true
+  # ⭐ 軸6（系譜 9-328）: 長さから <inertial> を作り直す（構造 = 組んだ質量 + 1.338 g/mm × (L − L0)、先のサーボはそのまま）
+  part_mass_file: assets/mujoco_envs/e2e_a1v_ra15_mass.json
+
+  body_params:
+    # ⭐ 設計変数は上腕（11）と前腕（111）の長さだけ（進捗 L-4「β は長さだけ」）。向きは変えない。
+    #   範囲は組み方の系統（Hinge_Short_Plug＋Frame_Long_Socket）で作れる 57.6〜185.2 mm（系譜 9-325、隙間 ≤ 1.7 mm）。
+    #   柱（1）と手先（1111）は受け取るが適用しない（`only`、次元は変えない）。
+    bone_len:
+      lb: 0.0576
+      ub: 0.1852
+      only: ['11', '111']
+
+  joint_params: {}
+
+  # 太さは部品で決まる（スケール表 A2、カプセルは部品の外形から）。ギア比は XL430 の 1.4 N·m で固定（P2、XML）
+  geom_params: {}
+
+  actuator_params: {}

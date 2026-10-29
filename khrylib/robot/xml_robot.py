@@ -121,6 +121,17 @@ class Joint:
         return params
 
 
+def _rotate_between(v, a, b):
+    """単位ベクトル a を b へ回す回転を v に掛ける（ロドリゲス）。軸6 の capsule_lateral 用"""
+    c = float(np.clip(a @ b, -1.0, 1.0))
+    k = np.cross(a, b)
+    s = float(np.linalg.norm(k))
+    if s < 1e-12:
+        return v.copy() if c > 0 else -v
+    k = k / s
+    return v * c + np.cross(k, v) * s + k * (k @ v) * (1.0 - c)
+
+
 class Geom:
 
     def __init__(self, node, body):
@@ -145,6 +156,17 @@ class Geom:
             else:
                 self.bone_start = body.bone_start.copy()
             self.ext_start = np.linalg.norm(self.bone_start - self.start)
+            # ⭐ 軸6（系譜 9-328、ブランチ）: `capsule_lateral: true` のとき、カプセルの骨の線から横へのずれを覚えて、作り直しても保つ。
+            #   ⛔ 旧（と既定）は rebuild でカプセルを骨の線の上へ作り直し、横のずれを「関節の後ろへのはみ出し」に変えていた
+            #     （部品の腕は重心と外形が関節の線から前後に 8〜11 mm ずれる）。既定では lateral = 0 で従来と同じ
+            self.lateral = np.zeros(3)
+            if self.cfg.get('capsule_lateral', False):
+                u = self.end - self.start
+                u = u / np.linalg.norm(u)
+                d = self.start - self.bone_start
+                self.lateral = d - (d @ u) * u
+                self.ext_start = max(-(d @ u), 0.0)
+                self.lat_dir0 = u
     
     def __repr__(self):
         return 'geom_' + self.name
@@ -160,6 +182,12 @@ class Geom:
     def update_start(self):
         if self.type == 'capsule':
             vec = self.bone_start - self.end
+            if np.any(getattr(self, 'lateral', 0.0)):       # 軸6 の capsule_lateral（系譜 9-328）。end は骨の終点で渡ってくる
+                u = -vec / np.linalg.norm(vec)
+                lat = _rotate_between(self.lateral, self.lat_dir0, u)
+                self.start = self.bone_start + lat - u * self.ext_start
+                self.end = self.end + lat
+                return
             self.start = self.bone_start + vec * (self.ext_start / np.linalg.norm(vec))
 
     def sync_node(self):
@@ -382,7 +410,7 @@ class Body:
         if len(self.child) > 0:
             bone_ends = [x.bone_start for x in self.child]
         else:
-            bone_ends = [x.end for x in self.geoms]
+            bone_ends = [x.end - getattr(x, 'lateral', 0.0) for x in self.geoms]   # 軸6 の capsule_lateral: 骨はずれを引いた線（既定は 0）
         if len(bone_ends) > 0:
             self.bone_end = np.mean(np.stack(bone_ends), axis=0)
             self.bone_offset = self.bone_end - self.bone_start
@@ -426,6 +454,8 @@ class Body:
           変換器（mujoco_xml_to_body / _urdf）も同じ意味論で読む
         質量は body 原点（＝関節位置）に置く。pos は body ローカル。
         """
+        if self._sync_part_mass():
+            return
         m_add = sum(j.actuator.joint_mass() for j in self.joints if j.actuator is not None)
         node = self.node.find('inertial')
         if m_add <= 0:
@@ -465,6 +495,56 @@ class Body:
         node.attrib['mass'] = f'{M:.6g}'
         node.attrib['fullinertia'] = fmt([I_tot[0, 0], I_tot[1, 1], I_tot[2, 2],
                                           I_tot[0, 1], I_tot[0, 2], I_tot[1, 2]])
+
+    def _sync_part_mass(self):
+        """軸6（系譜 9-328、ブランチ）: cfg の `part_mass_file` に載っている体は、今の骨の長さ L から <inertial> を作り直す。
+
+        構造（サーボ以外）: 質量 = 組んだ質量 + slope × (L − L0)（slope はスケール表 P1）、重心は骨の向きに L / L0 倍
+          （骨に垂直なずれは保つ）、慣性は骨に垂直な軸が (m / m0)(L / L0)²・骨の軸が m / m0・混ざった項が (m / m0)(L / L0) 倍。
+        先のサーボ: 先の関節（骨の終点）からの相対位置と慣性をそのまま。⚠️ 骨が体の +z を向く形（A1v をまっすぐ伸ばした姿勢）だけを扱う。
+        載っていない体・cfg に無いときは何もしない（False を返す）。
+        """
+        path = self.cfg.get('part_mass_file')
+        if not path:
+            return False
+        pm = self.robot._part_mass_cache if hasattr(self.robot, '_part_mass_cache') else None
+        if pm is None:
+            import json, os
+            full = path if os.path.isabs(path) else os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', path)
+            pm = self.robot._part_mass_cache = json.load(open(full))
+        spec = pm['bodies'].get(self.name)
+        if spec is None or self.bone_offset is None:
+            return False
+        L = float(np.linalg.norm(self.bone_offset))
+        u = self.bone_offset / L
+        assert abs(u[2]) > 0.999, f'part_mass: 体 {self.name} の骨が +z を向いていない {u}'
+        L0 = float(spec['L0'])
+        st, sv = spec['struct'], spec['servo']
+        m0 = float(st['mass'])
+        m = m0 + float(pm['slope_kg_per_m']) * (L - L0)
+        assert m > 0, f'part_mass: 体 {self.name} の構造の質量が負 (L = {L})'
+        r, a = m / m0, L / L0
+        c = np.array(st['com'], float)
+        c[2] *= a
+        I = np.array(st['inertia'], float)
+        S = np.array([[r * a * a, r * a * a, r * a], [r * a * a, r * a * a, r * a], [r * a, r * a, r]])
+        I = I * S
+        parts = [(m, c, I), (float(sv['mass']), np.array(sv['com_from_distal'], float) + np.array([0, 0, L]), np.array(sv['inertia'], float))]
+        M = sum(p[0] for p in parts)
+        com = sum(p[0] * p[1] for p in parts) / M
+        It = np.zeros((3, 3))
+        for mm, cc, II in parts:
+            d = cc - com
+            It += II + mm * (np.dot(d, d) * np.eye(3) - np.outer(d, d))
+        node = self.node.find('inertial')
+        if node is None:
+            node = Element('inertial')
+            self.node.insert(0, node)
+        fmt = lambda v: ' '.join(f'{x:.6g}' for x in v)
+        node.attrib['pos'] = fmt(com)
+        node.attrib['mass'] = f'{M:.6g}'
+        node.attrib['fullinertia'] = fmt([It[0, 0], It[1, 1], It[2, 2], It[0, 1], It[0, 2], It[1, 2]])
+        return True
 
     def _sync_visual_geoms(self):
         """Update box/cylinder visual geom positions to follow the capsule's current fromto."""
@@ -582,6 +662,9 @@ class Body:
                     self.param_specs['bone_len']['lb'] = max(self.param_specs['bone_len']['lb'], self.param_specs['bone_len'].get('min',-np.inf))
                     self.param_specs['bone_len']['ub'] = min(self.param_specs['bone_len']['ub'], self.param_specs['bone_len'].get('max', np.inf))
                 bone_len = normalize_range(bone_len, self.param_specs['bone_len']['lb'], self.param_specs['bone_len']['ub'])
+                _only = self.param_specs['bone_len'].get('only')       # 軸6（系譜 9-328）: 適用しない体は 0 を返す（範囲外で ±1 を越えて警告が出続けるため）
+                if _only is not None and self.name not in _only:
+                    bone_len = 0.0
                 param_list.append(np.array([bone_len]))
 
         if self.bone_offset is not None and 'bone_ang' in self.param_specs:
@@ -648,6 +731,10 @@ class Body:
             bone_len = denormalize_range(params[0].item(), self.param_specs['bone_len']['lb'], self.param_specs['bone_len']['ub'])
             bone_len = max(bone_len, 1e-4)
             params = params[1:]
+            # ⭐ 軸6（系譜 9-328、ブランチ）: `only` に名前が無い体は受け取るが適用しない（次元は変えない。fix_base と同じやり方）
+            _only = self.param_specs['bone_len'].get('only')
+            if _only is not None and self.name not in _only:
+                bone_len = np.linalg.norm(self.bone_offset)
         else:
             bone_len = np.linalg.norm(self.bone_offset)
 

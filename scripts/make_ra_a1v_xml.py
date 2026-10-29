@@ -99,13 +99,21 @@ def main():
             items.append((m, c, I))
             m_tot += m
             c_acc += m * c
-        com = c_acc / m_tot
-        Ic = np.zeros((3, 3))
-        for m, c, I in items:
-            dv = c - com
-            Ic += I + m * ((dv @ dv) * np.eye(3) - np.outer(dv, dv))
+        def compose(its):
+            mt = sum(m for m, _, _ in its)
+            cm = sum(m * c for m, c, _ in its) / mt
+            Ic = np.zeros((3, 3))
+            for m, c, I in its:
+                dv = c - cm
+                Ic += I + m * ((dv @ dv) * np.eye(3) - np.outer(dv, dv))
+            return mt, cm, Ic
+        _m, com, Ic = compose(items)
+        is_sv = [parts[i][1] == 'XL-430' for i in rng]
+        split = None
+        if g > 0 and any(is_sv) and not all(is_sv):       # 構造（サーボ以外）と先のサーボに分ける（β の質量の模型、系譜 9-328）
+            split = (compose([it for it, sv in zip(items, is_sv) if not sv]), compose([it for it, sv in zip(items, is_sv) if sv]))
         pts = np.vstack([sim(world_pts(i)) for i in rng]) - origin
-        bodies.append(dict(names=[parts[i][0] for i in rng], mass=m_tot, com=com, I=Ic, pts=pts / 1000.0))
+        bodies.append(dict(names=[parts[i][0] for i in rng], mass=m_tot, com=com, I=Ic, pts=pts / 1000.0, split=split))
 
     seg_end = [Jp[1], Jp[2], Jp[3], tip_p]          # 体 1〜4 のカプセルの終点（体の原点からの相対は下で）
     lens = []
@@ -206,6 +214,20 @@ def main():
 '''
     open(OUT, 'w').write(xml)
     print('書き出した:', OUT, flush=True)
+    # β の質量の模型（xml_robot の part_mass_file、系譜 9-328）: 体ごとに 構造 と 先のサーボ を分けて書く。座標は体の原点（関節）から、骨は +z
+    pm = {'slope_kg_per_m': 1.338, 'note': '構造の質量 = 組んだ質量 + slope × (L − L0)。slope はスケール表 P1（1.338 g/mm）', 'bodies': {}}
+    for g in range(1, 5):
+        b = bodies[g]
+        if b['split'] is None:
+            continue
+        (ms, cs, Is), (mv, cv, Iv) = b['split']
+        L0 = float(np.linalg.norm(b['L']))
+        pm['bodies'][names[g - 1]] = dict(L0=L0, struct=dict(mass=ms, com=cs.tolist(), inertia=Is.tolist()),
+                                          servo=dict(mass=mv, com_from_distal=(cv - np.array([0, 0, L0])).tolist(), inertia=Iv.tolist()))
+        print(f'  模型 体 {names[g-1]}: L0 {L0*1000:.1f} mm・構造 {ms*1000:.1f} g（重心 z {cs[2]*1000:.1f} mm）・サーボ {mv*1000:.1f} g（先の関節から {np.round((cv - [0, 0, L0])*1000, 1).tolist()} mm）', flush=True)
+    pm_out = OUT.replace('.xml', '_mass.json')
+    json.dump(pm, open(pm_out, 'w'), indent=1, ensure_ascii=False)
+    print('書き出した:', pm_out, flush=True)
 
 
 if __name__ == '__main__':
