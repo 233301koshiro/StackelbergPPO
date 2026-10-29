@@ -60,6 +60,7 @@
 | ⭐ **`make_ra_a1v_xml.py`** （⚠️ ブランチ `feat/layer4-robotassembler` にあり、main には存在しない。RobotAssembler 専用のコード） | お辞儀型の A1v を部品で組んだ JSON（`build_arm3.py` の出力）から、学習に使う 1/5 の MuJoCo XML を作る（軸6 L-3b、9-326）。雛形は `e2e_a1v_phys_arm171`、質量・重心・慣性は部品の合成を `<inertial>` に、カプセルは部品の前後の範囲の中央へ（保つには cfg の `capsule_lateral`）。→ `assets/mujoco_envs/e2e_a1v_ra15.xml` と β の質量の模型 `e2e_a1v_ra15_mass.json`（生成物、ブランチ、9-328） |
 | ⭐ **`probe_ra15_physics.py`** （⚠️ ブランチ `feat/layer4-robotassembler` にあり、main には存在しない） | 1/5 の部品の腕の XML を、方策を使わない台本で確かめる（軸6 L-3b、9-326）: 読み込まれた値・重力・速さの上限・可動域・床・箱の滑り・押し。Choreonoid で回す。`PROBE_DETAIL=3:2+` で肩 +1 を step ごとにリンク別の床からの高さで出す（Bug 85 を見つけた） |
 | ⭐ **`queue_ra15_l4.sh`** （⚠️ ブランチ `feat/layer4-robotassembler` にあり、main には存在しない） | 軸6 L-4 の押し（β・α × 2 seed、9-329）。worktree から起動し、main のキューの後に 2 本ずつ。見張りと自動再生はブランチのコピーを `PROJ_DIR`・`RUN_FILTER` で起こす |
+| ⭐ **`sync_branch_md.sh`** | main の md を軸6 のブランチ（worktree）へ取り込む（9-329）。ブランチに既にある md 以外のファイルを変える変更が main にあれば取り込まない（L-4 の bash が worktree で動いているため）。自動ではない: コミットの後・/reflect の区切りで回す |
 | **`make_obstacle_reach_xml.py`** | 障害物のある Reach の XML を作る（9-104）。⚠️ **障害物は `<body>` に入れる**（9-98）。⭐ `--src` で元の XML を選べる（既定は旧い物理の `e2e_a1v.xml`。実在の物理の腕は `--src assets/mujoco_envs/e2e_a1v_phys_arm171.xml`、9-275） |
 | **`gemini_api.py`** | M1 を Gemini API で回す骨組み（9-123）。⚠️ **未着手・キー待ち** |
 | ⭐ **`tripo_api.py`** | Tripo3D API で画像→3D を生成（9-115）。`--balance` / `--verify-seed`。⚠️ キーは `.env` |
