@@ -101,6 +101,24 @@ def main():
     print(f'[ra15] 段階 {env.stage} / リンク {names} / 実行の開始の箱の qpos（XML の位置からのずれ）'
           f'{np.round(np.array(env.data.qpos, float)[-2:], 4).tolist()} m（cube_init_noise {cfg.env_specs.get("cube_init_noise")}）', flush=True)
 
+    if os.environ.get('PROBE_BENCH'):               # 1 step の所要を測るだけ（刻みの分割のコスト、系譜 9-327）
+        import time
+        n = int(os.environ['PROBE_BENCH'])
+        rng = np.random.default_rng(0)
+        t0 = time.perf_counter()
+        for _ in range(n):
+            u = [(j, float(rng.uniform(-1, 1))) for j in range(1, 5)]
+            *_, info = env.step(act(u))
+            if info.get('stage') != 'execution':
+                env.reset()
+                for _ in range(64):
+                    if env.stage == 'execution':
+                        break
+                    env.step(act())
+        dt = time.perf_counter() - t0
+        print(f'[ra15] ⭐ BENCH {n} step（乱数の入力）: {dt:.2f} s、1 step {dt / n * 1000:.2f} ms（CNOID_SUBSTEPS={os.environ.get("CNOID_SUBSTEPS")}）', flush=True)
+        return
+
     # ---- 0. 読み込まれた値 ----
     xml = env.cur_xml_str if isinstance(env.cur_xml_str, str) else env.cur_xml_str.decode()
     n_inert = xml.count('<inertial')
