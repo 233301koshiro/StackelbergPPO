@@ -27,8 +27,9 @@ TOL_L = float(os.environ.get('TOL_L', '1.0'))      # mm
 OUT = os.environ.get('OUT', '/userdir/StackelbergPPO/data/axis6/bow_arm_image/bow15v3_parts.json')
 CF = ['fixed', 'invert', 'rotate90', 'rotate-90']
 TOL = 0.5
-HINGES = ['Hinge_Short_Plug', 'Hinge_Short_Socket', 'Hinge_Long_Plug', 'Hinge_Long_Socket']
-FRAMES = ['Frame_Short_Plug', 'Frame_Short_Socket', 'Frame_Long_Plug', 'Frame_Long_Socket', 'Frame_Bottom_Plug', 'Frame_Bottom_Socket']
+HINGES = os.environ.get('FAM_HINGE', 'Hinge_Short_Plug,Hinge_Short_Socket,Hinge_Long_Plug,Hinge_Long_Socket').split(',')   # FAM_* で組み方の系統を固定できる（系譜 9-325）
+FRAMES = os.environ.get('FAM_FRAME', 'Frame_Short_Plug,Frame_Short_Socket,Frame_Long_Plug,Frame_Long_Socket,Frame_Bottom_Plug,Frame_Bottom_Socket').split(',')
+FAM_MOUNT = os.environ.get('FAM_MOUNT', '')   # 'Frame→サーボの点:サーボの点'（例 connect_point:right-side）
 SERVO_PTS = ['right-side', 'left-side', 'bottom-side1', 'bottom-side2', 'bottom-side3', 'left-side2']
 
 
@@ -194,6 +195,8 @@ def main():
                                         continue
                                     for fs in [n for n in CPT[ft] if n not in fpts and not (CPT[ft][n][1] & {'PC1', 'SC1'})]:
                                         for ss in SERVO_PTS:
+                                            if FAM_MOUNT and f'{fs}:{ss}' != FAM_MOUNT:
+                                                continue
                                             r2 = rel(ft, fs, 'XL-430', ss, 'fixed')
                                             if r2 is None:
                                                 continue
