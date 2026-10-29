@@ -37,6 +37,9 @@ max_body_depth: 6
 add_body_condition:
   max_nchild: 2
 
+# ⭐ 判定器（diagnose_morphology.py）が長さの定数に掛ける縮尺（スケール表 J2、系譜 9-329）。学習は読まない
+length_scale: 0.2
+
 robot:
   param_mapping: sin
   no_root_offset: true

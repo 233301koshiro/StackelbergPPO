@@ -13,7 +13,8 @@
 #   nohup setsid bash scripts/watch_midrun.sh > /dev/null 2>&1 < /dev/null &
 #   tail single_run/midrun_check.log
 set -u
-cd /userdir/StackelbergPPO
+# ⭐ 9-329（軸6、ブランチだけの変更）: 作業場所を PROJ_DIR で変えられる。軸6 の run は worktree の cfg と XML で再生する（worktree の single_run は main の single_run へのリンク）。既定は main
+cd "${PROJ_DIR:-/userdir/StackelbergPPO}"
 OUT=single_run/midrun_check.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" >> $OUT; }
 # ⛔ 2026-10-22（系譜 9-283 ③）: cut -c はバイトで切るので日本語の途中で切れて UTF-8 が壊れ、ugrep がログを二進とみなして
@@ -22,7 +23,7 @@ trunc(){ python3 -c 'import sys; n = int(sys.argv[1]); [print(l.rstrip("\n")[:n]
 log "=== 途中の見張りを開始（PID $$）"
 idle=0
 while [ $idle -lt 6 ]; do
-  runs=$(ps -eo args | grep "[c]horeonoid_train.py" | grep -o "hydra.run.dir=single_run/[^ ]*" | sed 's|.*/||')
+  runs=$(ps -eo args | grep "[c]horeonoid_train.py" | grep -o "hydra.run.dir=single_run/[^ ]*" | sed 's|.*/||' | grep -E "${RUN_FILTER:-.}")   # 9-329: RUN_FILTER（軸6 は ^ra15_）
   [ -z "$runs" ] && idle=$((idle+1)) || idle=0
   for R in $runs; do
     D=single_run/$R

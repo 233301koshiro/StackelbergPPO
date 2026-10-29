@@ -10,7 +10,8 @@
 #
 # 出力: single_run/postrun_summary.log（run ごとに best・検査 12 項目（不変条件を含む）・反実仮想の再生・仲間うちの外れ値）
 set -u
-cd /userdir/StackelbergPPO
+# ⭐ 9-329（軸6、ブランチだけの変更）: 作業場所を PROJ_DIR で変えられる。軸6 の run は worktree の cfg と XML で再生する（worktree の single_run は main の single_run へのリンク）。既定は main
+cd "${PROJ_DIR:-/userdir/StackelbergPPO}"
 OUT=single_run/postrun_summary.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a $OUT; }
 # ⭐ 10-21（系譜 9-271）: 環境変数 RUNS で一覧を差し替えられる（動いている本体を止めずに、後から足した run だけ別に回すため）
