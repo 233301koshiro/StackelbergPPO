@@ -204,9 +204,10 @@ def link_box(l, offset_half):
     if isinstance(offset_half, tuple) and offset_half[0] == 'bone_len':
         # ⭐ 9-329（軸6）: `bone_len`（向きを保って長さだけ、絶対値 [lb, ub]）。`only` のリンク（長さで見分ける）だけが動く
         _, lb, ub, only_lengths = offset_half
+        e = 1e-9                  # lsq_linear は下限 < 上限を要求する（固定のリンク・横方向に極小の幅）
         if any(abs(l - x) < 1e-6 for x in only_lengths):
-            return 0.0, 0.0, lb, ub
-        return 0.0, 0.0, l, l
+            return -e, e, lb, ub
+        return -e, e, l - e, l + e
     if isinstance(offset_half, tuple):
         _, f_lo, f_up, f_lat = offset_half
         return -f_lat * l, f_lat * l, f_lo * l, f_up * l
