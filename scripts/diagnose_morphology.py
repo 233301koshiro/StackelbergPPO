@@ -40,6 +40,8 @@ ASSET_DIR = 'assets/mujoco_envs'
 # 設計変数の探索範囲（design_opt/cfg/*.yml の geom_params / actuator_params と対応）
 GEAR_LB, GEAR_UB = 20.0, 400.0
 SIZE_LB, SIZE_UB = 0.03, 0.10
+# ⭐ 9-329（軸6）: run の cfg でギア比・太さが設計変数でない（部品で固定）なら True。第2層の「範囲の端に張り付く」を判定しない
+GEAR_FIXED = SIZE_FIXED = False
 # 「境界に張り付いている」とみなす幅（探索範囲に対する割合）。
 # 実測例: tripo_pj_short の size は 0.039/0.030/0.030（範囲 0.03〜0.10）で、
 # これを「下限に張り付き」と読めるよう 20% を採る（5% では 0.039 を取りこぼした）
@@ -973,8 +975,11 @@ def layer2(bodies, task):
         return vals and all(abs(v - bound) <= span * BOUND_TOL for v in vals)
 
     gspan, ssz = GEAR_UB - GEAR_LB, SIZE_UB - SIZE_LB
-    findings.append(('info', f'収束したギア比: {", ".join(f"{g:.0f}" for g in gears)}'))
+    findings.append(('info', f'収束したギア比: {", ".join(f"{g:.0f}" if g >= 10 else f"{g:.2f}" for g in gears)}'))
     findings.append(('info', f'収束したリンク太さ: {", ".join(f"{s:.3f}" for s in sizes)} m'))
+    if GEAR_FIXED and SIZE_FIXED:
+        findings.append(('info', 'ギア比も太さも設計変数ではない（部品で固定、軸6）ので、範囲の端に張り付くかは判定しません。'))
+        return findings
 
     if at(gears, GEAR_LB, gspan) and at(sizes, SIZE_LB, ssz):
         if task == 'reach':
@@ -1023,7 +1028,7 @@ def layer3(trace, task):
         start = trace.get('move_start')
         if abs(moved) < 1e-3:
             findings.append(('warn', '対象がまったく動いていません（触れられていない可能性）'))
-        elif peak > 5.0:
+        elif peak > 5.0 * LEN_SCALE:
             findings.append(('info',
                 f'**一撃で吹き飛ばす戦略**に収束しました（最大 {peak:.1f} m/s、{moved:.2f} m 移動）。\n'
                 f'      狙った位置に止めたい場合は、Pusher ではなく Target-Pusher タスクを選んでください。'))
@@ -1241,7 +1246,7 @@ def main():
         length_frozen = not bool(bp)
         # ⭐ 9-249: 第2層の「範囲の端に張り付く」判定も、ギア比と太さの範囲を**その run の cfg から読む**（9-72 と同じ考え）。
         #   ⛔ 直書きの 20〜400 のままだと、実在の cfg（上限 150）で上限に張り付いた run を「範囲の内側」と判定していた
-        global GEAR_LB, GEAR_UB, SIZE_LB, SIZE_UB, LEN_SCALE
+        global GEAR_LB, GEAR_UB, SIZE_LB, SIZE_UB, LEN_SCALE, GEAR_FIXED, SIZE_FIXED
         # ⭐ 9-329（軸6）: 縮尺・箱のずれ・太さが設計変数でない cfg を読む（どれも無ければ従来どおり）
         if args.length_scale is None and rob is not None:
             _cf = yaml.safe_load(open(cfg_file)) if os.path.exists(cfg_file) else {}
@@ -1254,9 +1259,12 @@ def main():
             print('[diagnose] 太さは設計変数でない → 先端の半径は XML の実値で判定', flush=True)
         _g = (rob.get('actuator_params') or {}).get('gear') or {}
         _s = (rob.get('geom_params') or {}).get('size') or {}
+        if os.path.exists(cfg_file):
+            GEAR_FIXED, SIZE_FIXED = not _g, not _s
         GEAR_LB, GEAR_UB = float(_g.get('lb', GEAR_LB)), float(_g.get('ub', GEAR_UB))
         SIZE_LB, SIZE_UB = float(_s.get('lb', SIZE_LB)), float(_s.get('ub', SIZE_UB))
-        print(f'[diagnose] 探索範囲（{os.path.basename(cfg_file)}）: ギア比 {GEAR_LB:g}〜{GEAR_UB:g}・太さ {SIZE_LB:g}〜{SIZE_UB:g} m', flush=True)
+        print(f'[diagnose] 探索範囲（{os.path.basename(cfg_file)}）: ギア比 {"固定（設計変数でない）" if GEAR_FIXED else f"{GEAR_LB:g}〜{GEAR_UB:g}"}'
+              f'・太さ {"固定（設計変数でない）" if SIZE_FIXED else f"{SIZE_LB:g}〜{SIZE_UB:g} m"}', flush=True)
         # ⭐ 9-72: 探索幅はスクリプトに直書きせず**その run の cfg から読む**。
         #   直書きだと cfg を変えても判定器が追随せず、また食い違いが生まれる。
         if args.offset_half is None and bp.get('bone_len') is not None:
