@@ -431,6 +431,8 @@ COMPARISONS = [
     ('閉ループ 2.11 倍 押し（4.5.4）', ['tripo_pjr211p_phys', 'tripo_pjp_short_phys_cg'], {'xml_name', 'env_specs.init_self_contact_caps'}),
     ('閉ループ 関節固定 押し（4.5.5）', ['e2e_a1_pusher_phys', 'e2e_a1_fix3_pusher_phys'], {'xml_name'}),
     ('関節固定 到達 対 押し（4.5.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
+    # ⭐ 9-317（10-29）: 第3層の提案どおり到達の中間の関節 1 を固定（queue_1029_fix1_seed2.sh）
+    ('第3層の提案 関節 1 固定（9-317）', ['tripo_pj_mid_phys', 'tripo_pj_mid_phys_fix1'], {'xml_name'}),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
