@@ -22,8 +22,9 @@ import yaml
 PROJ = '/choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl'
 SCALE = float(os.environ.get('SCALE', '1.5'))
 TIP_LAYERS = int(os.environ.get('TIP_LAYERS', '3'))
+TIP_HINGE = os.environ.get('TIP_HINGE', 'Hinge_Long_Plug')   # 1/5 の手先 55.3 mm には Hinge_Long_Socket（56.1 mm、9-319）
 TOL_L = float(os.environ.get('TOL_L', '1.0'))      # mm
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.environ.get('OUT', 'bow15v3_parts.json'))
+OUT = os.environ.get('OUT', '/userdir/StackelbergPPO/data/axis6/bow_arm_image/bow15v3_parts.json')
 CF = ['fixed', 'invert', 'rotate90', 'rotate-90']
 TOL = 0.5
 HINGES = ['Hinge_Short_Plug', 'Hinge_Short_Socket', 'Hinge_Long_Plug', 'Hinge_Long_Socket']
@@ -258,11 +259,11 @@ def main():
         used.append({'目標_mm': round(L, 1), '組めた_mm': round(Lg, 1), 'Hinge': b['ht'], '段': b['comp'], 'Frame': b['ft'],
                      '噛み合い': b['eng'], '部品': b['n']})
     # 手先: 長い Hinge ＋ ブロックの段（継ぎ目を直交）
-    T = ru.makeParts('Hinge_Long_Plug')
+    T = ru.makeParts(TIP_HINGE)
     assert R.attach(T, T.name + '/side_connect_point', servos[-1].name + '/horn', 'fixed')
-    parts.append(('手先の Hinge', 'Hinge_Long_Plug', T))
+    parts.append(('手先の Hinge', TIP_HINGE, T))
     if TIP_LAYERS:
-        sp = stack_plan(pose(T), 'Hinge_Long_Plug', 'B' * TIP_LAYERS)
+        sp = stack_plan(pose(T), TIP_HINGE, 'B' * TIP_LAYERS)
         build_layers([T], sp[0], '手先')
 
     out = {'links': used, 'parts': []}
