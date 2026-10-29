@@ -189,6 +189,9 @@ def reach_annulus(lengths):
 
 # bone_offset の探索範囲（cfg の body_params.offset、rel: true・±OFFSET_HALF）
 OFFSET_HALF = 0.5
+# ⭐ 9-329（軸6）: 長さの定数（届いたとみなす距離・障害物の横の余裕・動き出しの速さ・ホッケーの隙間）に掛ける縮尺。
+#   run の cfg の `length_scale`（軸6 の pusher_ra15 は 0.2）か `--length-scale`。既定 1 ＝ 従来どおり（スケール表 J2）
+LEN_SCALE = 1.0
 
 
 def link_box(l, offset_half):
@@ -198,6 +201,12 @@ def link_box(l, offset_half):
     リンク長の倍率（9-150 の `rel_frac`、縦型の cfg は [0.5, 2.93, 0.5]。`xml_robot.py` と同じ箱）。
     ⛔ 2026-10-22（系譜 9-283 ⑤）: 以前は rel_frac を知らず ±0.5 m の箱を仮定し、長いリンクの上限を
     小さく見積もって、届く形態を棄却しえた（「棄却の側だけが確実」が崩れる）。"""
+    if isinstance(offset_half, tuple) and offset_half[0] == 'bone_len':
+        # ⭐ 9-329（軸6）: `bone_len`（向きを保って長さだけ、絶対値 [lb, ub]）。`only` のリンク（長さで見分ける）だけが動く
+        _, lb, ub, only_lengths = offset_half
+        if any(abs(l - x) < 1e-6 for x in only_lengths):
+            return 0.0, 0.0, lb, ub
+        return 0.0, 0.0, l, l
     if isinstance(offset_half, tuple):
         _, f_lo, f_up, f_lat = offset_half
         return -f_lat * l, f_lat * l, f_lo * l, f_up * l
@@ -914,7 +923,7 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
             d_o = float(rel @ u)                 # 目標方向の距離
             lat = float(abs(rel[1] * u[0] - rel[0] * u[1]))   # 横ずれ
             lat_half = float(np.linalg.norm(oh[:2]))
-            if lat - lat_half > max(geo['radii'] + [0.0]) + 0.05:
+            if lat - lat_half > max(geo['radii'] + [0.0]) + 0.05 * LEN_SCALE:
                 findings.append(('ok',
                     f'障害物 `{ob["name"]}` は目標方向から {lat:.2f} m 横にあり、'
                     f'腕の通り道から外れています'))
@@ -1175,6 +1184,10 @@ def main():
     ap.add_argument('--spread-y', type=float, default=0.0,
                     help='対象の y 方向のばらつき（Shot の cube_y_noise）。'
                          '指定すると分布の最遠点で判定する（9-46）')
+    ap.add_argument('--cube-noise', type=float, default=None, dest='cube_noise',
+                    help=f'対象の初期位置の一様なずれの幅。run 指定時は env_specs.cube_init_noise から。既定 {CUBE_POS_NOISE}（Bug 51）')
+    ap.add_argument('--length-scale', type=float, default=None, dest='length_scale',
+                    help='長さの定数に掛ける縮尺（run 指定時は cfg の length_scale）。既定 1（9-329、軸6）')
     ap.add_argument('--length-free', action='store_true',
                     help='リンク長も最適化対象として判定する（--run 指定時は cfg から自動判定）')
     args, _ = ap.parse_known_args()
@@ -1227,7 +1240,17 @@ def main():
         length_frozen = not bool(bp)
         # ⭐ 9-249: 第2層の「範囲の端に張り付く」判定も、ギア比と太さの範囲を**その run の cfg から読む**（9-72 と同じ考え）。
         #   ⛔ 直書きの 20〜400 のままだと、実在の cfg（上限 150）で上限に張り付いた run を「範囲の内側」と判定していた
-        global GEAR_LB, GEAR_UB, SIZE_LB, SIZE_UB
+        global GEAR_LB, GEAR_UB, SIZE_LB, SIZE_UB, LEN_SCALE
+        # ⭐ 9-329（軸6）: 縮尺・箱のずれ・太さが設計変数でない cfg を読む（どれも無ければ従来どおり）
+        if args.length_scale is None and rob is not None:
+            _cf = yaml.safe_load(open(cfg_file)) if os.path.exists(cfg_file) else {}
+            if _cf.get('length_scale') is not None:
+                args.length_scale = float(_cf['length_scale'])
+        if args.cube_noise is None and (cfgd.get('env_specs') or {}).get('cube_init_noise') is not None:
+            args.cube_noise = float(cfgd['env_specs']['cube_init_noise'])
+        if os.path.exists(cfg_file) and 'size' not in (rob.get('geom_params') or {}) and '--tip-ub' not in sys.argv:
+            args.tip_ub = 0.0            # 太さが設計変数でない（部品で決まる）なら、先端の半径は実物の値（tip_radius は max(実値, 上限)）
+            print('[diagnose] 太さは設計変数でない → 先端の半径は XML の実値で判定', flush=True)
         _g = (rob.get('actuator_params') or {}).get('gear') or {}
         _s = (rob.get('geom_params') or {}).get('size') or {}
         GEAR_LB, GEAR_UB = float(_g.get('lb', GEAR_LB)), float(_g.get('ub', GEAR_UB))
@@ -1235,6 +1258,22 @@ def main():
         print(f'[diagnose] 探索範囲（{os.path.basename(cfg_file)}）: ギア比 {GEAR_LB:g}〜{GEAR_UB:g}・太さ {SIZE_LB:g}〜{SIZE_UB:g} m', flush=True)
         # ⭐ 9-72: 探索幅はスクリプトに直書きせず**その run の cfg から読む**。
         #   直書きだと cfg を変えても判定器が追随せず、また食い違いが生まれる。
+        if args.offset_half is None and bp.get('bone_len') is not None:
+            # ⭐ 9-329（軸6）: 長さだけの設計変数。`only` の体の長さを XML から引いて箱にする
+            import xml.etree.ElementTree as _ET
+            _bl = bp['bone_len']
+            assert not _bl.get('rel', False), 'bone_len の rel は未対応'
+            _g0 = parse_arm_xml(os.path.join(ASSET_DIR, f'{args.xml}.xml'))
+            _wb = _ET.parse(os.path.join(ASSET_DIR, f'{args.xml}.xml')).getroot().find('worldbody')
+            _names = [b.get('name') for b in _wb.iter('body') if b.get('name') not in (None, '0', 'cube') and b.find('joint') is not None
+                      and b.find('joint').get('type', 'hinge') == 'hinge']
+            assert len(_names) == len(_g0['lengths']), (_names, _g0['lengths'])
+            _only = _bl.get('only') or _names
+            _ol = [float(l) for n, l in zip(_names, _g0['lengths']) if n in _only]
+            _rest = [float(l) for n, l in zip(_names, _g0['lengths']) if n not in _only]
+            assert all(min(abs(a - b) for b in _ol) > 1e-6 for a in _rest) if _ol and _rest else True, '長さで見分けられない'
+            args.offset_half = ('bone_len', float(_bl['lb']), float(_bl['ub']), _ol)
+            print(f'[diagnose] リンク長の探索範囲: bone_len {float(_bl["lb"]):g}〜{float(_bl["ub"]):g} m（{_only}）', flush=True)
         if args.offset_half is None:
             _off = bp.get('offset') or {}
             ub = _off.get('ub') or []
@@ -1265,9 +1304,13 @@ def main():
             args.target = list(map(float, _c))
         else:
             args.target = [0.8, 0.0, 0.15]
+    if args.length_scale is not None:
+        LEN_SCALE = float(args.length_scale)
+        print(f'[diagnose] 長さの定数の縮尺 {LEN_SCALE:g}（9-329）', flush=True)
     f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float),
                        length_frozen, spread_y=args.spread_y, tip_ub=args.tip_ub,
-                       offset_half=(OFFSET_HALF if args.offset_half is None else args.offset_half))
+                       offset_half=(OFFSET_HALF if args.offset_half is None else args.offset_half),
+                       cube_noise=(CUBE_POS_NOISE if args.cube_noise is None else args.cube_noise))
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
 
     if run:
@@ -1320,7 +1363,7 @@ def learned_strike_poses(env, n=200000, dz=0.10, dh=0.40, floor=0.02, wall_y=0.4
         iq = np.asarray(env.init_qpos, dtype=float)
         nj = len(chain)
         cube = np.array([0.55 + iq[nj], iq[nj + 1], 0.2125])
-        gap = env._get_cube_half_size() + env._get_max_arm_radius() + 0.01
+        gap = env._get_cube_half_size() + env._get_max_arm_radius() + 0.01 * LEN_SCALE
     except Exception:
         return None
     rng = np.random.default_rng(seed)
@@ -1451,10 +1494,10 @@ def _run_layers23(run, task, geo=None, target=None):
         print(f'[diagnose] 第3層の速さは 1 step {env.dt:g} s で計算', flush=True)
         trace['cube_x'] = xs
         trace['peak_v'] = max(v) if v else 0.0
-        trace['move_start'] = next((i for i, d in enumerate(v) if d > 0.05), None)
+        trace['move_start'] = next((i for i, d in enumerate(v) if d > 0.05 * LEN_SCALE), None)
     if dists:
         trace['dist'] = dists
-        trace['conv_step'] = next((i for i, d in enumerate(dists) if d < 0.01), None)
+        trace['conv_step'] = next((i for i, d in enumerate(dists) if d < 0.01 * LEN_SCALE), None)
     if qhist:
         Q = np.array(qhist)
         span = Q.max(axis=0) - Q.min(axis=0)          # 実際に振れた幅 [rad]
