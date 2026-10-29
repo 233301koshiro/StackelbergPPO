@@ -436,6 +436,8 @@ COMPARISONS = [
     ('第3層の提案 関節 1 固定（9-317）', ['tripo_pj_mid_phys', 'tripo_pj_mid_phys_fix1'], {'xml_name'}),
     # ⭐ 9-320（10-29）: D-5 の長い腕で形を固定した対照（queue_1029_long_frozen.sh）
     ('D-5 長い腕の形の固定（9-320）', ['e2e_a1v_obspen_reach_phys_long', 'e2e_a1v_obspen_reach_phys_long_frozen'], {'robot_param_scale'}),
+    # ⭐ 9-329（10-29）: 軸6 L-4 の押し、β（長さだけ学習）と α（形を固定）。比べる変数は robot_param_scale だけ（queue_ra15_l4.sh、ブランチ）
+    ('軸6 L-4 押し β 対 α（9-329）', ['ra15_pusher_beta', 'ra15_pusher_alpha'], {'robot_param_scale'}),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
