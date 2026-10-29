@@ -22,6 +22,7 @@
   10. ⭐ **縦型アームの台座が倒れていないか**（Bug 58。9-235）
   12. ⭐ **物理的にありえない値が無いか**（`check_invariants.py`。2026-10-12）
   11. ⭐ **比べる相手と起動行が、比べる変数以外で違わないか**（Bug 59。9-238）。組は COMPARISONS。
+      ⭐ seed の接尾辞は `_s2_ws`・`_s2`・`_s3`・`_s4` を読み、seed 1 の相手はワーカーの種が合う方（`_s2_ws` か `_s2`）を選ぶ（2026-10-29、9-318。旧は `_s2` だけで、`_ws` の run を比べていなかった）。
       任意の 2 本は `--pair A B`（XML と cfg 以外の差を出す）。
       ⭐ 起動行に出ないワーカーの乱数の種も比べる（Bug 76。直す前の seed 1 は 2〜5、直した後は 1001〜1004。2026-10-22）
   13. ⭐ **起動行の robot_param_scale が学習に届いたか**（Bug 74・Bug 75）。記録された値と、
@@ -567,8 +568,36 @@ def _worker_seeds(r):
     return [seed + i + 1 for i in range(n)], '直す前の式'
 
 
+# ⭐ 2026-10-29（系譜 9-318）: seed の接尾辞。旧は `_s2` しか読まず、`_s2_ws`（Bug 76 の取り直し）・`_s3`・`_s4` の run は
+#   「比べる相手が無い」になっていた。長いものから当てる。
+SEED_SUFFIXES = ('_s2_ws', '_s2', '_s3', '_s4')
+
+
+def _split_seed(r):
+    for s in SEED_SUFFIXES:
+        if r.endswith(s):
+            return r[:-len(s)], s
+    return r, ''
+
+
+def _pick_partner(r, o, s2):
+    """比べる相手の run 名。seed 1 は `_s2_ws`（新しい種）と `_s2`（旧い種）のどちらもありうるので、
+    ワーカーの乱数の種が r と一致する方を選ぶ（Bug 76）。一致が無ければ在る方を返し、種の違いは呼び手が ⛔ にする。"""
+    cands = [o + '_s2_ws', o + '_s2'] if s2 in ('_s2', '_s2_ws') else [o + s2]
+    have = [c for c in cands if (run_dir(c) / 'log').exists()]
+    if not have:
+        return None
+    wr = _worker_seeds(r)[0]
+    for c in have:
+        if wr is not None and _worker_seeds(c)[0] == wr:
+            return c
+    if s2 == '_s2' and (run_dir(r + '_ws') / 'log').exists():
+        return None     # 旧い種の run で、`_ws` で取り直してある。組の判定は取り直しの側で行う
+    return have[0]
+
+
 def ck_pair(r):
-    base, s2 = (r[:-3], '_s2') if r.endswith('_s2') else (r, '')
+    base, s2 = _split_seed(r)
     msgs, bad, n = [], False, 0
     if s2 and (run_dir(base) / 'log').exists():          # seed の対は seed 以外同じのはず
         d = diff_runs(base, r, set())
@@ -579,21 +608,22 @@ def ck_pair(r):
         if base not in runs:
             continue
         for o in runs:
-            if o == base or not (run_dir(o + s2) / 'log').exists():
+            p = _pick_partner(r, o, s2) if o != base else None
+            if p is None:
                 continue
-            d = diff_runs(r, o + s2, allowed)
+            d = diff_runs(r, p, allowed)
             n += 1
             if d:
                 bad = True
-                msgs.append(f'{name} の {o + s2} と: {"; ".join(d)}')
-            (wa, sa), (wb, sb) = _worker_seeds(r), _worker_seeds(o + s2)
+                msgs.append(f'{name} の {p} と: {"; ".join(d)}')
+            (wa, sa), (wb, sb) = _worker_seeds(r), _worker_seeds(p)
             if wa is not None and wb is not None and wa != wb:
                 bad = True
-                msgs.append(f'{name} の {o + s2} とワーカーの乱数の種が違う（{wa}〔{sa}〕対 {wb}〔{sb}〕。起動行には出ない、Bug 76）')
-            same, m = same_curve(r, o + s2)
+                msgs.append(f'{name} の {p} とワーカーの乱数の種が違う（{wa}〔{sa}〕対 {wb}〔{sb}〕。起動行には出ない、Bug 76）')
+            same, m = same_curve(r, p)
             if same:
                 bad = True
-                msgs.append(f'⛔⛔ {name} の {o + s2} と exec_R_eps が {m} epoch すべて一致（比べる変数が学習に届いていない、Bug 74）')
+                msgs.append(f'⛔⛔ {name} の {p} と exec_R_eps が {m} epoch すべて一致（比べる変数が学習に届いていない、Bug 74）')
     if bad:
         return False, '⛔ 比べる相手との比較が成り立たない（起動行の違い Bug 59・曲線の一致 Bug 74）: ' + ' ／ '.join(msgs)
     return True, (f'比べる相手 {n} 本と、比べる変数以外は同じ' if n else '比べる相手が無い・まだ無い（COMPARISONS に無い組は見ない）')

@@ -748,6 +748,19 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
                     f'      　⚠️ **機序は未解明です。**「慣性が増える」では説明できません'
                     f'（長さ 1.6 倍でも実効慣性の増加は 1.5 %。9-49）'))
 
+        # ⭐ 9-318（2026-10-29）: 平面アームの到達は全長と内側の穴だけで判定し、可動域は見ない（B は縦型だけ）。
+        #   関節を固定した XML（make_fixed_joint_arm.py）でも出力が元と同じになり、可動域 0 を読んだかが分からなかったので、
+        #   何を見て何を見ていないかを出力に出す（CLAUDE.md ⑤-3-2）。判定は変えない。
+        if planar:
+            rngs = geo.get('ranges') or []
+            fixed = [i + 1 for i, rg in enumerate(rngs) if rg and abs(rg[1] - rg[0]) < 1e-6]
+            findings.append(('info',
+                '平面アームの到達は全長と内側の穴で判定しています（関節の可動域は見ていません）'))
+            if fixed:
+                findings.append(('warn',
+                    f'関節 {", ".join(map(str, fixed))} の可動域が 0（固定）です。\n'
+                    f'      上の判定はこの固定を考慮していません。固定した角度のまま届くかは別に確かめてください'))
+
         if planar and dz > 1e-3:
             fatal = True
             findings.append(('fatal',
