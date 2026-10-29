@@ -1314,6 +1314,12 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         if add_noise:
             qpos = self.init_qpos + self.np_random.uniform(low=-.1, high=.1, size=self.model.nq)
             qvel = self.init_qvel + self.np_random.uniform(low=-.1, high=.1, size=self.model.nv)
+            # ⭐ 9-326（軸6 L-3b、スケール表 T7「× k」）: 上の ±0.1 は箱の 2 つの qpos（末尾 2 つ、cube_slide / cube_slide2）にも
+            #   ±0.1 m で掛かる。1/5 の腕（箱の半辺 0.03 m・手先まで約 0.2 m）では相対 5 倍になるので、`cube_init_noise` [m] で
+            #   箱の分だけ引き直す。⚠️ 既定（指定なし）では何もしない＝乱数の引き方も既存の run と同じ
+            _cn = self.env_specs.get('cube_init_noise')
+            if _cn is not None:
+                qpos[-2:] = self.init_qpos[-2:] + self.np_random.uniform(low=-float(_cn), high=float(_cn), size=2)
         else:
             qpos = self.init_qpos.copy()
             qvel = self.init_qvel.copy()
