@@ -31,6 +31,7 @@ OUT = os.environ.get('OUT', '/userdir/StackelbergPPO/data/axis6/irsl_link_length
 NB_MAX = int(os.environ.get('NB_MAX', '12'))
 NP_MAX = int(os.environ.get('NP_MAX', '3'))
 CHECK = int(os.environ.get('CHECK', '12'))
+ALL_OUT = os.environ.get('ALL_OUT', '')   # 指定すると、基準を満たす組み方を長さで絞らずに全部書き出す（系統ごとの比較用、系譜 9-325）
 CF = ['fixed', 'invert', 'rotate90', 'rotate-90']
 TOL = 0.5
 HINGES = ['Hinge_Short_Plug', 'Hinge_Short_Socket', 'Hinge_Long_Plug', 'Hinge_Long_Socket']
@@ -183,6 +184,7 @@ def main():
     log('Frame → サーボのつなぎ方:', {ft: len(v) for ft, v in servo_rel.items()})
 
     best = {}      # 長さ（0.1 mm）→ 候補
+    all_rows = []
     n_valid = 0
     comps = [('B' * nb) + ('P' * npl) for nb in range(NB_MAX + 1) for npl in range(NP_MAX + 1)]
     MA = np.eye(4)
@@ -221,6 +223,10 @@ def main():
                                     L = float(np.linalg.norm(d - ax * za))
                                     n_valid += 1
                                     npart = 2 + sum(len(l[1]) for l in layers)
+                                    if ALL_OUT:
+                                        items = [(ht, Mh)] + [(lt, x[4]) for lt, lay in layers for x in lay] + [(ft, MF)]
+                                        all_rows.append((round(L, 2), eng, npart, ht, comp or 'なし', ft, fn, c, fs, ss, ti, tn,
+                                                         round(mass_of(items)[0], 2)))
                                     key = round(L, 1)
                                     cand = (-eng, npart)
                                     if key not in best or cand < best[key]['rank']:
@@ -247,6 +253,13 @@ def main():
                      '最上段の部品': b['top'][0], '最上段の点': b['top'][1],
                      '質量_構造_g': f'{m_s:.1f}', '重心_構造_x_mm': f'{cs[0]:.1f}', '重心_構造_y_mm': f'{cs[1]:.1f}', '重心_構造_z_mm': f'{cs[2]:.1f}',
                      '質量_サーボ込み_g': f'{m_b:.1f}', '重心_サーボ込み_x_mm': f'{cb[0]:.1f}'})
+    if ALL_OUT:
+        with open(ALL_OUT, 'w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(['軸間距離_mm', '噛み合い', '部品の数', 'Hinge', '段', 'Frame', 'Frame の点', 'つなぎ方', 'Frame→サーボ', 'サーボの点',
+                        '最上段の部品', '最上段の点', '質量_構造_g'])
+            w.writerows(all_rows)
+        log(f'全部の組み方 {len(all_rows)} 行を書き出した: {ALL_OUT}')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', newline='') as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0]))
