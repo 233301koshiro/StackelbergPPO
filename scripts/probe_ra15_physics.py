@@ -109,6 +109,7 @@ def main():
     for o in (env, getattr(env, '_world', None), getattr(env, 'sim', None), getattr(getattr(env, 'sim', None), '_world', None)):
         if o is not None and getattr(o, '_arm_body', None) is not None:
             eb = o._arm_body
+            world = o
             break
     if eb is None:
         raise RuntimeError(f'腕の Choreonoid の body が見つからない: env の属性 {[k for k in vars(env) if "sim" in k or "world" in k]}')
@@ -218,7 +219,11 @@ def main():
             rows = run(((j, s),), 50, detail=(DETAIL == f'3:{j}{"+" if s > 0 else "-"}'))
             qj = np.degrees([r[0][j - 1] for r in rows])
             ext = qj.max() if s > 0 else qj.min()
-            print(f'  ⭐ {nm} {s:+.0f}: 行き着いた角 {ext:7.1f}° 最後 {qj[-1]:7.1f}°  床からの最低 {min(r[2] for r in rows)*1000:6.1f} mm', flush=True)
+            ov = getattr(world, '_limit_overshoot', None)
+            print(f'  ⭐ {nm} {s:+.0f}: 行き着いた角 {ext:7.1f}° 最後 {qj[-1]:7.1f}°  床からの最低 {min(r[2] for r in rows)*1000:6.1f} mm'
+                  + (f'  端を越えた最大 {np.degrees(ov):.2f}°' if ov is not None else ''), flush=True)
+            if ov is not None:
+                world._limit_overshoot = 0.0
 
     # ---- 4. 床 ----
     print('\n[ra15] === 4. 前へお辞儀して床へ押し付ける（肩 +1・肘 +1）', flush=True)
@@ -268,13 +273,16 @@ def main():
     print(f'  姿勢: 肩 {np.degrees(a1):.0f}° 肘 {np.degrees(a2):.0f}° 手先 {np.degrees(a3):.0f}°（FK の隙間 {best[0]*1000:.1f} mm）', flush=True)
     place([0, a1, a2, a3], cube=(0.0, 0.0))
     print(f'  置いた直後: 箱との隙間 {cube_gap()*1000:.1f} mm / 床からの最低 {floor_low()*1000:.1f} mm', flush=True)
+    if getattr(world, '_limit_overshoot', None) is not None:
+        world._limit_overshoot = 0.0
     rows = run(((2, 1.0),), 50, every=5, detail=(DETAIL == '6'))
     gaps = np.array([r[3] for r in rows])
     cx = np.array([r[0][4] for r in rows])
     cv = np.array([r[1][4] for r in rows])
     cy = np.array([r[0][5] for r in rows])
     print(f'  ⭐ 箱の x の変位 最後 {cx[-1]*1000:.1f} mm / 最大の速さ {cv.max():.3f} m/s / y のずれ {np.abs(cy).max()*1000:.1f} mm / '
-          f'箱との隙間の最小 {gaps.min()*1000:.1f} mm（負 = めり込み）/ 床からの最低 {min(r[2] for r in rows)*1000:.1f} mm', flush=True)
+          f'箱との隙間の最小 {gaps.min()*1000:.1f} mm（負 = めり込み）/ 床からの最低 {min(r[2] for r in rows)*1000:.1f} mm'
+          + (f' / 端を越えた最大 {np.degrees(world._limit_overshoot):.2f}°' if getattr(world, '_limit_overshoot', None) is not None else ''), flush=True)
 
 
 try:
