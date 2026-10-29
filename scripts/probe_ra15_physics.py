@@ -64,12 +64,8 @@ def main():
     d = OmegaConf.to_container(OmegaConf.create(yaml.safe_load(open(f'{REF}/.hydra/config.yaml'))), resolve=True)
     d.pop('restore_dir', None)
     d['xml_name'] = XML
+    d['cfg'] = os.environ.get('PROBE_CFG', 'pusher_ra15')   # ⭐ 9-328: β の cfg（capsule_lateral・part_mass_file・上腕と前腕の長さ）。設計の行動は 0 なので形は XML のまま
     cfg = Config(OmegaConf.create(d), os.getcwd(), JOB)
-    for key in ('body_params', 'joint_params', 'geom_params'):
-        cfg.robot_cfg[key] = {}                     # 設計変数を空に（形は XML のまま）
-    # ⚠️ 設計変数が 1 つも無いと xml_robot.get_params が空の配列を concatenate できない。gear を幅 ±0.0001 の設計変数として残す
-    #   （下限 = 上限は normalize_range がゼロ割りになる）
-    cfg.robot_cfg['actuator_params'] = {'gear': {'lb': 1.4 - 1e-4, 'ub': 1.4 + 1e-4}}
     cfg.env_specs['arm_safe_init'] = False          # 初期姿勢は台本で置く
     # ⚠️ 骨（関節から関節）で測ると、台の球を関節 1 のホーンに置いたものとして扱い、肩のリンクと 1 mm 重なると判定して
     #   1 step 目で終わらせる（実物の台のサーボはホーンより下）。本物のカプセル・球の位置で測る（Bug 72 の init_self_contact_caps）
@@ -301,6 +297,54 @@ def main():
     print(f'  ⭐ 箱の x の変位 最後 {cx[-1]*1000:.1f} mm / 最大の速さ {cv.max():.3f} m/s / y のずれ {np.abs(cy).max()*1000:.1f} mm / '
           f'箱との隙間の最小 {gaps.min()*1000:.1f} mm（負 = めり込み）/ 床からの最低 {min(r[2] for r in rows)*1000:.1f} mm'
           + (f' / 端を越えた最大 {np.degrees(world._limit_overshoot):.2f}°' if getattr(world, '_limit_overshoot', None) is not None else ''), flush=True)
+
+    # ---- 7. 横から振って押す（旋回 +1）----
+    print('\n[ra15] === 7. 横から振って押す: 手先を箱の高さ・距離に置き、旋回 −40° から +1', flush=True)
+    # 縦の面（旋回 0）での運動学。カプセルの横のずれ（fromto の x）も含める（⚠️ 試験 6 はこれを無視して箱に届かなかった）
+    order = ['1', '11', '111', '1111']
+    z1 = float(np.asarray(env._body_xpos['1'], float)[2])
+    def fk2(a):
+        p = np.array([0.0, z1])
+        th = 0.0
+        segs = []
+        for nm, q in zip(order, [0.0] + list(a)):
+            a0, a1_, r = caps[nm]
+            th += q
+            R = np.array([[np.cos(th), np.sin(th)], [-np.sin(th), np.cos(th)]])   # +y 回りの回転を xz 面で
+            segs.append((nm, p + R @ a0[[0, 2]], p + R @ a1_[[0, 2]], r))
+            L = {'1': 0.0422, '11': 0.080399, '111': 0.065892, '1111': 0.0}[nm]
+            p = p + R @ np.array([0.0, L])
+        return segs
+    best = None
+    for a1 in np.radians(np.arange(0, 121, 4)):
+        for a2 in np.radians(np.arange(-10, 147, 4)):
+            for a3 in np.radians(np.arange(-90, 136, 6)):
+                segs = fk2([a1, a2, a3])
+                if min(min(p[1], q[1]) - r for nm, p, q, r in segs if nm != '1') < 0.006:
+                    continue
+                _, p, q, r = segs[-1]
+                ts = np.linspace(0, 1, 11)
+                pts = p[None] + ts[:, None] * (q - p)[None]
+                ok = (np.abs(pts[:, 0] - 0.20) < 0.015) & (np.abs(pts[:, 1] - 0.04) < 0.015)
+                if ok.any():
+                    sc = abs(pts[ok][:, 1].mean() - 0.04)
+                    if best is None or sc < best[0]:
+                        best = (sc, a1, a2, a3)
+    if best is None:
+        print('  ⛔ 手先が箱を通る姿勢が見つからない', flush=True)
+        return
+    _, a1, a2, a3 = best
+    print(f'  姿勢: 肩 {np.degrees(a1):.0f}° 肘 {np.degrees(a2):.0f}° 手先 {np.degrees(a3):.0f}°（旋回 0 で手先のカプセルが箱の中心を通る）', flush=True)
+    place([np.radians(-40), a1, a2, a3], cube=(0.0, 0.0))
+    print(f'  置いた直後: 箱との隙間 {cube_gap()*1000:.1f} mm / 床からの最低 {floor_low()*1000:.1f} mm / 姿勢 {np.degrees(np.array(env.data.qpos, float)[:4]).round(1).tolist()}°', flush=True)
+    if getattr(world, '_limit_overshoot', None) is not None:
+        world._limit_overshoot = 0.0
+    rows = run(((1, 1.0), (2, 0.15)), 40, every=4)    # 旋回 +1、肩は自重を少し支える
+    gaps = np.array([r[3] for r in rows])
+    cx = np.array([r[0][4] for r in rows]); cy = np.array([r[0][5] for r in rows])
+    cv = np.hypot([r[1][4] for r in rows], [r[1][5] for r in rows])
+    print(f'  ⭐ 箱の変位 x {cx[-1]*1000:.1f} mm・y {cy[-1]*1000:.1f} mm / 最大の速さ {cv.max():.3f} m/s / 箱との隙間の最小 {gaps.min()*1000:.1f} mm（負 = めり込み）'
+          f' / 床からの最低 {min(r[2] for r in rows)*1000:.1f} mm', flush=True)
 
 
 try:
