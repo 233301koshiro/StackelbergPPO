@@ -446,7 +446,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
         cube_xy   = self.get_body_com("cube")[:2]
         cube_half = self._get_cube_half_size()
         arm_rad   = self._get_max_arm_radius()
-        margin    = 0.03   # 安全マージン
+        margin    = float(self.env_specs.get('init_contact_margin', 0.03))   # 安全マージン。⭐ 9-328: 1/5 の腕（軸6）は × k（スケール表 M4）。既定は従来の 0.03
         thresh    = cube_half + arm_rad + margin
         if (abs(tip_xy[0] - cube_xy[0]) < thresh and
                 abs(tip_xy[1] - cube_xy[1]) < thresh):
@@ -653,7 +653,7 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             try:
                 _t = np.asarray(self._arm_tip_pos, dtype=float)
                 _c = np.asarray(self.get_body_com('cube'), dtype=float)
-                _th = (self._get_cube_half_size() + self._get_max_arm_radius() + 0.03)
+                _th = (self._get_cube_half_size() + self._get_max_arm_radius() + float(self.env_specs.get('init_contact_margin', 0.03)))
                 print(f'⚠️⚠️ [init_gate] **1 step でペナルティ終了する。**'
                       f'初期接触={_ic}（リンク {getattr(self, "_init_contact_link", "先端")}）/ 床貫通={_fp} / '
                       f'先端 ({_t[0]:.3f},{_t[1]:.3f},{_t[2]:.3f}) / '
