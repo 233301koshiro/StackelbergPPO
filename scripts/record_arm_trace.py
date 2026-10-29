@@ -47,7 +47,8 @@ else:
     print(f'[trace] ⭐ 学習時の環境で再生: {LAUNCH_ENV}', flush=True)
 _PHYS = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_CTRL_CLIP', 'CNOID_HINGE_DAMP_TORQUE', 'CNOID_JOINT_MAX_VEL', 'CNOID_JOINT_MAX_VEL_STRICT', 'CNOID_TICK_SYNC', 'CNOID_FRICTION', 'CNOID_MATERIAL_TABLE',
          'CNOID_RESTITUTION', 'HOCKEY_WALL_RESTITUTION', 'HOCKEY_ARM_BLOCK', 'ARM_SWEEP_OFF',
-         'CNOID_SUBSTEPS')   # ⭐ 10-27 Bug 82: 刻みも物理（無いと 0.002 s で学習した run を 0.01 s で再生する）
+         'CNOID_SUBSTEPS',   # ⭐ 10-27 Bug 82: 刻みも物理（無いと 0.002 s で学習した run を 0.01 s で再生する）
+               'CNOID_JOINT_LIMIT_TORQUE', 'CNOID_JOINT_LIMIT_SLACK')   # ⭐ 10-29 Bug 85（系譜 9-329）: 可動域の掛け方も物理（無いと軸6 の run を書き戻しで再生する）
 REPLAY_ENV = {k: os.environ[k] for k in _PHYS if k in os.environ}
 
 import numpy as np
