@@ -411,7 +411,11 @@ class Body:
     def _sync_inertial(self):
         """段1b（実験系譜 9-83）: 関節の駆動系質量を body の <inertial> に書く。
 
-        ⚠️ **既定では何もしない**（cfg に `torque_density` が無ければ m_add=0 で要素ごと消す）。
+        ⚠️ **既定では何もしない**（cfg に `torque_density` が無ければ m_add=0 で、XML の <inertial> をそのまま残す）。
+        ⭐ 2026-10-29（系譜 9-326）: 旧は m_add=0 で要素ごと消していたので、部品の実物から書いた <inertial>（軸6 の
+          `e2e_a1v_ra15`）が書き出しで消え、カプセルの密度の質量に戻っていた。m_add>0 になるのは torque_density を
+          置いた cfg だけで、そのときは毎回上書きするので、m_add=0 で残っている要素は元の XML のものに限られる。
+          10-29 時点で <inertial> を持つ元の XML は無く、既存の run の物理は変わらない。
 
         **<inertial> を選んだ理由**（密な球 geom 案は却下）:
         - Body.geoms は `geom[@type="sphere"]` を設計変数として拾うので、球 geom を足すと
@@ -425,8 +429,6 @@ class Body:
         m_add = sum(j.actuator.joint_mass() for j in self.joints if j.actuator is not None)
         node = self.node.find('inertial')
         if m_add <= 0:
-            if node is not None:
-                self.node.remove(node)
             return
         parts = [(m_add, np.zeros(3), np.zeros((3, 3)))]        # (mass, center, inertia about own center)
         for g in self.geoms:
