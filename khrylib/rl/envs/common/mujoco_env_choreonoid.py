@@ -945,6 +945,15 @@ if _TICK_SYNC:
 # ⭐ Bug 68（系譜 9-262）: 物理の刻みだけを K 分割する（制御の間隔 timestep×frame_skip は変えない）。
 #   公式の推奨は刻み 1 ms 程度（choreonoid.org「シミュレーションプロジェクトの作成」）、XML は 10 ms。既定 1＝従来どおり
 _SUBSTEPS = max(1, int(os.environ.get('CNOID_SUBSTEPS') or 1))
+# ⭐ Bug 85（系譜 9-327）: 可動域を「物理の後に角度を端へ書き戻す」で掛けると、接触ソルバが端の反力を知らず、
+#   端にある関節のリンクを床へ押し付けると沈み続ける（1/5 の部品の腕で 30 step −29 mm）。`CNOID_JOINT_LIMIT_TORQUE=1` のときだけ、
+#   腕の回転関節（armature > 0）は端を越えた分にばねと減衰のトルクを物理の前に足す（接触と同じ動力学の中で解かれる）。
+#   強さは armature J と 1 tick の Δt から: ばね k = J·(W/Δt)²、減衰 c = 2·J·(W/Δt)（臨界、陽に掛けて発散しない W = 0.5）。
+#   書き戻しは、端を `CNOID_JOINT_LIMIT_SLACK`（度、既定 10）越えたときの安全弁だけにする。⚠️ 既定（指定なし）では従来どおり
+_JOINT_LIMIT_TORQUE = bool(os.environ.get('CNOID_JOINT_LIMIT_TORQUE'))
+_JOINT_LIMIT_SLACK = math.radians(float(os.environ.get('CNOID_JOINT_LIMIT_SLACK') or 10.0))
+_JOINT_LIMIT_W = 0.5
+_JLT_SAID = False
 
 class ChoreonoidSimWorld:
     def __init__(self):
@@ -982,6 +991,7 @@ class ChoreonoidSimWorld:
         limits     = []
         vel_limits = []
         vcap_strict = []
+        arm_lim = set()
         for entry_idx, (sb, _) in enumerate(entries):
             body_key = 'robot' if entry_idx == 0 else f'extra_{entry_idx - 1}'
             eb = sb.body()
@@ -1000,6 +1010,8 @@ class ChoreonoidSimWorld:
                 rng = self._joint_limits.get((body_key, j.jointName))
                 if rng is not None:
                     limits.append((eb, j, rng[0], rng[1]))
+                    if entry_idx == 0:
+                        arm_lim.add(id(j))       # Bug 85 の CNOID_JOINT_LIMIT_TORQUE が腕の関節を見分ける印
                 vel = self._joint_vel_limits.get((body_key, j.jointName))
                 # ⭐ 9-245: 腕の回転関節に実在アクチュエータの定格速度で上限を掛ける（`CNOID_JOINT_MAX_VEL` [rad/s]、既定は掛けない）。
                 #   減衰を MuJoCo と同じにしたら（Bug 61）、44 g の腕に 400 N·m で最高速度が ギア÷b ＝ 最大 400 rad/s になり、
@@ -1068,6 +1080,28 @@ class ChoreonoidSimWorld:
         if hinge_damp and not _HINGE_DAMP_SAID:   # 読み込みのたびに出すとログが膨らむので 1 プロセス 1 回
             _HINGE_DAMP_SAID = True
             print(f'[choreonoid] ⭐ 腕の回転関節の減衰をトルク −b·q̇ で掛ける: {len(hinge_damp)} 関節（Bug 61）', flush=True)
+        self._limit_torque = []       # [(joint, lower, upper, k, c)]（Bug 85、CNOID_JOINT_LIMIT_TORQUE のときだけ）
+        if _JOINT_LIMIT_TORQUE and entries:
+            keep = []
+            _why = []
+            for eb, j, lo, hi in limits:
+                J = float(getattr(self, '_joint_armatures', {}).get(j.jointName, 0.0))
+                _why.append((j.jointName, id(j) in arm_lim, bool(j.isRevoluteJoint()), J))
+                if id(j) in arm_lim and j.isRevoluteJoint() and J > 0:   # ⚠️ body の包みは呼ぶたびに別物で、`is` でも name でも比べられない
+                    w = _JOINT_LIMIT_W / self._timestep
+                    self._limit_torque.append((j, lo, hi, J * w * w, 2.0 * J * w))
+                    keep.append((eb, j, lo - _JOINT_LIMIT_SLACK, hi + _JOINT_LIMIT_SLACK))   # 安全弁
+                else:
+                    keep.append((eb, j, lo, hi))
+            limits = keep
+            global _JLT_SAID
+            if not _JLT_SAID:
+                _JLT_SAID = True
+                print(f'[choreonoid] ⭐ 可動域をトルクで掛ける: {len(self._limit_torque)} 関節 '
+                      f'{[(j.jointName, round(k, 4), round(c, 5)) for j, _, _, k, c in self._limit_torque]}'
+                      f'（名前, k [N·m/rad], c [N·m·s/rad]）、書き戻しは端 ± {math.degrees(_JOINT_LIMIT_SLACK):g}° だけ'
+                      f'（CNOID_JOINT_LIMIT_TORQUE、Bug 85）。候補（名前, 腕, 回転, armature）: {_why}', flush=True)
+        self._limit_overshoot = 0.0   # 端を越えた最大の角 [rad]（プローブ用）
         self._joint_limits_compiled  = limits
         self._joint_vel_limits_compiled = vel_limits
         self._vcap_strict = vcap_strict
@@ -1441,6 +1475,7 @@ class ChoreonoidSimWorld:
                         timestep: float, joint_armatures: dict) -> dict:
         """body_defs = [(name, yaml_str), ...] を Choreonoid にロードする共通処理。"""
         self.actuators_map = actuators_map
+        self._joint_armatures = dict(joint_armatures or {})   # Bug 85 の CNOID_JOINT_LIMIT_TORQUE が強さを決める（読み込み直後の関節からは 0 と読める）
         if _SUBSTEPS > 1:
             print(f'[choreonoid] ⭐ 物理の刻み {timestep} s を {_SUBSTEPS} 分割 → {timestep / _SUBSTEPS:g} s（CNOID_SUBSTEPS、Bug 68）', flush=True)
             timestep = timestep / _SUBSTEPS
@@ -1641,6 +1676,19 @@ class ChoreonoidSimWorld:
         for _ in range(n_frames * _SUBSTEPS):
             for j, b in getattr(self, '_hinge_damp', ()):
                 j.u = self._base_u.get(id(j), 0.0) - b * j.dq
+            if getattr(self, '_limit_torque', None):
+                _hd = {id(j): b for j, b in self._hinge_damp}
+                for j, lo, hi, k, c in self._limit_torque:      # Bug 85: 端を越えた分だけ戻すトルク
+                    q, dq = j.q, j.dq
+                    if q > hi:
+                        t = -k * (q - hi) - c * max(dq, 0.0)
+                    elif q < lo:
+                        t = -k * (q - lo) - c * min(dq, 0.0)
+                    else:
+                        t = 0.0
+                    if t:
+                        self._limit_overshoot = max(self._limit_overshoot, (q - hi) if q > hi else (lo - q))
+                    j.u = self._base_u.get(id(j), 0.0) - _hd.get(id(j), 0.0) * dq + t
             _pre = self._puck_pre_tick()
             _apre = self._arm_pre_tick() if getattr(self, '_arm_block', False) else None
             _vq = {id(j): j.q for j in self._vcap_strict} if getattr(self, '_vcap_strict', None) else None
