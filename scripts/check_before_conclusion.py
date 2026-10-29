@@ -434,6 +434,8 @@ COMPARISONS = [
     ('関節固定 到達 対 押し（4.5.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
     # ⭐ 9-317（10-29）: 第3層の提案どおり到達の中間の関節 1 を固定（queue_1029_fix1_seed2.sh）
     ('第3層の提案 関節 1 固定（9-317）', ['tripo_pj_mid_phys', 'tripo_pj_mid_phys_fix1'], {'xml_name'}),
+    # ⭐ 9-320（10-29）: D-5 の長い腕で形を固定した対照（queue_1029_long_frozen.sh）
+    ('D-5 長い腕の形の固定（9-320）', ['e2e_a1v_obspen_reach_phys_long', 'e2e_a1v_obspen_reach_phys_long_frozen'], {'robot_param_scale'}),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
