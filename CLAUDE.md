@@ -268,6 +268,7 @@ AI は勝手にスコープを広げない。タスク追加・報酬の複雑�
 | 専門MD（パイプライン・タスク設計） ↔ 修論本文 | **専門MDが正しく、修論が古い**ことが多い |
 | 台帳（実験系譜・形態比較） ↔ 派生（修論・想定問答・知見総括表） | §4-2 の4層モデル |
 | コード ↔ 修論の記述 | 実装を変えたら該当する節 |
+| 修論本文 ↔ 主張の木（`主張の木.drawio`） | 本文の節・語・字数を変えたら木も。`check_claim_tree.py` が候補を出す |
 
 ### 主張を訂正するときの必須手順
 
@@ -319,6 +320,7 @@ python3 scripts/check_open_gaps.py      # ⭐ 埋まった穴の印が残って�
 python3 scripts/check_env_claims.py        # ⭐ 道具と環境の主張を実際に動かして確かめる（約 1 分半）。コンテナで回す（docker exec akita_sp_ppo …。ホストには Choreonoid が無く、止まる）
 python3 scripts/check_open_gaps.py --status   # ④層（進捗・引き継ぎ・方針）の「⏳ / 🔄 / 稼働中」の行を並べ、1 行ずつ本当にまだかを見る
 python3 scripts/check_rule_zombies.py          # 訂正の注記の前後に、古い命令が残っていないか（指示の層）
+python3 scripts/check_claim_tree.py            # 修論の主張の木（drawio）が本文とずれていないか（md の検査は drawio を読まない）
 python3 scripts/doc_tree.py                    # どの根（提出・審査・運用）からも辿れない md・遠い md（刈る候補。消す前に全文を読む）
 ```
 
