@@ -87,15 +87,28 @@ def cluster_decimate(mesh, pitch, vcol=None):
     return nV, nF, nC[nF].mean(axis=1)
 
 
-def box_tris(center, half):
-    """中心と半幅から、直方体の 12 枚の三角形 (12, 3, 3) を返す。"""
+def box_tris(center, half, cell=0.0):
+    """中心と半幅から、直方体の三角形 (N, 3, 3) を返す。`cell` > 0 なら各面をその大きさ以下の格子に分ける。
+
+    ⭐ 2026-10-30（D-1）: matplotlib は三角形の重心の奥行きで塗る順を決めるので、柱（高さ 0.85 m）の面を 2 枚の三角形のままにすると
+    脇を通る腕との前後が崩れ、柱に触れているだけの腕が柱に入って見えた。動かない箱は細かく分けて渡す。
+    """
     c, h = np.asarray(center, float), np.asarray(half, float)
     s = np.array([[-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
                   [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]], float)
     P = c + s * h
     quads = [(0, 1, 2, 3), (4, 5, 6, 7), (0, 1, 5, 4), (2, 3, 7, 6), (1, 2, 6, 5), (0, 3, 7, 4)]
-    return np.array([[P[a], P[b], P[cc]] for a, b, cc, d in quads for (a, b, cc) in
-                     ((a, b, cc), (a, cc, d))])
+    out = []
+    for a, b, cc, d in quads:
+        u, v = P[b] - P[a], P[d] - P[a]
+        nu = max(1, int(np.ceil(np.linalg.norm(u) / cell))) if cell > 0 else 1
+        nv = max(1, int(np.ceil(np.linalg.norm(v) / cell))) if cell > 0 else 1
+        for i in range(nu):
+            for j in range(nv):
+                q0 = P[a] + u * i / nu + v * j / nv
+                q1, q2, q3 = q0 + u / nu, q0 + u / nu + v / nv, q0 + v / nv
+                out += [[q0, q1, q2], [q0, q2, q3]]
+    return np.array(out)
 
 
 def scene_from_xml(xml_path):
@@ -181,6 +194,12 @@ def main():
                     help='環境の XML。省略時は trace のある run の .hydra から xml_name を読む。柱・壁・板と箱の寸法に使う')
     ap.add_argument('--glb', default='',
                     help='元の GLB。渡すと**元のモデルの色**で描く（無ければリンク名ごとの決め打ちの色）')
+    # ⭐ 2026-10-30（D-1、ユーザー案）: メッシュは元の絵の太さのままで当たり判定より太く、障害物 Reach では
+    #   柱に触れているだけの上腕が食い込んで見えた。当たり判定のカプセルを不透明で描き、元の形を半透明で重ねる
+    ap.add_argument('--collision', action='store_true',
+                    help='当たり判定のカプセル（trace の cap_fromto と geom_size）を不透明で描き、メッシュは半透明にする')
+    ap.add_argument('--mesh-alpha', type=float, default=0.35, dest='mesh_alpha',
+                    help='--collision のときのメッシュの不透明度')
     args = ap.parse_args()
 
     d = np.load(args.trace, allow_pickle=True)
@@ -207,7 +226,7 @@ def main():
     static, cube_box = scene_from_xml(xml_path) if xml_path and pathlib.Path(xml_path).exists() else ([], None)
     if xml_path:
         print(f'  環境 {xml_path}: 動かない箱 {len(static)} 個 {[s[0] for s in static]}')
-    static_tris = [(box_tris(c, h), col) for _n, c, h, col in static]
+    static_tris = [(box_tris(c, h, cell=0.05), col) for _n, c, h, col in static]
     mesh_names = args.link_names
     skip = L - len(mesh_names)          # 先頭の取り付け球など、メッシュを持たない body
     if skip < 0:
@@ -248,6 +267,25 @@ def main():
         print(f'  {mn:10} (body {names[i]}) faces {len(F):5d}  '
               f'ボーン長 {Lb:.4f} → {Lo:.4f}（×{Lo/Lb:.3f}）')
 
+    # 当たり判定のカプセル（body ローカル）。色はそのリンクのメッシュの平均色。メッシュを持たない body（取り付けの球）は描かない
+    caps = [None] * L
+    if args.collision:
+        if 'cap_fromto' not in d.files:
+            raise SystemExit('--collision: trace に cap_fromto が無い（Bug 72 より前の再生）。record_arm_trace.py で取り直す')
+        cf, gsz = d['cap_fromto'], d['geom_size']
+        for i, p in enumerate(parts):
+            if p is None or np.isnan(cf[i]).any():
+                continue
+            a, b = cf[i][:3], cf[i][3:]
+            h = float(np.linalg.norm(b - a))
+            cm = trimesh.creation.capsule(height=h, radius=float(gsz[i]), count=[16, 12])
+            Rc = align(np.array([0., 0., 1.]), b - a) if h > 1e-9 else np.eye(3)
+            col = p[2]
+            col = (np.asarray(col).mean(axis=0) if isinstance(col, np.ndarray)
+                   else np.array(matplotlib.colors.to_rgb(col)))
+            caps[i] = ((Rc @ np.asarray(cm.vertices).T).T + (a + b) / 2, np.asarray(cm.faces), col)
+            print(f'  当たり判定 body {names[i]}: 半径 {gsz[i]*1000:.1f} mm・長さ {h*1000:.1f} mm')
+
     # 描画範囲は**全時刻の実際の点**から決めて固定する（途中で視点が動くと比較しにくい）。
     # リンク原点だけだと先端メッシュがはみ出るので、最長ボーン 1 本ぶんだけ広げる。
     # ⚠️ **cube は画角に入れない。** Pusher の学習済み方策は cube を 15 m 吹き飛ばすので、
@@ -276,14 +314,15 @@ def main():
         # ⭐ 腕・箱・壁を**1 つの集まり**にして奥から順に塗る（部品ごとに足すと前後関係が崩れる）
         all_tri, all_fc = [], []
 
-        def add(tri, rgb):
+        def add(tri, rgb, alpha=1.0):
             nrm = np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
             ln = np.linalg.norm(nrm, axis=1, keepdims=True)
             nrm = nrm / np.where(ln < 1e-12, 1.0, ln)
             lit = np.clip(np.abs(nrm @ LIGHT), 0.0, 1.0)
             rgb = np.atleast_2d(rgb)
             all_tri.append(tri)
-            all_fc.append(np.clip(rgb * (0.45 + 0.55 * lit)[:, None], 0, 1))
+            fc = np.clip(rgb * (0.45 + 0.55 * lit)[:, None], 0, 1)
+            all_fc.append(np.c_[np.broadcast_to(fc, (len(tri), 3)), np.full(len(tri), alpha)])
         for tr, col in static_tris:
             add(tr, col)
         if args.cube and cube_box is not None and cube.ndim == 2 and np.any(cube[t]):
@@ -294,7 +333,11 @@ def main():
             Vw = xpos[t, i] + (xmat[t, i] @ Vl.T).T
             # 面法線と光源の内積で陰影を作る（立体感が無いと関節の動きが読めない）
             add(Vw[F], col if isinstance(col, np.ndarray)       # 面ごとの元の色（--glb）
-                else np.array(matplotlib.colors.to_rgb(col))[None, :])
+                else np.array(matplotlib.colors.to_rgb(col))[None, :],
+                args.mesh_alpha if args.collision else 1.0)
+            if caps[i] is not None:
+                Vc, Fc, cc = caps[i]
+                add((xpos[t, i] + (xmat[t, i] @ Vc.T).T)[Fc], cc[None, :])
         if all_tri:
             ax.add_collection3d(Poly3DCollection(np.concatenate(all_tri), facecolors=np.concatenate(all_fc),
                                                  edgecolor='none', zorder=1))
