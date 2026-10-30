@@ -75,6 +75,10 @@ def main():
         if '/.git' in d or '/single_run' in d:
             continue
         here.update(files)
+    # ⭐ 軸6 のブランチにだけあるファイル（`queue_ra15_l4.sh` など）も実在する（研究方針「ブランチの使い分け」。2026-10-30）
+    here.update(os.path.basename(f) for f in subprocess.run(
+        ['git', 'ls-tree', '-r', '--name-only', 'feat/layer4-robotassembler'],
+        cwd=ROOT, capture_output=True, text=True).stdout.split())
     pats = [(r'`([\w./-]+\.(?:py|sh))`', None),
             # ⭐ コマンドの中の `python3 scripts/xxx.py` も拾う（2026-10-14: 実在しない check_visual_log.py が 3 週間素通りした）
             (r'scripts/([\w.-]+\.(?:py|sh))', None),
