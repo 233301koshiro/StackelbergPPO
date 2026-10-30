@@ -1,0 +1,11 @@
+#!/bin/bash
+# git の post-commit フック: main でコミットしたら、md と docs/ を軸6 のブランチへ取り込む（scripts/sync_branch_md.sh。2026-10-30、ユーザー「自動にする」）。
+# 入れ方: ln -s ../../scripts/hooks/post-commit .git/hooks/post-commit
+# ⚠️ フックは worktree（/userdir/StackelbergPPO_ra）と共有なので、main の作業ツリーで main にコミットしたときだけ動く。
+# ⚠️ git はフックに GIT_DIR などを渡すので外す（残すと sync の git -C <worktree> が main の .git を見る）。
+# 取り込めなくてもコミットは失敗させない（止まった理由は sync が出す）。
+[ "$(git rev-parse --abbrev-ref HEAD)" = "main" ] || exit 0
+[ "$(git rev-parse --show-toplevel)" = "/userdir/StackelbergPPO" ] || exit 0
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
+bash /userdir/StackelbergPPO/scripts/sync_branch_md.sh 2>&1 | sed 's/^/[post-commit] /'
+exit 0
