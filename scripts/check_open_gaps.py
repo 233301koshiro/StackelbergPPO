@@ -50,6 +50,15 @@ SKIP = [
     '未測」のまま',
 ]
 
+# ⭐ 2026-11-01: 消し線（~~…~~）と「…」の中の印は数えない。前者は消し込んだ過去の記述（台帳は消さずに残す）、
+#   後者は印について述べた記録（目次の棚卸しの表）で、どちらも穴ではない。行ごと外すと同じ行の本物の穴を
+#   見落とすので、その部分だけを取り除いてから印を探す（系譜 9-276 の行と目次の記録が L-2b の決定後も残っていた）
+MENTION = re.compile(r'~~.*?~~|「[^」]*」')
+
+
+def has_mark(pat, line):
+    return bool(pat.search(MENTION.sub('', line))) and not any(x in line for x in SKIP)
+
 
 def self_check() -> int:
     """⭐ **本物の穴を見落とさないか**を既知の文字列で確かめる（§5-2 ⑤-3）。"""
@@ -60,10 +69,13 @@ def self_check() -> int:
         ('| 禁止物 | ⏳ 未確認 |', True,  '未確認'),
         ('| ❌ 🔧 | **やる。** 未着手・未測定で、着手すれば埋まる |', False, '凡例'),
         ('| 長さ | ✅ 済 |', False, '埋まっている'),
+        ('~~⏳ 未確認: 電圧~~ → ✅ 決めた', False, '消し線の中は過去の記述'),
+        ('| 系譜 9-276 の「⏳ 未確認」 | 消し込み |', False, '「」で引いた印は記録'),
+        ('~~⏳ 未確認: 電圧~~ → ✅ 決めた。慣性は ⏳ 未確認', True, '消し線の外に本物の穴'),
     ]
     bad = 0
     for line, want, why in cases:
-        got = bool(pat.search(line)) and not any(x in line for x in SKIP)
+        got = has_mark(pat, line)
         ok = (got == want)
         print(f'  {"✅" if ok else "⛔"} {why:22s} 期待 {want} / 実際 {got}')
         bad += (not ok)
@@ -73,7 +85,7 @@ def self_check() -> int:
     ok = got == ['| D-1 | ⏳ 待ち |']
     print(f'  {"✅" if ok else "⛔"} --status は「旧」より下を数えない  実際 {got}')
     bad += (not ok)
-    print('✅ 自己検査 6 項目一致' if not bad else f'⛔ {bad} 件 失敗')
+    print(f'✅ 自己検査 {len(cases) + 1} 項目一致' if not bad else f'⛔ {bad} 件 失敗')
     return bad
 
 
@@ -142,7 +154,7 @@ def main() -> int:
         text = p.read_text(encoding='utf-8', errors='replace')
         rows = []
         for i, l in enumerate(text.splitlines(), 1):
-            if not pat.search(l):
+            if not has_mark(pat, l):
                 continue
             if any(x in l for x in SKIP):
                 continue
