@@ -30,6 +30,7 @@ TOL = 0.5
 HINGES = os.environ.get('FAM_HINGE', 'Hinge_Short_Plug,Hinge_Short_Socket,Hinge_Long_Plug,Hinge_Long_Socket').split(',')   # FAM_* で組み方の系統を固定できる（系譜 9-325）
 FRAMES = os.environ.get('FAM_FRAME', 'Frame_Short_Plug,Frame_Short_Socket,Frame_Long_Plug,Frame_Long_Socket,Frame_Bottom_Plug,Frame_Bottom_Socket').split(',')
 FAM_MOUNT = os.environ.get('FAM_MOUNT', '')   # 'Frame→サーボの点:サーボの点'（例 connect_point:right-side）
+COMP_JSON = os.environ.get('COMP_JSON', '')   # replay_rounded_lengths.py の json。上腕・前腕をその composition の組み方のまま組む（探索しない、軸6 L-6）
 SERVO_PTS = ['right-side', 'left-side', 'bottom-side1', 'bottom-side2', 'bottom-side3', 'left-side2']
 
 
@@ -236,10 +237,22 @@ def main():
             cur = new
         return cur
 
+    def from_comp(c):
+        """replay_rounded_lengths.py が選んだ組み方（irsl_link_all_v2.csv の 1 行）を、search_link と同じ形にする。"""
+        ht = c['Hinge']
+        layers, _, _ = stack_plan(rel('XL-430', 'horn', ht, 'side_connect_point', 'fixed'), ht, c['段'])
+        return {'L': float(c['軸間距離_mm']), 'eng': int(c['噛み合い']), 'n': int(c['部品の数']), 'ht': ht, 'comp': c['段'],
+                'layers': layers, 'top': (int(c['最上段の部品']), c['最上段の点']), 'ft': c['Frame'], 'fn': c['Frame の点'],
+                'c': c['つなぎ方'], 'fs': c['Frame→サーボ'], 'ss': c['サーボの点']}
+
+    comps = json.load(open(COMP_JSON))['composition'] if COMP_JSON else None
+    if comps:
+        log(f'⭐ 組み方を {COMP_JSON} の composition から取る（探索しない）')
     used = []
-    for k, L in enumerate((403.1 * 0.2 * SCALE, 330.8 * 0.2 * SCALE)):
+    for k, L in enumerate([float(comps[b]['軸間距離_mm']) for b in ('11', '111')] if comps
+                          else (403.1 * 0.2 * SCALE, 330.8 * 0.2 * SCALE)):
         tag = f'リンク{k+1}'
-        b = search_link(L)
+        b = from_comp(comps[('11', '111')[k]]) if comps else search_link(L)
         if b is None:
             raise RuntimeError(f'{tag}: 基準を満たす組み方が無い')
         A = servos[-1]
