@@ -17,6 +17,8 @@
     # → single_run/<run>/trace/l4b_round1.json（話ごとの報酬・丸める前後の長さ）と l4b_round1.xml（丸めた形の XML）
 
 `ROUND=0` は丸めずに同じ 50 話を回す（対照。丸めの効果と、50 話に増やした効果を分ける）。
+`MASS_FILE=<json>` は質量の模型（cfg の `part_mass_file`）をその json へ差し替える（系譜 9-329 の 15 時の追記: 前腕の模型が約 8.5 g 軽い。
+質量の差が性能に効くかを測る）。出力の名前に `_mass` が付く。実行の段の各体の <inertial> の質量を出力に出す。
 組み方の表は `FAMILY_CSV`（既定は main の `data/axis6/irsl_link_all_v2.csv`、git の外。9-325 の `enum_criteria_links.py` の `ALL_OUT`）。
 ⚠️ 質量は β と同じ 1 次式の模型で、丸めた長さの組み方の実際の質量とは違う（9-325 の残差 2.3 g）。その差は出力に出す。
 """
@@ -77,6 +79,10 @@ OmegaConf.update(FLAGS, 'restore_dir', rd)
 cfg = Config(FLAGS, os.getcwd(), rd)
 cfg.restore_dir = rd
 replay_robot_param_scale(cfg, rd)
+MASS_FILE = os.environ.get('MASS_FILE')
+if MASS_FILE:
+    print(f'[l4b] ⭐ 質量の模型を差し替える: {cfg.robot_cfg.get("part_mass_file")} → {MASS_FILE}', flush=True)
+    cfg.robot_cfg['part_mass_file'] = os.path.abspath(MASS_FILE)
 cfg.control_prior = False      # Bug 10
 cfg.morph_prior = False
 torch.set_default_dtype(torch.float64)
@@ -95,6 +101,7 @@ assert len(idx) == len(BODIES)
 
 mass_spec = json.load(open(cfg.robot_cfg['part_mass_file'])) if cfg.robot_cfg.get('part_mass_file') else None
 log_lens = []      # 話ごとの (丸める前, 丸めた後) mm
+log_mass = []      # 話ごとの、実行の段の体の <inertial> の質量 g（構造＋先のサーボ）
 _orig_set = env.set_design_params
 
 
@@ -126,6 +133,7 @@ def rounded_set(in_design_params):
     # ⭐ 置き換えが効いたかを、env の中の骨の長さで確かめる（⑤-3-2: 期待値と実測を並べる）
     got = [np.linalg.norm(env.robot.bodies[i].bone_offset) * 1000 for i in idx]
     log_lens.append([(L, Lr, g) for (L, Lr), g in zip(row, got)])
+    log_mass.append([float(env.robot.bodies[i].node.find('inertial').attrib['mass']) * 1000 for i in idx])
     return ok
 
 
@@ -167,6 +175,8 @@ print(f'\n[l4b] {rd}  epoch={epoch}  {"丸めた" if ROUND else "丸めない（
 print(f'[l4b] exec 合計報酬: 中央値 {np.median(R):.2f}・平均 {R.mean():.2f}・範囲 [{R.min():.2f}, {R.max():.2f}]')
 if best_log is not None:
     print(f'[l4b] log の best: {best_log:.2f}')
+print(f'[l4b] 実行の段の体の質量（構造＋先のサーボ、g）: ' + ' / '.join(f'{env.robot.bodies[i].name} {min(m[k] for m in log_mass):.2f}〜{max(m[k] for m in log_mass):.2f}' for k, i in enumerate(idx))
+      + (f'  （質量の模型 {MASS_FILE}）' if MASS_FILE else ''))
 print(f'[l4b] 置き換えた長さと env の骨の長さの差の最大: {err:.3f} mm' + ('' if err < 0.05 else '  ⛔ 置き換えが効いていない'))
 comp = {}
 for k, i in enumerate(idx):
@@ -184,10 +194,10 @@ for k, i in enumerate(idx):
 
 d = os.path.join(rd, 'trace')
 os.makedirs(d, exist_ok=True)
-tag = f'l4b_round{int(ROUND)}'
+tag = f'l4b_round{int(ROUND)}' + ('_mass' if MASS_FILE else '')
 json.dump(dict(run=rd, epoch=str(epoch), round=ROUND, episodes=nep, best_log=best_log,
                ep_reward=R.tolist(), ep_steps=[n for _, n in rows], median=float(np.median(R)),
-               lengths_mm=log_lens, max_replace_err_mm=err, composition=comp,
+               lengths_mm=log_lens, body_mass_g=log_mass, mass_file=MASS_FILE, max_replace_err_mm=err, composition=comp,
                launch_env=LAUNCH_ENV, family=FAMILY, mesh_min=MESH_MIN),
           open(os.path.join(d, tag + '.json'), 'w'), ensure_ascii=False, indent=1)
 if xml:
