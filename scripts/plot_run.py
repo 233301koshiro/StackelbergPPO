@@ -122,6 +122,7 @@ def plot(run, trace=None, out=None):
     except Exception:
         xml = None
     st = statics(xml) if xml else []
+    sys.path.insert(0, str(ROOT / 'scripts'))
     ch = cube_half(xml) if xml else None
     snaps = snapshot_steps(ends, cube, tgt)
 
@@ -161,13 +162,18 @@ def plot(run, trace=None, out=None):
     # ⭐ 2026-11-02: カプセルの面の最も下（骨の z 最小は太さを見ない）。根元の球と縦の柱は床に据えてあるので除く
     #   （check_invariants.py の床と同じ規則）
     keep = [i for i in range(1, len(bo)) if not (i == 1 and abs(bo[1][2]) > 0.9 * np.linalg.norm(bo[1]) + 1e-9)]
-    czmin = float(np.nanmin((np.minimum(c0[..., 2], c1[..., 2]) - rad)[:, keep]))
-    note += f'   moving capsule surface z min = {czmin*1000:.0f} mm' + ('  CAPSULE BELOW FLOOR!' if czmin < -0.005 else '')
+    #   ⭐ 印は check_invariants.py の床と同じ閾値（10 mm より下の step が 1 % を超えるか、50 mm より深い）。
+    #   それより浅い一瞬の接触は値だけ出す（初版は −5 mm で印を付け、縦型の到達の一瞬の接触にも付いた）
+    from check_invariants import FLOOR_TOL, FLOOR_FRAC, FLOOR_DEEP
+    cz = np.nanmin((np.minimum(c0[..., 2], c1[..., 2]) - rad)[:, keep], axis=1)
+    czmin, czfrac = float(np.nanmin(cz)), float((cz < -FLOOR_TOL).mean())
+    cbad = czfrac > FLOOR_FRAC or czmin < -FLOOR_DEEP
+    note += (f'   moving capsule surface z min = {czmin*1000:.0f} mm ({czfrac*100:.1f} % of steps below -{FLOOR_TOL*1000:.0f} mm)'
+             + ('  CAPSULE BELOW FLOOR!' if cbad else ''))
     if tgt is not None:
         dd = np.linalg.norm(ends[:, -1, :] - tgt, axis=1)
         note += f'   tip-target min {dd.min()*1000:.1f} mm'
     try:
-        sys.path.insert(0, str(ROOT / 'scripts'))
         from check_self_penetration import measure
         far = measure(str(p))[4]
         note += f'\nfar-pair overlap max {far[0]*1000:.0f} mm ({far[1]*100:.1f} % of steps{", " + "x".join(far[3]) if far[3] else ""})'
@@ -180,7 +186,7 @@ def plot(run, trace=None, out=None):
     out = Path(out) if out else d / 'trace' / 'view.png'
     plt.savefig(out, dpi=100); plt.close()
     print(f'⭐ {run:<28} z最小 {zmin*1000:7.1f} mm' + ('  ⛔ **床下**' if zmin < -0.001 else '')
-          + f'  カプセルの面 {czmin*1000:7.1f} mm' + ('  ⛔ **床下**' if czmin < -0.005 else '') + f'  → {out}')
+          + f'  カプセルの面 {czmin*1000:7.1f} mm' + ('  ⛔ **床下**' if cbad else '') + f'  → {out}')
     return out
 
 
