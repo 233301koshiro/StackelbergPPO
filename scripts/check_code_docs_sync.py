@@ -77,7 +77,7 @@ def main():
         here.update(files)
     # ⭐ 軸6 のブランチにだけあるファイル（`queue_ra15_l4.sh` など）も実在する（研究方針「ブランチの使い分け」。2026-10-30）
     # ⚠️ クラウドのクローンには手元のブランチが無く、黙って空になって軸6 のファイル 4 本を「実在しない」と誤検出した
-    #   （2026-11-02）。origin/ 側も見て、どちらも無ければ言う
+    #   （2026-11-02、Bug 89）。origin/ 側も見て、どちらも無ければ言う
     for ref in ('feat/layer4-robotassembler', 'origin/feat/layer4-robotassembler'):
         r = subprocess.run(['git', 'ls-tree', '-r', '--name-only', ref], cwd=ROOT, capture_output=True, text=True)
         if r.returncode == 0:
