@@ -6,7 +6,7 @@
 
 | 環境変数 | 意味 |
 |---|---|
-| `CNOID_VISUAL_MESHES` | リンクごとの STL と `joints.json` のあるディレクトリ（例 `data/test/A1/meshes`） |
+| `CNOID_VISUAL_MESHES` | リンクごとの STL と `joints.json` のあるディレクトリ（例 `data/test/A1/meshes`）。`joints.json` の `frame_origins` に `tip` があれば先端のリンクの骨はそこへ向ける（無ければ最遠点。2026-11-02、軸6 の部品の腕） |
 | `CNOID_VISUAL_GLB` | 元の GLB（色を拾う。無ければ灰色） |
 | `CNOID_VISUAL_NAMES` | 根元から順のメッシュ名（既定 `base,upper_arm,forearm,hand`）。腕の body の先頭（取り付け用の球）は飛ばす |
 
@@ -65,7 +65,8 @@ def _spec():
         warnings.filterwarnings('ignore', category=DeprecationWarning)
         sc = trimesh.load(glb)
         g = sc.to_geometry() if hasattr(sc, 'to_geometry') else sc
-        gC = np.asarray(g.visual.to_color().vertex_colors[:, :3], float) / 255.0
+        vis = g.visual.to_color() if hasattr(g.visual, 'to_color') else g.visual   # 頂点色の GLB（軸6 の部品の腕）はそのまま
+        gC = np.asarray(vis.vertex_colors[:, :3], float) / 255.0
         V = np.asarray(g.vertices)
         gV = np.c_[V[:, 0], -V[:, 2], V[:, 1]]          # glb_to_links.py と同じ Y-up → Z-up
     from scipy.spatial import cKDTree
@@ -83,6 +84,8 @@ def _spec():
         V, F, C = _decimate(V, F, C, float(os.environ.get('CNOID_VISUAL_PITCH', '0.008')))
         if j + 1 < len(names) and names[j + 1] in origins:
             bl = np.asarray(origins[names[j + 1]]) - np.asarray(origins[mn])
+        elif 'tip' in origins:                  # ⭐ 2026-11-02: joints.json が先端の点を持てばそれ（render_arm_video.py と同じ。軸6 の部品の腕）
+            bl = np.asarray(origins['tip']) - np.asarray(origins[mn])
         else:
             bl = V[np.argmax(np.linalg.norm(V, axis=1))]
         out[mn] = (V, F, C, bl)
