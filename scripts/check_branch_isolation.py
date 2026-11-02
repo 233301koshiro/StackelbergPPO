@@ -40,6 +40,9 @@ KNOWN_DIFF = {
 RA_ENV = {
     'CNOID_JOINT_LIMIT_TORQUE': '③ 物理: 可動域をトルクで掛ける（Bug 85）',
     'CNOID_JOINT_LIMIT_SLACK': '③ 物理: 同上の遊び',
+    'CNOID_ACT_DELAY': '③ 物理: 腕への指令の遅れ（系譜 9-332、ブランチの口）',
+    'CNOID_JOINT_FRICTION': '③ 物理: 関節の摩擦（系譜 9-332、ブランチの口）',
+    'CNOID_JOINT_FRICTION_VS': '③ 物理: 同上の直線部の速さ',
     'CNOID_VISUAL_RAW': '見た目だけ: 部品のメッシュを間引かず出す（画面のデモ）',
 }
 REQUIRED_RA_ENV = {'CNOID_JOINT_LIMIT_TORQUE'}

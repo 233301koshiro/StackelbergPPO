@@ -954,6 +954,17 @@ _JOINT_LIMIT_TORQUE = bool(os.environ.get('CNOID_JOINT_LIMIT_TORQUE'))
 _JOINT_LIMIT_SLACK = math.radians(float(os.environ.get('CNOID_JOINT_LIMIT_SLACK') or 10.0))
 _JOINT_LIMIT_W = 0.5
 _JLT_SAID = False
+# ⭐ 系譜 9-332（軸6 の sim to real のずれ、スケール表 §3.2 の ① ②）: 既定（指定なし）では従来どおり。
+#   `CNOID_ACT_DELAY=k`: 腕への指令を k 制御 step 遅らせる（XL430 の 1 制御周期の遅れ、9-321・Open Ant）。話の頭の k step は指令 0。
+#   `CNOID_JOINT_FRICTION=f`: 腕の回転関節（減衰をトルクで掛ける関節）に摩擦のトルク −f·clip(q̇/v_s, ±1) を tick ごとに足す [N·m]。
+#     速さ v_s（`CNOID_JOINT_FRICTION_VS`、既定 0.05 rad/s）以下は直線にする（陽に掛けた符号の摩擦は速さ 0 の付近で行き来するため）。
+#     直線部の傾き f/v_s は減衰と同じ形で、1 tick で安定する条件は (f/v_s)·Δt / J < 2（f 0.1・v_s 0.05・Δt 0.0025・J 0.008 で 0.6）
+_ACT_DELAY = max(0, int(os.environ.get('CNOID_ACT_DELAY') or 0))
+_JOINT_FRICTION = float(os.environ.get('CNOID_JOINT_FRICTION') or 0.0)
+_JOINT_FRICTION_VS = float(os.environ.get('CNOID_JOINT_FRICTION_VS') or 0.05)
+if _ACT_DELAY:
+    print(f'[choreonoid] ⭐ 腕への指令を {_ACT_DELAY} 制御 step 遅らせる（CNOID_ACT_DELAY、系譜 9-332）', flush=True)
+_FRICTION_SAID = False
 
 class ChoreonoidSimWorld:
     def __init__(self):
@@ -1079,7 +1090,9 @@ class ChoreonoidSimWorld:
             print(f'[choreonoid] ⭐ 腕の回転関節の速度を {_JOINT_MAX_VEL} rad/s で飽和させる: {nv} 関節（9-245）', flush=True)
         if hinge_damp and not _HINGE_DAMP_SAID:   # 読み込みのたびに出すとログが膨らむので 1 プロセス 1 回
             _HINGE_DAMP_SAID = True
-            print(f'[choreonoid] ⭐ 腕の回転関節の減衰をトルク −b·q̇ で掛ける: {len(hinge_damp)} 関節（Bug 61）', flush=True)
+            print(f'[choreonoid] ⭐ 腕の回転関節の減衰をトルク −b·q̇ で掛ける: {len(hinge_damp)} 関節（Bug 61）'
+                  f' b={sorted({round(x, 6) for _, x in hinge_damp})}'
+                  f' armature={sorted({round(v, 6) for v in getattr(self, "_joint_armatures", {}).values() if v > 0})}', flush=True)
         self._limit_torque = []       # [(joint, lower, upper, k, c)]（Bug 85、CNOID_JOINT_LIMIT_TORQUE のときだけ）
         if _JOINT_LIMIT_TORQUE and entries:
             keep = []
@@ -1634,6 +1647,7 @@ class ChoreonoidSimWorld:
 
     def reset(self) -> dict:
         self._puck_dq_target = None      # 反射の当て直しを話の境で持ち越さない（Bug 70）
+        self._ctrl_hist = []             # 指令の遅れ（CNOID_ACT_DELAY）を話の境で持ち越さない（9-332）
         self.sim_item.stopSimulation()
         IU.processEvent()  # flush stop signal before restart
         for item in self.body_items.values():
@@ -1657,6 +1671,11 @@ class ChoreonoidSimWorld:
             return {'qpos': [], 'qvel': [], 'body_xpos': {}, 'body_xmat': {}}
 
         # Apply ctrl to the robot body only (first entry)
+        if _ACT_DELAY:
+            hist = getattr(self, '_ctrl_hist', [])
+            hist.append(list(ctrl))
+            self._ctrl_hist = hist[-(_ACT_DELAY + 1):]
+            ctrl = self._ctrl_hist[0] if len(self._ctrl_hist) > _ACT_DELAY else [0.0] * len(ctrl)
         self._base_u = {}
         robot_sb, _ = self._sim_body_entries[0]
         b = robot_sb.body()
@@ -1689,6 +1708,14 @@ class ChoreonoidSimWorld:
                     if t:
                         self._limit_overshoot = max(self._limit_overshoot, (q - hi) if q > hi else (lo - q))
                     j.u = self._base_u.get(id(j), 0.0) - _hd.get(id(j), 0.0) * dq + t
+            if _JOINT_FRICTION:
+                global _FRICTION_SAID
+                if not _FRICTION_SAID:
+                    _FRICTION_SAID = True
+                    print(f'[choreonoid] ⭐ 腕の回転関節に摩擦 {_JOINT_FRICTION} N·m（速さ {_JOINT_FRICTION_VS} rad/s 以下は直線）を足す: '
+                          f'{len(getattr(self, "_hinge_damp", ()))} 関節（CNOID_JOINT_FRICTION、系譜 9-332）', flush=True)
+                for j, _b in getattr(self, '_hinge_damp', ()):
+                    j.u -= _JOINT_FRICTION * max(-1.0, min(1.0, j.dq / _JOINT_FRICTION_VS))
             _pre = self._puck_pre_tick()
             _apre = self._arm_pre_tick() if getattr(self, '_arm_block', False) else None
             _vq = {id(j): j.q for j in self._vcap_strict} if getattr(self, '_vcap_strict', None) else None
