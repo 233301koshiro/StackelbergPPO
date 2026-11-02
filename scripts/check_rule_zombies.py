@@ -59,7 +59,18 @@ def scan(name, text):
 
 
 def reproduce():
-    old = subprocess.run(['git', 'show', 'ed644bf^:CLAUDE.md'], cwd=ROOT, capture_output=True, text=True).stdout
+    r = subprocess.run(['git', 'show', 'ed644bf^:CLAUDE.md'], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        # ⭐ 浅いクローン（クラウドのセッション）では ed644bf が手元に無く、空の文字列を走査して
+        # 「検査が壊れている」と偽って出ていた（2026-11-02）。比べる相手が無いのは判定不能であって、検査の故障ではない
+        shallow = subprocess.run(['git', 'rev-parse', '--is-shallow-repository'], cwd=ROOT,
+                                 capture_output=True, text=True).stdout.strip() == 'true'
+        print(f'⚠️ 判定不能: 比べる相手 ed644bf^ を読めない（{r.stderr.strip()[:120]}）')
+        if shallow:
+            print('   浅いクローンで履歴が足りない。履歴を足してから回し直す:')
+            print('     git fetch --shallow-since=2026-10-15 origin main')
+        return 2
+    old = r.stdout
     hits = scan('CLAUDE.md@ed644bf^', old)
     want = {'`main()` だけにする': False, '1200 秒以上': False}
     for *_, ln in hits:
