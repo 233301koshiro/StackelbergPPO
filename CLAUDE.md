@@ -321,6 +321,7 @@ python3 scripts/check_env_claims.py        # ⭐ 道具と環境の主張を実�
 python3 scripts/check_open_gaps.py --status   # ④層（進捗・引き継ぎ・方針）の「⏳ / 🔄 / 稼働中」の行を並べ、1 行ずつ本当にまだかを見る
 python3 scripts/check_rule_zombies.py          # 訂正の注記の前後に、古い命令が残っていないか（指示の層）
 python3 scripts/check_claim_tree.py            # 修論の主張の木（drawio）が本文とずれていないか（md の検査は drawio を読まない）
+python3 scripts/check_branch_isolation.py       # main と軸6 のブランチの設定が混ざっていないか（共用のファイル・run の起動場所・cfg キー・launch_env）
 python3 scripts/doc_tree.py                    # どの根（提出・審査・運用）からも辿れない md・遠い md（刈る候補。消す前に全文を読む）
 ```
 
@@ -789,6 +790,7 @@ docs の執筆・相談、結果の解釈、通常のコミット。
 ブランチ（2026-10-05 決定、ユーザー判断）
 - **全体に効く変更は `main`。RobotAssembler（軸6）専用のコードだけ、着手時に `main` から `feat/layer4-robotassembler` を切り直して書く**（RA は今のシステムとのギャップが多いので、main を壊さず戻せるように隔離する）。台帳・記録は常に `main`。理由と経緯は [研究方針.md「ブランチの使い分け」](docs/研究応用/方針/研究方針.md)
 - run はブランチに紐づかないので、投入前にキュー script へ `git rev-parse --short HEAD` を書く
+- **RobotAssembler の設定・幾何のリンクの設定・物理の環境が混ざらないかは `python3 scripts/check_branch_isolation.py` で確かめる**（軸6 の run の投入前と、main の共用ファイルを変えた後。2026-11-02、ユーザー「何回も言っているけど」）。共用しているファイルの一覧とチェックリストは [mainと軸6ブランチの境界.md](docs/リポジトリ説明/mainと軸6ブランチの境界.md)
 
 権限モード（2026-09-02 以降）
 - `.claude/settings.json` の `permissions.defaultMode` は **`auto`**。承認プロンプトは出ない。
