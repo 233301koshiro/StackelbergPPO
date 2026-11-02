@@ -45,6 +45,7 @@
 | `audit_runs.sh` | 全 run の一次データ表。**md より先にこれを見る** |
 | `check_docs_consistency.py` | **docs とログの突き合わせ。** 古い状態語・数値の食い違い・記録漏れを検出。値を更新したら必ず走らせる |
 | `check_citations.py` | **本文の引用と参考文献リストを双方向で照合**。リスト起点で本文を探す方向（確実）と、本文から抽出してリストに無いものを探す方向（取りこぼし検出）の2つ。不一致で終了コード 1 |
+| ⭐ **`check_branch_isolation.py`** | **main と軸6 のブランチが混ざっていないか**（2026-11-02）: A 中身が違うファイルが既知の一覧の外に増えていないか・B 軸6 の run は worktree、それ以外は main で起動したか（hydra の cwd）・C 軸6 だけの cfg キーと環境変数が軸6 以外の run に無いか、軸6 の run に `CNOID_JOINT_LIMIT_TORQUE` があるか・D ブランチが main の共用コードを取り込んだか。`--reproduce` で既知の混ざり方 5 つを拾えるか。一覧とチェックリストは [mainと軸6ブランチの境界.md](../docs/リポジトリ説明/mainと軸6ブランチの境界.md) |
 | `compare_morphology.py` | 複数 run の収束形態を並べて比較 |
 | `boundary_compare.py` | 境界張り付きの条件間比較（matched epoch） |
 | ⭐ **`joint_fix_watch.py`** | **指摘13の自動化。**関節使用率を監視し、安定したら固定版を並行起動、完走後に判定する（9-95） |
