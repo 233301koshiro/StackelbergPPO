@@ -12,7 +12,7 @@ STL は Tripo3D が出したままの姿勢（描いた絵のとおり傾いて�
 そこで各リンクを次の順で変換する。
 
   1. `joints.json` の `frame_origins` から、**メッシュ座標でのボーン方向**を出す
-     （自分の原点 → 次のリンクの原点。先端リンクだけは最遠点）
+     （自分の原点 → 次のリンクの原点。先端リンクだけは最遠点。`frame_origins` に `tip` があればそこ）
   2. その方向を +Z へ回す
   3. **最適化後のボーン長 ÷ 元の長さ**で Z 方向にだけ伸縮する（太さは変えない）
   4. XML のボーン方向へ回す
@@ -150,7 +150,8 @@ def glb_vertex_colors(glb_path, origins):
     warnings.filterwarnings('ignore', category=DeprecationWarning)
     sc = trimesh.load(glb_path)
     g = sc.to_geometry() if hasattr(sc, 'to_geometry') else sc
-    col = np.asarray(g.visual.to_color().vertex_colors[:, :3], dtype=float) / 255.0
+    vis = g.visual.to_color() if hasattr(g.visual, 'to_color') else g.visual   # 頂点色の GLB（軸6 の部品の腕）はそのまま
+    col = np.asarray(vis.vertex_colors[:, :3], dtype=float) / 255.0
     V = np.asarray(g.vertices)
     Vz = np.c_[V[:, 0], -V[:, 2], V[:, 1]]
 
@@ -254,6 +255,8 @@ def main():
         # ① メッシュ座標でのボーン方向
         if j + 1 < len(mesh_names) and mesh_names[j + 1] in origins:
             bl = np.array(origins[mesh_names[j + 1]]) - np.array(origins[mn])
+        elif 'tip' in origins:                  # ⭐ 2026-11-02: joints.json が先端の点を持てばそれ（軸6 の部品の腕は最遠点が手先の角で、骨が 17.7° 横へ傾く）
+            bl = np.array(origins['tip']) - np.array(origins[mn])
         else:                                   # 先端は最遠点（Bug 31 と同じ考え方）
             bl = V[np.argmax(np.linalg.norm(V, axis=1))]
         Lb = float(np.linalg.norm(bl))
