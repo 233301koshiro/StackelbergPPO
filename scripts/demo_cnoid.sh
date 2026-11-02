@@ -36,13 +36,13 @@ case "$TASK" in
   obstacle_reach) RUN=e2e_a1v_obspen_reach_s2;    HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 目標に届く（柱の中を通る）
   # ⭐ 軸6（2026-11-02、ブランチだけ。e2e_a1v_ra15.xml がブランチにしか無いので worktree から実行する）: 研究室の部品（RobotAssembler）で
   #   組んだ腕の見た目。メッシュは `python3 scripts/make_ra_visual_meshes.py <部品の json> single_run/<run>/trace/ra_visual` で作る。
-  #   部品は 1/5 の腕で細かいので間引きを 1.5 mm にする。α の 2 seed は同じ形なので、メッシュは ra15_pusher_alpha のものを使う
+  #   部品の形と色をそのまま出す（CNOID_VISUAL_RAW=1: 間引かない・色をまとめない・面ごとの法線。既定の処理では荒く、黒いサーボが銀色に見えた）。α の 2 seed は同じ形なので、メッシュは ra15_pusher_alpha のものを使う
   ra_beta|ra_beta0|ra_alpha|ra_alpha1)
                   case "$TASK" in ra_beta) RUN=ra15_pusher_beta_s2 ;; ra_beta0) RUN=ra15_pusher_beta ;;
                                   ra_alpha) RUN=ra15_pusher_alpha ;; ra_alpha1) RUN=ra15_pusher_alpha_s2 ;; esac
                   HIDE=; MARK=0; CAM=0.55,-0.85,0.45,0.18,0,0.12
                   VMESH=single_run/${RUN%_s2}/trace/ra_visual; [ "$TASK" = ra_beta ] && VMESH=single_run/$RUN/trace/ra_visual
-                  VGLB=$VMESH/arm.glb; EXTRA="CNOID_VISUAL_PITCH=0.0015" ;;
+                  VGLB=$VMESH/arm.glb; EXTRA="CNOID_VISUAL_RAW=1" ;;
   hockey)         RUN=hockey_bank9;               HIDE=;     MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2      # 星＝ゴール口の中心（1.55, 0）
                   VMESH=data/test/hockey/meshes; VGLB=data/test/hockey/3D/hockey.glb
                   EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"; EPS=${2:-3} ;;
