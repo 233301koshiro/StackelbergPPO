@@ -8,6 +8,7 @@
 |---|---|
 | `CNOID_VISUAL_MESHES` | リンクごとの STL と `joints.json` のあるディレクトリ（例 `data/test/A1/meshes`）。`joints.json` の `frame_origins` に `tip` があれば先端のリンクの骨はそこへ向ける（無ければ最遠点。2026-11-02、軸6 の部品の腕） |
 | `CNOID_VISUAL_GLB` | 元の GLB（色を拾う。無ければ灰色） |
+| `CNOID_VISUAL_RAW` | `1` なら間引かず、色をまとめず明るさを持ち上げず、面ごとの法線を書く（2026-11-02、軸6 の部品の腕。既定の出力はバイト単位で変わらない） |
 | `CNOID_VISUAL_NAMES` | 根元から順のメッシュ名（既定 `base,upper_arm,forearm,hand`）。腕の body の先頭（取り付け用の球）は飛ばす |
 
 変換は `scripts/render_arm_video.py`（mp4 のデモ）と同じ:
@@ -81,7 +82,8 @@ def _spec():
                 C = gC[idx]
             else:
                 print(f'[visual_mesh] ⚠️ {mn}: GLB と一致しない（距離の中央値 {np.median(d):.2e}）。灰色で描く', flush=True)
-        V, F, C = _decimate(V, F, C, float(os.environ.get('CNOID_VISUAL_PITCH', '0.008')))
+        if not _raw():
+            V, F, C = _decimate(V, F, C, float(os.environ.get('CNOID_VISUAL_PITCH', '0.008')))
         if j + 1 < len(names) and names[j + 1] in origins:
             bl = np.asarray(origins[names[j + 1]]) - np.asarray(origins[mn])
         elif 'tip' in origins:                  # ⭐ 2026-11-02: joints.json が先端の点を持てばそれ（render_arm_video.py と同じ。軸6 の部品の腕）
@@ -94,6 +96,12 @@ def _spec():
     return _CACHE['spec']
 
 
+def _raw():
+    """⭐ 2026-11-02: CNOID_VISUAL_RAW=1 なら、間引かず・色をまとめず持ち上げず・面ごとの法線を書く（軸6 の部品の腕。
+    部品の形と色が細かく、既定の処理では LEGO の段とサーボの角が潰れ、黒いサーボが銀色になった）。"""
+    return os.environ.get('CNOID_VISUAL_RAW') == '1'
+
+
 def _write_dae(path, V, F, C, k=4):
     """メッシュを COLLADA（.dae）で書く。
 
@@ -102,26 +110,44 @@ def _write_dae(path, V, F, C, k=4):
       ので、どの面にも灰色が混ざって**薄くくすんだ**。
     ⭐ 面の色を k 色のかたまり（リンクの本体色・関節のマゼンタ球など）に分け、**かたまりごとに色の材質**を付ける。
       環境光も同じ色で足されるので、元の色のまま見える。
+    ⭐ CNOID_VISUAL_RAW=1（_raw）: 色は面の色ごとに材質を分け、明るさを持ち上げない。面ごとの法線を書く
+      （Choreonoid の Assimp は同じ位置の頂点をまとめ〔aiProcess_JoinIdenticalVertices〕、法線が無ければ crease angle π で
+      全部なめらかにつなぐ〔AssimpSceneLoader.cpp〕ので、頂点を分けるだけでは箱の角が丸く光る）。
     """
-    from scipy.cluster.vq import kmeans2
+    raw = _raw()
     fc = C[F].mean(axis=1)
-    k = int(min(k, len(np.unique(np.round(fc, 2), axis=0))))
-    if k > 1:
-        cen, lab = kmeans2(fc, k, seed=0, minit='++')
+    if raw:
+        cen, lab = np.unique(np.round(fc, 3), axis=0, return_inverse=True)
+        lab = lab.reshape(-1)
     else:
-        cen, lab = fc.mean(axis=0, keepdims=True), np.zeros(len(F), int)
+        from scipy.cluster.vq import kmeans2
+        k = int(min(k, len(np.unique(np.round(fc, 2), axis=0))))
+        if k > 1:
+            cen, lab = kmeans2(fc, k, seed=0, minit='++')
+        else:
+            cen, lab = fc.mean(axis=0, keepdims=True), np.zeros(len(F), int)
     pos = ' '.join(f'{x:.6g}' for x in V.reshape(-1))
     n = len(V)
+    nrm_src, nrm_in = '', ''
+    if raw:
+        Nf = np.cross(V[F[:, 1]] - V[F[:, 0]], V[F[:, 2]] - V[F[:, 0]])
+        Nf /= np.maximum(np.linalg.norm(Nf, axis=1, keepdims=True), 1e-12)
+        nn = len(Nf)
+        nrm_src = (f'<source id="g-nrm"><float_array id="g-nrm-a" count="{3*nn}">{" ".join(f"{x:.4g}" for x in Nf.reshape(-1))}</float_array>'
+                   f'<technique_common><accessor source="#g-nrm-a" count="{nn}" stride="3"><param name="X" type="float"/>'
+                   f'<param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>')
+        nrm_in = '<input semantic="NORMAL" source="#g-nrm" offset="1"/>'
     eff, mat, tri, bind = [], [], [], []
     for i in range(len(cen)):
-        sel = F[lab == i]
+        fi = np.where(lab == i)[0]
+        sel = F[fi]
         if len(sel) == 0:
             continue
         # ⭐ 色味（色相・彩度）は変えず、明るさだけ 0.9 へ持ち上げる（元の GLB の色がやや暗く、画面で沈んだ）。
         #   さらに自己発光を少し足して影の側も黒くつぶれないようにする（2026-10-05、見た目のみ）
         import colorsys
         hh, ss, vv = colorsys.rgb_to_hsv(*np.clip(cen[i], 0, 1))
-        r, g, b = colorsys.hsv_to_rgb(hh, ss, max(vv, 0.9))
+        r, g, b = colorsys.hsv_to_rgb(hh, ss, vv if raw else max(vv, 0.9))
         er, eg, eb = 0.25 * r, 0.25 * g, 0.25 * b
         eff.append(f'<effect id="e{i}"><profile_COMMON><technique sid="t"><phong>'
                    f'<emission><color>{er:.4f} {eg:.4f} {eb:.4f} 1</color></emission>'
@@ -129,9 +155,12 @@ def _write_dae(path, V, F, C, k=4):
                    f'<specular><color>0.15 0.15 0.15 1</color></specular><shininess><float>20</float></shininess>'
                    f'</phong></technique></profile_COMMON></effect>')
         mat.append(f'<material id="m{i}"><instance_effect url="#e{i}"/></material>')
-        idx = ' '.join(str(int(j)) for j in sel.reshape(-1))
+        if raw:                                   # 頂点の番号と法線（面の番号）を組にする
+            idx = ' '.join(f'{int(v)} {int(f)}' for f, row in zip(fi, sel) for v in row)
+        else:
+            idx = ' '.join(str(int(j)) for j in sel.reshape(-1))
         tri.append(f'<triangles material="s{i}" count="{len(sel)}">'
-                   f'<input semantic="VERTEX" source="#g-vtx" offset="0"/><p>{idx}</p></triangles>')
+                   f'<input semantic="VERTEX" source="#g-vtx" offset="0"/>{nrm_in}<p>{idx}</p></triangles>')
         bind.append(f'<instance_material symbol="s{i}" target="#m{i}"/>')
     path.write_text(f'''<?xml version="1.0" encoding="utf-8"?>
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
@@ -141,7 +170,7 @@ def _write_dae(path, V, F, C, k=4):
 <library_geometries><geometry id="g" name="g"><mesh>
 <source id="g-pos"><float_array id="g-pos-a" count="{3*n}">{pos}</float_array>
 <technique_common><accessor source="#g-pos-a" count="{n}" stride="3"><param name="X" type="float"/><param name="Y" type="float"/><param name="Z" type="float"/></accessor></technique_common></source>
-<vertices id="g-vtx"><input semantic="POSITION" source="#g-pos"/></vertices>
+{nrm_src}<vertices id="g-vtx"><input semantic="POSITION" source="#g-pos"/></vertices>
 {''.join(tri)}
 </mesh></geometry></library_geometries>
 <library_visual_scenes><visual_scene id="s"><node id="n"><instance_geometry url="#g"><bind_material><technique_common>{''.join(bind)}</technique_common></bind_material></instance_geometry></node></visual_scene></library_visual_scenes>
