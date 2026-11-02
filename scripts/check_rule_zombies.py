@@ -59,7 +59,18 @@ def scan(name, text):
 
 
 def reproduce():
-    old = subprocess.run(['git', 'show', 'ed644bf^:CLAUDE.md'], cwd=ROOT, capture_output=True, text=True).stdout
+    r = subprocess.run(['git', 'show', 'ed644bf^:CLAUDE.md'], cwd=ROOT, capture_output=True, text=True)
+    if r.returncode != 0:
+        # ⭐ 浅いクローン（クラウドのセッション）では ed644bf が手元に無く、空の文字列を走査して
+        # 「検査が壊れている」と偽って出ていた（2026-11-02、Bug 89）。比べる相手が無いのは判定不能であって、検査の故障ではない
+        shallow = subprocess.run(['git', 'rev-parse', '--is-shallow-repository'], cwd=ROOT,
+                                 capture_output=True, text=True).stdout.strip() == 'true'
+        print(f'⚠️ 判定不能: 比べる相手 ed644bf^ を読めない（{r.stderr.strip()[:120]}）')
+        if shallow:
+            print('   浅いクローンで履歴が足りない。履歴を足してから回し直す:')
+            print('     git fetch --shallow-since=2026-10-15 origin main')
+        return 2
+    old = r.stdout
     hits = scan('CLAUDE.md@ed644bf^', old)
     want = {'`main()` だけにする': False, '1200 秒以上': False}
     for *_, ln in hits:
@@ -75,10 +86,16 @@ def reproduce():
 def main():
     if '--reproduce' in sys.argv:
         return reproduce()
+    ts = targets()
     hits = []
-    for f in targets():
+    for f in ts:
         hits += scan(str(f.relative_to(ROOT)) if f.is_relative_to(ROOT) else f'memory/{f.name}', f.read_text())
-    print(f'見た: {len(targets())} ファイル（CLAUDE.md・新しいチャットの始め方・コマンド・メモリ）')
+    n_mem = sum(1 for f in ts if f.is_relative_to(MEMORY))
+    print(f'見た: {len(ts)} ファイル（CLAUDE.md・新しいチャットの始め方・コマンドで {len(ts) - n_mem} 本、メモリ {n_mem} 本）')
+    if n_mem == 0:
+        # ⭐ メモリが無い環境（クラウドのセッション）でも「メモリも見た」と読める出力で 0 件と言っていた（2026-11-02、Bug 89）
+        why = 'フォルダが無い' if not MEMORY.is_dir() else 'フォルダはあるが md が 0 本'
+        print(f'⚠️ メモリは見ていない（{why}: {MEMORY}）。下の結果は CLAUDE.md・コマンド・新しいチャットの始め方だけについて言える')
     if not hits:
         print('✅ 訂正の注記の前に命令が残っている箇所は無い'); return 0
     print(f'⚠️ {len(hits)} 件。1 件ずつ見て、命令がまだ正しいか（訂正と食い違わないか）を判断する:')
