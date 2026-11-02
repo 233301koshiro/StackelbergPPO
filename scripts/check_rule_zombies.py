@@ -86,10 +86,16 @@ def reproduce():
 def main():
     if '--reproduce' in sys.argv:
         return reproduce()
+    ts = targets()
     hits = []
-    for f in targets():
+    for f in ts:
         hits += scan(str(f.relative_to(ROOT)) if f.is_relative_to(ROOT) else f'memory/{f.name}', f.read_text())
-    print(f'見た: {len(targets())} ファイル（CLAUDE.md・新しいチャットの始め方・コマンド・メモリ）')
+    n_mem = sum(1 for f in ts if f.is_relative_to(MEMORY))
+    print(f'見た: {len(ts)} ファイル（CLAUDE.md・新しいチャットの始め方・コマンドで {len(ts) - n_mem} 本、メモリ {n_mem} 本）')
+    if n_mem == 0:
+        # ⭐ メモリが無い環境（クラウドのセッション）でも「メモリも見た」と読める出力で 0 件と言っていた（2026-11-02）
+        why = 'フォルダが無い' if not MEMORY.is_dir() else 'フォルダはあるが md が 0 本'
+        print(f'⚠️ メモリは見ていない（{why}: {MEMORY}）。下の結果は CLAUDE.md・コマンド・新しいチャットの始め方だけについて言える')
     if not hits:
         print('✅ 訂正の注記の前に命令が残っている箇所は無い'); return 0
     print(f'⚠️ {len(hits)} 件。1 件ずつ見て、命令がまだ正しいか（訂正と食い違わないか）を判断する:')
