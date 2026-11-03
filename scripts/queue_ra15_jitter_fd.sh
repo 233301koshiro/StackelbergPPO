@@ -30,14 +30,17 @@ launch(){ local RUN=$1 SEED=$2 SCALE=$3
   nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 $PHYS \
     /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/choreonoid_train.py \
     $COMMON seed=$SEED +robot_param_scale=$SCALE hydra.run.dir=single_run/$RUN > single_run/$RUN/stdout.log 2>&1 &
-  log "$RUN launched (PID $!)  seed $SEED  robot_param_scale $SCALE  env: $PHYS"; sleep 90
+  local PID=$!
+  log "$RUN launched (PID $PID)  seed $SEED  robot_param_scale $SCALE  env: $PHYS"; sleep 90
   local want="[$((1000*SEED+1)), $((1000*SEED+2)), $((1000*SEED+3)), $((1000*SEED+4))]" s
   s=$(grep -ao 'ワーカーの乱数の種 \[[0-9, ]*\]' single_run/$RUN/stdout.log | head -1)
   case "$s" in *"$want"*) log "✅ $RUN: $s";; *) log "⛔⛔ $RUN: 種の行が期待（$want）と違う／無い: '$s'";; esac
   grep -q "可動域をトルクで掛ける: 4 関節" single_run/$RUN/stdout.log && log "✅ $RUN: 可動域のトルク 4 関節" || log "⛔⛔ $RUN: 可動域のトルクの行が無い"
   grep -q "4 分割" single_run/$RUN/stdout.log && log "✅ $RUN: 刻み 4 分割" || log "⛔⛔ $RUN: 刻みの分割の行が無い"
   grep -q "1 制御 step 遅らせる" single_run/$RUN/stdout.log && log "✅ $RUN: 指令の遅れ 1 step" || log "⛔⛔ $RUN: 指令の遅れの行が無い"
-  grep -q "摩擦 0.08 N·m" single_run/$RUN/stdout.log && log "✅ $RUN: 関節の摩擦 0.08" || log "⛔⛔ $RUN: 関節の摩擦の行が無い"
+  # 摩擦の行は最初の tick で出るので、tick しない本体の stdout.log ではなくワーカーのログに出る（11-03 に誤報を出した、系譜 9-332）
+  local nf; nf=$(grep -l "摩擦 0.08 N·m" /tmp/cnoid_worker_${PID}_*.log 2>/dev/null | wc -l)
+  [ "$nf" -ge 1 ] && log "✅ $RUN: 関節の摩擦 0.08（ワーカーのログ ${nf} 個）" || log "⛔⛔ $RUN: 関節の摩擦の行がワーカーのログに無い"
   grep -q '"CNOID_ACT_DELAY": "1"' single_run/$RUN/launch_env.json && grep -q '"CNOID_JOINT_FRICTION": "0.08"' single_run/$RUN/launch_env.json && log "✅ $RUN: launch_env に遅れと摩擦" || log "⛔⛔ $RUN: launch_env に遅れか摩擦が無い"
   return 0; }
 
