@@ -76,15 +76,37 @@ def main():
             continue
         here.update(files)
     # ⭐ 軸6 のブランチにだけあるファイル（`queue_ra15_l4.sh` など）も実在する（研究方針「ブランチの使い分け」。2026-10-30）
-    here.update(os.path.basename(f) for f in subprocess.run(
-        ['git', 'ls-tree', '-r', '--name-only', 'feat/layer4-robotassembler'],
-        cwd=ROOT, capture_output=True, text=True).stdout.split())
+    # ⚠️ クラウドのクローンには手元のブランチが無く、黙って空になって軸6 のファイル 4 本を「実在しない」と誤検出した
+    #   （2026-11-02、Bug 89）。origin/ 側も見て、どちらも無ければ言う
+    for ref in ('feat/layer4-robotassembler', 'origin/feat/layer4-robotassembler'):
+        r = subprocess.run(['git', 'ls-tree', '-r', '--name-only', ref], cwd=ROOT, capture_output=True, text=True)
+        if r.returncode == 0:
+            here.update(os.path.basename(f) for f in r.stdout.split())
+            break
+    else:
+        print('    ⚠️ 軸6 のブランチが手元にも origin/ にも無い。ブランチにだけあるファイルは下で ⛔ に出る（判定不能）。取ってくるなら:')
+        print('         git fetch origin feat/layer4-robotassembler:refs/remotes/origin/feat/layer4-robotassembler')
+    ignored_cache = {}
+
+    def ignored(path):
+        # ⭐ .gitignore 下（`tools/yomiyasu/` など、他人のコードを手元に置く場所）はクローンに無いのが正しい
+        if path.startswith(('.', '/')):
+            return False
+        if path not in ignored_cache:
+            ignored_cache[path] = subprocess.run(['git', 'check-ignore', '-q', path], cwd=ROOT,
+                                                 stderr=subprocess.DEVNULL).returncode == 0
+        return ignored_cache[path]
+    # 同じ行で見るのは tools/ 下（他人のコードを置く場所。セカンドオピニオン.md C）だけ。
+    # ⚠️ single_run/ も .gitignore 下だが、それを同じ行に書く行はどこにでもあり、本当に無いスクリプトまで逃がす
+    EXT_ON_LINE = re.compile(r'(?<![\w./-])tools/[\w.-]+(?:/[\w.-]+)*/?')
     pats = [(r'`([\w./-]+\.(?:py|sh))`', None),
             # ⭐ コマンドの中の `python3 scripts/xxx.py` も拾う（2026-10-14: 実在しない check_visual_log.py が 3 週間素通りした）
-            (r'scripts/([\w.-]+\.(?:py|sh))', None),
+            #   ⭐ 前に付くパス（`tools/yomiyasu/scripts/…`）ごと取る。.gitignore 下かを見るため（2026-11-02）
+            (r'((?:[\w.-]+/)*scripts/[\w.-]+\.(?:py|sh))', None),
             (r'assets/mujoco_envs/([\w-]+\.xml)', None),
             (r'design_opt/cfg/([\w-]+\.yml)', None)]
     bad = {}
+    elsewhere = {}
     for p, text in mds.items():
         # ⚠️ archive/ は過去の記録。当時存在したものを指していて正しい
         if str(p.relative_to(DOCS)).startswith('archive/'):
@@ -107,10 +129,19 @@ def main():
                 if any(HISTORICAL.search(text[max(0, k - 200):k + 200])
                        for k in (mm.start() for mm in re.finditer(re.escape(name), text))):
                     continue
+                # ⭐ 参照そのもの、または同じ行に出てくる tools/ 下のパスが .gitignore 下なら、クローンに無いのが正しい。
+                #   数えずに別に並べる（手元のマシンでは実体があるので、そこで見れば通る）
+                if '/' in m.group(1) and ignored(m.group(1)) or any(ignored(q) for q in EXT_ON_LINE.findall(ln)):
+                    elsewhere.setdefault(name, set()).add(str(p.relative_to(DOCS)))
+                    continue
                 bad.setdefault(name, set()).add(str(p.relative_to(DOCS)))
     for k in sorted(bad):
         print(f'    ⛔ {k}  ← {", ".join(sorted(bad[k])[:3])}')
     print(f'    合計 {len(bad)} 件')
+    if elsewhere:
+        print(f'    ℹ️ .gitignore 下を指していてこのクローンに無いもの {len(elsewhere)} 件（数えない。手元のマシンで確かめる）:')
+        for k in sorted(elsewhere):
+            print(f'        {k}  ← {", ".join(sorted(elsewhere[k])[:3])}')
     issues += len(bad)
 
     # --- C. 環境変数で挙動が変わるのに md に無いもの ---
