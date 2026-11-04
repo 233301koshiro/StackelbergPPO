@@ -59,12 +59,21 @@ GROUPS = [
     ('4.5.4', '閉ループ 伸ばす 押し（2.11 倍）', 'push', [
         ('短腕', 'tripo_pjp_short_phys_cg', None, None),
         ('2.11 倍', 'tripo_pjr211p_phys', 'tripo_pjr211p_phys_s2', 'tripo_pjr211p_phys_s2_ws')]),
+    # seed 2 は 9-334 ㊶（queue_1104_frozen_alloc_455.sh）
     ('4.5.5', '閉ループ 関節固定 到達（A1）', 'reach', [
-        ('可動', 'e2e_a1_reach_phys', 'e2e_a1_reach_phys_s2', 'e2e_a1_reach_phys_s2_ws'),
-        ('固定', 'e2e_a1_fix3_reach_phys', 'e2e_a1_fix3_reach_phys_s2', 'e2e_a1_fix3_reach_phys_s2_ws')]),
+        ('可動', 'e2e_a1_reach_phys', 'e2e_a1_reach_phys_s2', 'e2e_a1_reach_phys_s2_ws', 'e2e_a1_reach_phys_s3'),
+        ('固定', 'e2e_a1_fix3_reach_phys', 'e2e_a1_fix3_reach_phys_s2', 'e2e_a1_fix3_reach_phys_s2_ws', 'e2e_a1_fix3_reach_phys_s3')]),
     ('4.5.5', '閉ループ 関節固定 押し（A1）', 'push', [
-        ('可動', 'e2e_a1_pusher_phys', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s2'),
-        ('固定', 'e2e_a1_fix3_pusher_phys', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s2')]),
+        ('可動', 'e2e_a1_pusher_phys', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s3'),
+        ('固定', 'e2e_a1_fix3_pusher_phys', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s3')]),
+    ('4.5.5', '第3層の提案 関節 1 固定 到達（中間）', 'reach', [
+        # 関節 1 固定の seed 1 は新しい種でしか回していない（queue_1029_fix1_seed2.sh が `_s2_ws` と比べた）ので、可動も元・新とも `_s2_ws`
+        ('可動', 'tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'),
+        ('固定', 'tripo_pj_mid_phys_fix1', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s3')]),
+    # 9-334 ㊵: 形を凍結した押しの配分（想定問答 Q58）。読みは凍結どうしの 2 seed の帯。最適化の帯は 4.4.3.3 の組
+    ('9-334', '凍結の配分 押し', 'push', [
+        ('根元重 凍結', 'tripo_pjdp_prox_frozen_phys_fx', 'tripo_pjdp_prox_frozen_phys_fx_s2', 'tripo_pjdp_prox_frozen_phys_fx_s2'),
+        ('先端重 凍結', 'tripo_pjdp_dist_frozen_phys_cg_fx', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2')]),
 ]
 EPOCHS = 200
 
