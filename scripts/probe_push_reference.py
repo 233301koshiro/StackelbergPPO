@@ -12,6 +12,12 @@
   - 振っている間、肘と手先は伸ばしたまま保つ: u = clip(−KP·q − KD·q̇, −1, 1)、KP = 1.0・KD = 0.1（指令は ±1 に正規化）。
   - 開始のくじ（関節と箱に ±0.1）は学習と同じ（env.reset()）。話数は `REF_EPISODES`（既定 10）。
 
+`REF_RULE=place_push`（系譜 9-337。11-05 にユーザーへ説明した規則）:
+  - 寄せる: 先端を P =（箱の手前の面 − 0.10 m, 0）へ、作業空間の PD で寄せる。F = 2000·(P − 先端) − 200·v、
+    指令 u = clip(Jᵀ F / ギア比, −1, 1)。J は各関節（z 軸）の位置と先端から幾何で作る。
+    |P − 先端| < 0.03 m かつ |v| < 0.1 m/s、または 150 step で押しへ移る。
+  - 押す: 方向 Jᵀ [1, −5·先端の y] を、指令の最大の絶対値が 1 になるように割って 25 step（1 秒）与え、その後は全関節 0。
+
 出力: `REF_OUT`（既定 single_run/_probe_push_reference/<run 名>.json）に話ごとの実行フェーズの報酬・箱の移動・形。
 
 使い方（コンテナで。物理の環境変数は run の launch_env.json から読む）:
@@ -40,10 +46,12 @@ try:
     from design_opt.utils.tools import set_global_seed
 
     KP, KD = 1.0, 0.1
+    RULE = os.environ.get('REF_RULE', 'swing')
+    assert RULE in ('swing', 'place_push'), RULE
     N_EP = int(os.environ.get('REF_EPISODES', '10'))
     SCALE = float(os.environ.get('REF_PARAM_SCALE', '0.0001'))
     run = os.path.basename(os.path.normpath(restore_dir))
-    out = os.environ.get('REF_OUT', f'single_run/_probe_push_reference/{run}.json')
+    out = os.environ.get('REF_OUT', f'single_run/_probe_push_reference/{run}' + ('' if RULE == 'swing' else '_' + RULE) + '.json')
 
     FLAGS = OmegaConf.create(yaml.safe_load(open(f'{restore_dir}/.hydra/config.yaml')))
     d = OmegaConf.to_container(FLAGS, resolve=True)
@@ -68,6 +76,7 @@ try:
         r_exec = r_ctrl = 0.0
         q0 = None; swinging = True; n_swing = 0; shape = None
         cube0 = None; vmax = 0.0
+        phase = None; place_steps = None; place_err = None
         for _ in range(cfg.skel_transform_nsteps + 2 + 1200):
             sv = tensorfy([state])
             if agent.obs_norm is not None:
@@ -85,13 +94,37 @@ try:
                     shape = {'gear': [float(b.joints[0].actuator.gear) for b in env.robot.bodies[1:]],
                              'bone': [np.asarray(b.bone_offset, dtype=float).round(4).tolist() for b in env.robot.bodies[1:]],
                              'tip_radius': float(np.asarray(env.robot.bodies[-1].geoms[0].size, dtype=float).flatten()[0])}
-                if swinging and np.sign(q[0]) != np.sign(q0):
-                    swinging = False
                 u = np.zeros(nj)
-                if swinging:
-                    n_swing += 1
-                    u[0] = -np.sign(q0)
-                    u[1:] = np.clip(-KP * q[1:] - KD * qd[1:], -1, 1)
+                if RULE == 'swing':
+                    if swinging and np.sign(q[0]) != np.sign(q0):
+                        swinging = False
+                    if swinging:
+                        n_swing += 1
+                        u[0] = -np.sign(q0)
+                        u[1:] = np.clip(-KP * q[1:] - KD * qd[1:], -1, 1)
+                else:
+                    tip = np.asarray(env._arm_tip_pos, dtype=float)
+                    if phase is None:
+                        P = np.array([cube0[0] - env._get_cube_half_size() - 0.10, 0.0])
+                        phase, n_phase, tip_prev = 'place', 0, tip.copy()
+                    v = (tip[:2] - tip_prev[:2]) / env.dt
+                    tip_prev = tip.copy()
+                    jp = [np.asarray(env._body_xpos[b.name], dtype=float) for b in env.robot.bodies[1:]]
+                    J = np.array([[-(tip[1] - p_[1]), tip[0] - p_[0]] for p_ in jp]).T   # 2 × nj（z 軸の回転）
+                    gear = np.array(shape['gear'])
+                    n_phase += 1
+                    if phase == 'place':
+                        F = 2000.0 * (P - tip[:2]) - 200.0 * v
+                        u = np.clip(J.T @ F / gear, -1, 1)
+                        if (np.linalg.norm(P - tip[:2]) < 0.03 and np.linalg.norm(v) < 0.1) or n_phase >= 150:
+                            place_steps, place_err = n_phase, float(np.linalg.norm(P - tip[:2]))
+                            phase, n_phase = 'push', 0
+                    elif phase == 'push':
+                        dvec = J.T @ np.array([1.0, -5.0 * tip[1]]) / gear
+                        u = dvec / max(np.abs(dvec).max(), 1e-9)
+                        n_swing += 1
+                        if n_phase >= 25:
+                            phase = 'done'
                 action[:, :env.control_action_dim] = 0.0
                 action[1:, 0] = u
                 vmax = max(vmax, float(np.linalg.norm(qd[0])))
@@ -103,12 +136,15 @@ try:
         cube1 = np.asarray(env.get_body_com('cube'), dtype=float)
         e = {'ep': k, 'reward_exec': r_exec, 'reward_ctrl': r_ctrl, 'q0_deg': np.degrees(q0) if q0 is not None else None,
              'swing_steps': n_swing, 'cube_dx': float(cube1[0] - cube0[0]) if cube0 is not None else None,
-             'cube_dy': float(cube1[1] - cube0[1]) if cube0 is not None else None, 'base_qd_max': vmax}
+             'cube_dy': float(cube1[1] - cube0[1]) if cube0 is not None else None, 'base_qd_max': vmax,
+             'place_steps': place_steps, 'place_err': place_err,
+             'cube0': cube0.round(4).tolist() if cube0 is not None else None, 'cube1': cube1.round(4).tolist()}
         eps.append(e)
         print(f'[ref] 話 {k}: 報酬 {r_exec:.3f}（制御 {r_ctrl:.3f}）  q0 {e["q0_deg"]:.1f}°  振った {n_swing} step  '
-              f'箱 dx {e["cube_dx"]:+.3f} dy {e["cube_dy"]:+.3f} m  根元の最大角速度 {vmax:.2f} rad/s', flush=True)
+              f'箱 dx {e["cube_dx"]:+.3f} dy {e["cube_dy"]:+.3f} m  根元の最大角速度 {vmax:.2f} rad/s'
+              + (f'  寄せ {place_steps} step・残り {place_err:.3f} m' if place_steps is not None else ''), flush=True)
     rs = np.array([e['reward_exec'] for e in eps])
-    res = {'run': run, 'rule': {'KP': KP, 'KD': KD, 'param_scale': SCALE, 'episodes': N_EP},
+    res = {'run': run, 'rule': {'name': RULE, 'KP': KP, 'KD': KD, 'param_scale': SCALE, 'episodes': N_EP},
            'shape': shape, 'replay_env': LAUNCH_ENV, 'episodes': eps,
            'reward_median': float(np.median(rs)), 'reward_min': float(rs.min()), 'reward_max': float(rs.max())}
     os.makedirs(os.path.dirname(out), exist_ok=True)
