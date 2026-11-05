@@ -304,11 +304,15 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             out.append(r'\end{itemize}')
             continue
 
-        # 番号付きリスト
+        # 番号付きリスト。番号は md の数字をそのまま印字する（見出しと同じく md が正）。
+        # 2026-11-05 まで LaTeX に 1 から振り直させており、空行や注記で切れたリストが毎回 1 に戻っていた
+        # （5.3 節の課題が 1, 1, 2, … と印字され、本文の「5.3 節の 6」が別の項を指していた。参考文献は全件が 1）
         if re.match(r'^\d+\.\s+', line):
             out.append(r'\begin{enumerate}')
             while i < len(lines) and re.match(r'^\d+\.\s+', lines[i]):
-                out.append(r'  \item ' + md_inline(re.sub(r'^\d+\.\s+', '', lines[i])))
+                num = int(re.match(r'^(\d+)\.', lines[i]).group(1))
+                out.append(r'  \setcounter{enumi}{%d}\item ' % (num - 1)
+                           + md_inline(re.sub(r'^\d+\.\s+', '', lines[i])))
                 i += 1
             out.append(r'\end{enumerate}')
             continue
