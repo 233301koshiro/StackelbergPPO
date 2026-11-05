@@ -434,6 +434,10 @@ COMPARISONS = [
     ('関節固定 到達 対 押し（4.5.5）', ['e2e_a1_reach_phys', 'e2e_a1_pusher_phys'], 'TASK'),
     # ⭐ 9-317（10-29）: 第3層の提案どおり到達の中間の関節 1 を固定（queue_1029_fix1_seed2.sh）
     ('第3層の提案 関節 1 固定（9-317）', ['tripo_pj_mid_phys', 'tripo_pj_mid_phys_fix1'], {'xml_name'}),
+    # ⭐ 9-334（11-04）: 形を凍結した押しの配分（想定問答 Q58、queue_1104_frozen_alloc_455.sh）
+    ('凍結の配分 押し（9-334 ㊵）', ['tripo_pjdp_prox_frozen_phys_fx', 'tripo_pjdp_dist_frozen_phys_cg_fx'], {'xml_name', 'env_specs.init_self_contact_caps'}),
+    ('根元重 凍結 対 最適化（9-334）', ['tripo_pjdp_prox_phys', 'tripo_pjdp_prox_frozen_phys_fx'], {'robot_param_scale'}),
+    ('先端重 凍結 対 最適化（9-334）', ['tripo_pjdp_dist_phys_cg', 'tripo_pjdp_dist_frozen_phys_cg_fx'], {'robot_param_scale'}),
     # ⭐ 9-320（10-29）: D-5 の長い腕で形を固定した対照（queue_1029_long_frozen.sh）
     ('D-5 長い腕の形の固定（9-320）', ['e2e_a1v_obspen_reach_phys_long', 'e2e_a1v_obspen_reach_phys_long_frozen'], {'robot_param_scale'}),
     # ⭐ 9-329（10-29）: 軸6 L-4 の押し、β（長さだけ学習）と α（形を固定）。比べる変数は robot_param_scale だけ（queue_ra15_l4.sh、ブランチ）
