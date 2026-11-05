@@ -137,7 +137,8 @@ try:
         e = {'ep': k, 'reward_exec': r_exec, 'reward_ctrl': r_ctrl, 'q0_deg': np.degrees(q0) if q0 is not None else None,
              'swing_steps': n_swing, 'cube_dx': float(cube1[0] - cube0[0]) if cube0 is not None else None,
              'cube_dy': float(cube1[1] - cube0[1]) if cube0 is not None else None, 'base_qd_max': vmax,
-             'place_steps': place_steps, 'place_err': place_err}
+             'place_steps': place_steps, 'place_err': place_err,
+             'cube0': cube0.round(4).tolist() if cube0 is not None else None, 'cube1': cube1.round(4).tolist()}
         eps.append(e)
         print(f'[ref] 話 {k}: 報酬 {r_exec:.3f}（制御 {r_ctrl:.3f}）  q0 {e["q0_deg"]:.1f}°  振った {n_swing} step  '
               f'箱 dx {e["cube_dx"]:+.3f} dy {e["cube_dy"]:+.3f} m  根元の最大角速度 {vmax:.2f} rad/s'
