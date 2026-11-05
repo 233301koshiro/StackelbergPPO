@@ -131,14 +131,16 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
     while i < len(lines):
         line = lines[i]
 
-        # コードブロック
+        # コードブロック。本文で使うのは付録A のプロンプト全文だけで、文面は再現の条件なので縮めず、
+        # 文字だけ小さくする（2026-11-05、ユーザー「①で」。4 ページの付録を詰めるため）。
+        # 長い行は余白で切れていたので、改行を足さずに枠の端で折り返す（折り返しには矢印が付く）
         if line.strip().startswith('```'):
             if not in_code:
                 in_code = True
-                out.append(r'\begin{verbatim}')
+                out.append(r'\begin{Verbatim}[fontsize=\footnotesize,baselinestretch=1.1,breaklines,breakanywhere]')
             else:
                 in_code = False
-                out.append(r'\end{verbatim}')
+                out.append(r'\end{Verbatim}')
             i += 1
             continue
         if in_code:
@@ -361,6 +363,7 @@ PREAMBLE = r"""
 \usepackage{amssymb}
 \usepackage{xcolor}
 \usepackage{verbatim}
+\usepackage{fvextra}
 \usepackage{hyperref}
 \usepackage{setspace}
 \onehalfspacing
