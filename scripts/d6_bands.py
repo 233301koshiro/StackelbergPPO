@@ -70,10 +70,10 @@ GROUPS = [
         # 関節 1 固定の seed 1 は新しい種でしか回していない（queue_1029_fix1_seed2.sh が `_s2_ws` と比べた）ので、可動も元・新とも `_s2_ws`
         ('可動', 'tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'),
         ('固定', 'tripo_pj_mid_phys_fix1', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s3')]),
-    # 9-334 ㊵: 形を凍結した押しの配分（想定問答 Q58）。読みは凍結どうしの 2 seed の帯。最適化の帯は 4.4.3.3 の組
+    # 9-334 ㊵: 形を凍結した押しの配分（想定問答 Q58）。読みは凍結どうしの帯（seed 2 は 9-335 で足した）。最適化の帯は 4.4.3.3 の組
     ('9-334', '凍結の配分 押し', 'push', [
-        ('根元重 凍結', 'tripo_pjdp_prox_frozen_phys_fx', 'tripo_pjdp_prox_frozen_phys_fx_s2', 'tripo_pjdp_prox_frozen_phys_fx_s2'),
-        ('先端重 凍結', 'tripo_pjdp_dist_frozen_phys_cg_fx', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2')]),
+        ('根元重 凍結', 'tripo_pjdp_prox_frozen_phys_fx', 'tripo_pjdp_prox_frozen_phys_fx_s2', 'tripo_pjdp_prox_frozen_phys_fx_s2', 'tripo_pjdp_prox_frozen_phys_fx_s3'),
+        ('先端重 凍結', 'tripo_pjdp_dist_frozen_phys_cg_fx', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2', 'tripo_pjdp_dist_frozen_phys_cg_fx_s3')]),
 ]
 EPOCHS = 200
 

@@ -131,14 +131,16 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
     while i < len(lines):
         line = lines[i]
 
-        # コードブロック
+        # コードブロック。本文で使うのは付録A のプロンプト全文だけで、文面は再現の条件なので縮めず、
+        # 文字だけ小さくする（2026-11-05、ユーザー「①で」。4 ページの付録を詰めるため）。
+        # 長い行は余白で切れていたので、改行を足さずに枠の端で折り返す（折り返しには矢印が付く）
         if line.strip().startswith('```'):
             if not in_code:
                 in_code = True
-                out.append(r'\begin{verbatim}')
+                out.append(r'\begin{Verbatim}[fontsize=\footnotesize,baselinestretch=1.1,breaklines,breakanywhere]')
             else:
                 in_code = False
-                out.append(r'\end{verbatim}')
+                out.append(r'\end{Verbatim}')
             i += 1
             continue
         if in_code:
@@ -304,11 +306,15 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             out.append(r'\end{itemize}')
             continue
 
-        # 番号付きリスト
+        # 番号付きリスト。番号は md の数字をそのまま印字する（見出しと同じく md が正）。
+        # 2026-11-05 まで LaTeX に 1 から振り直させており、空行や注記で切れたリストが毎回 1 に戻っていた
+        # （5.3 節の課題が 1, 1, 2, … と印字され、本文の「5.3 節の 6」が別の項を指していた。参考文献は全件が 1）
         if re.match(r'^\d+\.\s+', line):
             out.append(r'\begin{enumerate}')
             while i < len(lines) and re.match(r'^\d+\.\s+', lines[i]):
-                out.append(r'  \item ' + md_inline(re.sub(r'^\d+\.\s+', '', lines[i])))
+                num = int(re.match(r'^(\d+)\.', lines[i]).group(1))
+                out.append(r'  \setcounter{enumi}{%d}\item ' % (num - 1)
+                           + md_inline(re.sub(r'^\d+\.\s+', '', lines[i])))
                 i += 1
             out.append(r'\end{enumerate}')
             continue
@@ -357,6 +363,7 @@ PREAMBLE = r"""
 \usepackage{amssymb}
 \usepackage{xcolor}
 \usepackage{verbatim}
+\usepackage{fvextra}
 \usepackage{hyperref}
 \usepackage{setspace}
 \onehalfspacing
