@@ -1,0 +1,64 @@
+<mujoco model="quad_4x2">
+  <!-- 四脚の可否のプローブ用（系譜 9-342、2026-11-06、ユーザー「ちょっと小規模な4脚の実験をしてみたい」）。
+       Text2Robot（Ringel et al., 2025）の型「脚 4 本 × 各脚 2 関節」を、ant.xml（BodyGen）の書き方でなぞった最小の形。
+       胴は原点の球（半径 0.15）。各脚は股（鉛直軸まわり ±30°）と膝（脚の向きに直交する水平軸 ±30°）。
+       腿は胴の中心から斜め外へ水平に 0.28 m、脛は膝から外下へ（水平 0.14・下 0.30 m）。
+       ⚠️ 脚の付け根を胴の四隅に置く形（最初の版）は、xml_robot.py の骨の表し方（子の体は親の骨の終わり＝子の始点の平均に置き直される）で
+          付け根が全部胴の中心へ寄り、胴のカプセルの端が NaN になった（9-342）。BodyGen の ant と同じく、脚は胴の中心から出す。
+       ⚠️ 物理の値（density 5・gear 150・armature 1・damping 1）は ant.xml の既定のままで、実在の部品から導いていない。 -->
+  <compiler angle="degree" />
+  <option integrator="RK4" timestep="0.01" />
+  <default>
+    <joint armature="1" damping="1" limited="true" />
+    <geom conaffinity="0" condim="3" density="5.0" friction="1 0.5 0.5" margin="0.01" rgba=".7 .5 .3 1" />
+  </default>
+  <worldbody>
+    <geom conaffinity="1" condim="3" name="floor" pos="0 0 0" rgba="1 1 1 1" size="200 200 .125" type="plane" />
+    <body name="0" pos="0 0 0.38">
+      <geom pos="0 0 0" size="0.15" type="sphere" />
+      <joint armature="0" damping="0" limited="false" margin="0.01" name="root" pos="0 0 0" type="free" />
+      <body name="1" pos="0 0 0">
+        <joint axis="0 0 1" name="1_joint" pos="0 0 0" range="-30 30" type="hinge" />
+        <geom fromto="0 0 0 0.2 0.2 0" size="0.04" type="capsule" />
+        <body name="11" pos="0.2 0.2 0">
+          <joint axis="-0.707107 0.707107 0" name="11_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 0.1 0.1 -0.3" size="0.04" type="capsule" />
+        </body>
+      </body>
+      <body name="2" pos="0 0 0">
+        <joint axis="0 0 1" name="2_joint" pos="0 0 0" range="-30 30" type="hinge" />
+        <geom fromto="0 0 0 0.2 -0.2 0" size="0.04" type="capsule" />
+        <body name="12" pos="0.2 -0.2 0">
+          <joint axis="0.707107 0.707107 0" name="12_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 0.1 -0.1 -0.3" size="0.04" type="capsule" />
+        </body>
+      </body>
+      <body name="3" pos="0 0 0">
+        <joint axis="0 0 1" name="3_joint" pos="0 0 0" range="-30 30" type="hinge" />
+        <geom fromto="0 0 0 -0.2 0.2 0" size="0.04" type="capsule" />
+        <body name="13" pos="-0.2 0.2 0">
+          <joint axis="-0.707107 -0.707107 0" name="13_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 -0.1 0.1 -0.3" size="0.04" type="capsule" />
+        </body>
+      </body>
+      <body name="4" pos="0 0 0">
+        <joint axis="0 0 1" name="4_joint" pos="0 0 0" range="-30 30" type="hinge" />
+        <geom fromto="0 0 0 -0.2 -0.2 0" size="0.04" type="capsule" />
+        <body name="14" pos="-0.2 -0.2 0">
+          <joint axis="0.707107 -0.707107 0" name="14_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 -0.1 -0.1 -0.3" size="0.04" type="capsule" />
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="1_joint" gear="150" name="1_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint" gear="150" name="11_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="2_joint" gear="150" name="2_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="12_joint" gear="150" name="12_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="3_joint" gear="150" name="3_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="13_joint" gear="150" name="13_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="4_joint" gear="150" name="4_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="14_joint" gear="150" name="14_joint" />
+  </actuator>
+</mujoco>
