@@ -19,7 +19,7 @@
 #   打っていないと `Authorization required` → Qt が core dump する。下で先に確かめて案内を出す。
 # ⚠️ 学習と同時に走らせると重い（7/31 に GUI が落ちた記録がある）。発表の前に学習は止めておく。
 set -eu
-TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey | ra_beta | ra_beta0 | ra_alpha | ra_alpha1}
+TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey | ra_beta | ra_beta0 | ra_alpha | ra_alpha1 | ra_cc | ra_cc0}
 EPS=${2:-1}   # ⭐ 既定は 1 話（録画用。2026-10-05。複数回は第 2 引数で）
 # ⛔ 訂正（2026-10-09、系譜 9-237）: 「読み込み直後の 1〜2 話は当てにならない」は誤り。どの話も初期状態のくじ（関節と箱に ±0.1）で、
 #   くじの種が run の seed で固定されているので毎回同じ順に出るだけ。頭を飛ばす理由は無いので WARMUP の既定は 0（話を飛ばすときだけ指定）
@@ -43,6 +43,11 @@ case "$TASK" in
                   HIDE=; MARK=0; CAM=0.55,-0.85,0.45,0.18,0,0.12
                   VMESH=single_run/${RUN%_s2}/trace/ra_visual; [ "$TASK" = ra_beta ] && VMESH=single_run/$RUN/trace/ra_visual
                   VGLB=$VMESH/arm.glb; EXTRA="CNOID_VISUAL_RAW=1" ;;
+  # ⭐ 2026-11-06: 制御コスト 0.2 で学習し直した β（揺れなかった 2 本、系譜 9-332 回 1）。ra_beta（揺れた seed 1）と並べて見る用。
+  #   メッシュは replay_rounded_lengths.py → build_arm3.py（COMP_JSON）→ make_ra_visual_meshes.py で、run ごとに作ったもの
+  ra_cc|ra_cc0)   case "$TASK" in ra_cc) RUN=ra15_pusher_beta_cc02_s2 ;; ra_cc0) RUN=ra15_pusher_beta_cc02 ;; esac
+                  HIDE=; MARK=0; CAM=0.55,-0.85,0.45,0.18,0,0.12
+                  VMESH=single_run/$RUN/trace/ra_visual; VGLB=$VMESH/arm.glb; EXTRA="CNOID_VISUAL_RAW=1" ;;
   hockey)         RUN=hockey_bank9;               HIDE=;     MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2      # 星＝ゴール口の中心（1.55, 0）
                   VMESH=data/test/hockey/meshes; VGLB=data/test/hockey/3D/hockey.glb
                   EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"; EPS=${2:-3} ;;

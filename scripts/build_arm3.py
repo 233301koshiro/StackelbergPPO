@@ -240,8 +240,9 @@ def main():
     def from_comp(c):
         """replay_rounded_lengths.py が選んだ組み方（irsl_link_all_v2.csv の 1 行）を、search_link と同じ形にする。"""
         ht = c['Hinge']
-        layers, _, _ = stack_plan(rel('XL-430', 'horn', ht, 'side_connect_point', 'fixed'), ht, c['段'])
-        return {'L': float(c['軸間距離_mm']), 'eng': int(c['噛み合い']), 'n': int(c['部品の数']), 'ht': ht, 'comp': c['段'],
+        comp = '' if c['段'] == 'なし' else c['段']   # 表は段を積まない組み方を「なし」と書く（enum_criteria_links.py）。そのまま渡すと「な」「し」をプレート 2 段として積む
+        layers, _, _ = stack_plan(rel('XL-430', 'horn', ht, 'side_connect_point', 'fixed'), ht, comp)
+        return {'L': float(c['軸間距離_mm']), 'eng': int(c['噛み合い']), 'n': int(c['部品の数']), 'ht': ht, 'comp': comp,
                 'layers': layers, 'top': (int(c['最上段の部品']), c['最上段の点']), 'ft': c['Frame'], 'fn': c['Frame の点'],
                 'c': c['つなぎ方'], 'fs': c['Frame→サーボ'], 'ss': c['サーボの点']}
 
