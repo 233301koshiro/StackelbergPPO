@@ -1,0 +1,62 @@
+# quad_walk_ra: 研究室の部品で組んだ四脚（`quad_walk_ra235_rab2`）を、形を変えずに歩く方策だけ学習する（2026-11-06 夜、系譜 9-342。四脚の遊び、修論に入れない）。
+#   quad_gearonly_ra から 3 つだけ変えた（③ は下の env_specs.init_root_z_noise）（ユーザー「いいよ」→ 学習の準備の ① ②）:
+#   ① done_condition.min_height 0.05 m: 胴の中心の高さの下限。既定 0 では腹ばいで床を這っても話が続き、前へ進めば点が入る。
+#      0.05 の根拠: 股のサーボの下面（胴の中心から −42 mm）が床に着く 0.042 m の少し上で、当たり判定の無い股のサーボ（変換器は体ごとに 1 つの形、
+#      Bug 97 の残り）が床をすり抜ける前に話を終える。rab2 の台本の速歩 9 回（どれも倒れない）の胴の最低 0.066 m（入力 0 では 0.088 m）より下なので、立って歩く間は切らない。
+#      ⚠️ 最初は 0.07（立った高さ 0.145 m の半分）にしかけたが、速歩の最低を 0.088 と読み違えていた（実際は振幅 0.1 で 0.066）
+#   ② robot_param_scale 0: 設計の段階の行動を 0 倍にして、ギア比を XML の 1.4（XL430）のまま固定する。quad_gearonly_ra の範囲 0.7〜2.8 のままだと実物の 2 倍まで出せる。
+#      骨格の段階は起動行の `+fix_skeleton=true` で飛ばす（脚を足し引きしない）。fix_skeleton と skel_transform_nsteps は起動行からしか読まれない
+# quad_gearonly_ra: 研究室の部品で組んだ四脚（`quad_*_ra`・RobotAssembler で組んだ版）のプローブ用（2026-11-06、系譜 9-342）。
+#   quad_gearonly と違うのはギア比の範囲だけ。⛔ quad_gearonly（20〜400）に XL430 の 1.4 N·m の XML を通すと、設計の段階で
+#   [-1, 1] に切り詰めてから戻すので 20 に置き換わる（Bug 95）。1.4 を範囲の内側に入れ、行動 0 で 1.4 のまま実行の段階へ入れる。
+# quad_gearonly: 四脚の可否のプローブ用（系譜 9-342、2026-11-06）。crawler.yml（env は ant）から、設計変数をギア比だけにした版。
+#   ⚠️ crawler の offset `xy`・geom の size・ext_start は BodyGen の ant の表し方（胴は原点の球、脚は体の原点から伸びる）を前提にしており、
+#   胴をカプセルにし脚を胴の四隅に付けた quad_4x2.xml を通すと、胴のカプセルの端が NaN、脚の付け根が全部原点へ書き換わった（9-342）。
+#   形を書き換えない設計変数（ギア比）だけにして、経路が通るかを先に見る。
+env_name: ant
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 0
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+  min_height: 0.05
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 4
+
+add_body_condition:
+  max_nchild: 2
+
+env_specs:
+  # ⭐ 2026-11-06（9-342）: ant.py の reset_state は既定で胴の高さを 0.4 m に置き直す（BodyGen の ant の胴の高さ）。
+  #   quad_tripo は胴の中心が 0.576 m なので、置き直すと足が床の 17 cm 下から始まった。XML の高さのまま始める
+  init_height: false
+  # ⭐ 2026-11-06 夜（Bug 98）: 実行の段階に入るときの胴の高さの乱れ。ant.py の既定 ±0.1 m は ant の大きさの値で、
+  #   立った高さ 0.145 m のこの四脚では足が床に最大 95 mm 埋まって始まった（スモークの再生）。0 にして XML の高さ（最も低い当たり判定が床から 5 mm）から始める。
+  #   関節・姿勢・速さの乱れ（±0.1）は残す
+  init_root_z_noise: 0.0
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  body_params: {}
+  joint_params: {}
+  geom_params: {}
+  actuator_params:
+    gear:
+      lb: 0.7
+      ub: 2.8
