@@ -1,0 +1,41 @@
+# quad_gearonly: 四脚の可否のプローブ用（系譜 9-342、2026-11-06）。crawler.yml（env は ant）から、設計変数をギア比だけにした版。
+#   ⚠️ crawler の offset `xy`・geom の size・ext_start は BodyGen の ant の表し方（胴は原点の球、脚は体の原点から伸びる）を前提にしており、
+#   胴をカプセルにし脚を胴の四隅に付けた quad_4x2.xml を通すと、胴のカプセルの端が NaN、脚の付け根が全部原点へ書き換わった（9-342）。
+#   形を書き換えない設計変数（ギア比）だけにして、経路が通るかを先に見る。
+env_name: ant
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 4
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  body_params: {}
+  joint_params: {}
+  geom_params: {}
+  actuator_params:
+    gear:
+      lb: 20
+      ub: 400
