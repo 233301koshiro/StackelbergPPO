@@ -330,6 +330,12 @@ class AntEnv(MujocoEnv, utils.EzPickle):
         if add_noise:
             qpos = self.init_qpos + self.np_random.uniform(low=-.1, high=.1, size=self.model.nq)
             qvel = self.init_qvel + self.np_random.uniform(low=-.1, high=.1, size=self.model.nv)
+            # ⭐ 2026-11-06 夜（Bug 98、系譜 9-342）: 胴の高さ（qpos[2]、m）の乱れの幅を env_specs.init_root_z_noise で決める。
+            #   ⛔ 既定の ±0.1 m は BodyGen の ant の大きさの値で、立った高さ 0.145 m の部品の四脚では足が床に最大 95 mm 埋まって始まり、弾き出された。
+            #   指定なしは従来どおり（上の ±0.1 のまま）。乱数の引き方は変えない（同じ seed で他の成分は同じ値）
+            z_noise = self.env_specs.get('init_root_z_noise', None)
+            if z_noise is not None:
+                qpos[2] = self.init_qpos[2] + (qpos[2] - self.init_qpos[2]) * (float(z_noise) / 0.1)
         else:
             qpos = self.init_qpos
             qvel = self.init_qvel
