@@ -1,0 +1,305 @@
+format: ChoreonoidBody
+format_version: 2.0
+angle_unit: degree
+name: quad_tripo_ra
+root_link: "0"
+links:
+  -
+    name: "0"
+    joint_name: root
+    joint_type: free
+    translation: [ 0, 0, 0.165871 ]
+    mass: 0.1
+    center_of_mass: [ 0, 0, 0 ]
+    inertia: [
+      0.000159792, 0, 0,
+      0, 0.000307248, 0,
+      0, 0, 0.00040704 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0, 0, 0 ]
+        geometry: { type: Box, size: [ 0.1824, 0.1248, 0.06 ] }
+        appearance:
+          material:
+            diffuseColor: [ 0.9, 0.1, 0.1 ]
+  -
+    name: "1"
+    parent: "0"
+    joint_type: fixed
+    translation: [ 0, 0, 0 ]
+    mass: 0.0572
+    center_of_mass: [ -0.06096, 0.06765, 0.00966 ]
+    inertia: [
+      1e-06, 0, 0,
+      0, 1e-06, 0,
+      0, 0, 1e-06 ]
+    elements:
+      -
+        type: Shape
+        translation: [ -0.03048, 0.033825, 0.00483 ]
+        rotation: [ 0.156512, -0, 0.987676, 42.38 ]
+        geometry: { type: Capsule, radius: 0.01, height: 0.0915749 }
+        appearance:
+          material:
+            diffuseColor: [ 0.1, 0.55, 0.95 ]
+  -
+    name: "11"
+    parent: "1"
+    joint_name: 11_joint
+    joint_type: revolute
+    joint_id: 0
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ -0.06096, 0.06765, 0.00966 ]
+    mass: 0.142648
+    center_of_mass: [ -0.0506506, -2.09907e-05, -0.0569478 ]
+    inertia: [
+      0.000103775, -3.39884e-08, -9.22105e-05,
+      -3.39884e-08, 0.000185789, -3.8214e-08,
+      -9.22105e-05, -3.8214e-08, 8.2114e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ -0.0361535, -1.49828e-05, -0.0406483 ]
+        rotation: [ -0.747211, 0, 0.664586, 90.02 ]
+        geometry: { type: Capsule, radius: 0.0232, height: 0.1088 }
+        appearance:
+          material:
+            diffuseColor: [ 0.15, 0.75, 0.2 ]
+  -
+    name: "111"
+    parent: "11"
+    joint_name: 111_joint
+    joint_type: revolute
+    joint_id: 1
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ -0.072307, -2.99656e-05, -0.0812966 ]
+    mass: 0.076904
+    center_of_mass: [ 0.0279871, -0.000839913, -0.0428656 ]
+    inertia: [
+      4.72207e-05, 6.02587e-07, 3.07535e-05,
+      6.02587e-07, 6.72817e-05, -9.22934e-07,
+      3.07535e-05, -9.22934e-07, 2.01972e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.0225208, -0.00067587, -0.0344934 ]
+        rotation: [ -0.837331, 0, -0.546696, 90.94 ]
+        geometry: { type: Capsule, radius: 0.02, height: 0.0824 }
+        appearance:
+          material:
+            diffuseColor: [ 0.95, 0.6, 0.05 ]
+  -
+    name: "2"
+    parent: "0"
+    joint_type: fixed
+    translation: [ 0, 0, 0 ]
+    mass: 0.0572
+    center_of_mass: [ 0.06093, -0.06783, 0.00963 ]
+    inertia: [
+      1e-06, 0, 0,
+      0, 1e-06, 0,
+      0, 0, 1e-06 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.030465, -0.033915, 0.004815 ]
+        rotation: [ 0.156112, 0, -0.987739, 137.7 ]
+        geometry: { type: Capsule, radius: 0.01, height: 0.0916848 }
+        appearance:
+          material:
+            diffuseColor: [ 0.65, 0.2, 0.85 ]
+  -
+    name: "12"
+    parent: "2"
+    joint_name: 12_joint
+    joint_type: revolute
+    joint_id: 2
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ 0.06093, -0.06783, 0.00963 ]
+    mass: 0.142648
+    center_of_mass: [ 0.050374, -0.00195362, -0.0571592 ]
+    inertia: [
+      0.000104668, 3.14605e-06, 9.20474e-05,
+      3.14605e-06, 0.000185667, -3.56981e-06,
+      9.20474e-05, -3.56981e-06, 8.13428e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.0359561, -0.00139446, -0.0407992 ]
+        rotation: [ -0.750232, 0, -0.661175, 91.47 ]
+        geometry: { type: Capsule, radius: 0.0232, height: 0.1088 }
+        appearance:
+          material:
+            diffuseColor: [ 0.95, 0.85, 0.1 ]
+  -
+    name: "112"
+    parent: "12"
+    joint_name: 112_joint
+    joint_type: revolute
+    joint_id: 3
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ 0.0719122, -0.00278892, -0.0815984 ]
+    mass: 0.0743408
+    center_of_mass: [ -0.0254071, -0.00533143, -0.0430129 ]
+    inertia: [
+      4.66506e-05, -3.35665e-06, -2.70807e-05,
+      -3.35665e-06, 6.19425e-05, -5.68262e-06,
+      -2.70807e-05, -5.68262e-06, 1.68006e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ -0.02035, -0.00427024, -0.0344515 ]
+        rotation: [ -0.861011, 0, 0.508587, 96.09 ]
+        geometry: { type: Capsule, radius: 0.02, height: 0.0804801 }
+        appearance:
+          material:
+            diffuseColor: [ 0.1, 0.8, 0.75 ]
+  -
+    name: "3"
+    parent: "0"
+    joint_type: fixed
+    translation: [ 0, 0, 0 ]
+    mass: 0.0572
+    center_of_mass: [ 0.06117, 0.06786, 0.0096 ]
+    inertia: [
+      1e-06, 0, 0,
+      0, 1e-06, 0,
+      0, 0, 1e-06 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.030585, 0.03393, 0.0048 ]
+        rotation: [ 0.155042, 0, -0.987908, 42.38 ]
+        geometry: { type: Capsule, radius: 0.01, height: 0.0918635 }
+        appearance:
+          material:
+            diffuseColor: [ 0.9, 0.3, 0.6 ]
+  -
+    name: "13"
+    parent: "3"
+    joint_name: 13_joint
+    joint_type: revolute
+    joint_id: 4
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ 0.06117, 0.06786, 0.0096 ]
+    mass: 0.142648
+    center_of_mass: [ 0.0504858, 0.00182859, -0.0570646 ]
+    inertia: [
+      0.000104307, -2.95124e-06, 9.20991e-05,
+      -2.95124e-06, 0.000185682, 3.33581e-06,
+      9.20991e-05, 3.33581e-06, 8.16883e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.0360359, 0.00130521, -0.0407317 ]
+        rotation: [ -0.74896, 0, -0.662615, 88.63 ]
+        geometry: { type: Capsule, radius: 0.0232, height: 0.1088 }
+        appearance:
+          material:
+            diffuseColor: [ 0.9, 0.1, 0.1 ]
+  -
+    name: "113"
+    parent: "13"
+    joint_name: 113_joint
+    joint_type: revolute
+    joint_id: 5
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ 0.0720718, 0.00261043, -0.0814634 ]
+    mass: 0.0743408
+    center_of_mass: [ -0.0258145, 0.00525906, -0.0427787 ]
+    inertia: [
+      4.61336e-05, 3.36416e-06, -2.7365e-05,
+      3.36416e-06, 6.19615e-05, 5.57495e-06,
+      -2.7365e-05, 5.57495e-06, 1.72986e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ -0.0206762, 0.00421227, -0.0342638 ]
+        rotation: [ -0.85619, 0, 0.516661, 83.99 ]
+        geometry: { type: Capsule, radius: 0.02, height: 0.08048 }
+        appearance:
+          material:
+            diffuseColor: [ 0.1, 0.55, 0.95 ]
+  -
+    name: "4"
+    parent: "0"
+    joint_type: fixed
+    translation: [ 0, 0, 0 ]
+    mass: 0.0572
+    center_of_mass: [ -0.06087, -0.06762, 0.00945 ]
+    inertia: [
+      1e-06, 0, 0,
+      0, 1e-06, 0,
+      0, 0, 1e-06 ]
+    elements:
+      -
+        type: Shape
+        translation: [ -0.030435, -0.03381, 0.004725 ]
+        rotation: [ 0.153411, -0, 0.988162, 137.7 ]
+        geometry: { type: Capsule, radius: 0.01, height: 0.0914709 }
+        appearance:
+          material:
+            diffuseColor: [ 0.15, 0.75, 0.2 ]
+  -
+    name: "14"
+    parent: "4"
+    joint_name: 14_joint
+    joint_type: revolute
+    joint_id: 6
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ -0.06087, -0.06762, 0.00945 ]
+    mass: 0.142648
+    center_of_mass: [ -0.0507599, 0.000105006, -0.0568502 ]
+    inertia: [
+      0.00010342, 1.70394e-07, -9.22512e-05,
+      1.70394e-07, 0.000185788, 1.90838e-07,
+      -9.22512e-05, 1.90838e-07, 8.24688e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ -0.0362315, 7.49515e-05, -0.0405787 ]
+        rotation: [ -0.745933, 0, 0.666021, 89.92 ]
+        geometry: { type: Capsule, radius: 0.0232, height: 0.1088 }
+        appearance:
+          material:
+            diffuseColor: [ 0.95, 0.6, 0.05 ]
+  -
+    name: "114"
+    parent: "14"
+    joint_name: 114_joint
+    joint_type: revolute
+    joint_id: 7
+    joint_axis: [ 0, 1, 0 ]
+    joint_range: [ -30, 30 ]
+    joint_damping: 0.235
+    translation: [ -0.072463, 0.000149903, -0.0811574 ]
+    mass: 0.076904
+    center_of_mass: [ 0.028028, 0.000915262, -0.0428373 ]
+    inertia: [
+      4.71619e-05, -6.57606e-07, 3.07781e-05,
+      -6.57606e-07, 6.72783e-05, 1.00507e-06,
+      3.07781e-05, 1.00507e-06, 2.02593e-05 ]
+    elements:
+      -
+        type: Shape
+        translation: [ 0.0225538, 0.0007365, -0.0344706 ]
+        rotation: [ -0.836799, 0, -0.54751, 88.98 ]
+        geometry: { type: Capsule, radius: 0.02, height: 0.0824 }
+        appearance:
+          material:
+            diffuseColor: [ 0.65, 0.2, 0.85 ]
