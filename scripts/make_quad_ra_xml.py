@@ -12,9 +12,14 @@
    腿 ＝ 股 → 膝のカプセル、脛 ＝ 膝 → 先端のカプセル。半径は部品の、脚の面の中で線に垂直な向きの幅の半分（RADIUS_Q の分位）、
    中心線は部品の幅の中央へずらす。脛のカプセルの終点は「先端 − 半径」に置き、カプセルの外形が部品の先端に届くようにする。
 ⚠️ 当たり判定はカプセルの近似で、部品の形そのものではない。胴に制御基板・電池は載せていない（部品の質量だけ）。
+⛔ env（`ant.py`）は設計の段階（`set_params` → `rebuild`）でカプセルを骨の線（体の原点 → 子の体の原点、葉は自分の終点）へ作り直す。
+   上の「中心線を幅の中央へずらす」は main の xml_robot では消える（腿・脛の横 19 mm。ブランチの `capsule_lateral` は四脚の cfg では切）。
+   ⭐ `AXIS_SHIFT=1`（11-06 夜）: 股・腿・脛の体を関節の軸の向きへ腿のカプセルのずれだけずらし、カプセルを骨の線の上に書く（XML ＝ シミュレーション）。
+   股と膝の軸は平行で、ずらしても同じ直線なので運動は変わらない。脚の面の中のずれ（腿 約 8 mm）は骨の線へ寄せて捨て、捨てた量を出力する。
 
     QUAD=tripo IN=data/axis6/quad/quad_tripo_parts.json OUT=assets/mujoco_envs/quad_tripo_rab.xml python3 scripts/make_quad_ra_xml.py
     QUAD=walk IN=data/axis6/quad/quad_walk_ra235_parts.json TPL=assets/mujoco_envs/quad_walk_ra235.xml OUT=assets/mujoco_envs/quad_walk_ra235_rab.xml python3 scripts/make_quad_ra_xml.py
+    AXIS_SHIFT=1 QUAD=walk IN=data/axis6/quad/quad_walk_ra235_parts.json TPL=assets/mujoco_envs/quad_walk_ra235.xml OUT=assets/mujoco_envs/quad_walk_ra235_rab2.xml python3 scripts/make_quad_ra_xml.py
 """
 import json
 import os
@@ -35,6 +40,7 @@ OUT = os.environ.get('OUT', f'/userdir/StackelbergPPO/assets/mujoco_envs/quad_{Q
 RADIUS_Q = float(os.environ.get('RADIUS_Q', '99'))
 CLEAR = float(os.environ.get('CLEAR', '0.005'))
 R_MOUNT = 0.010
+AXIS_SHIFT = os.environ.get('AXIS_SHIFT', '') == '1'
 
 
 def signed(u, w, a):
@@ -159,6 +165,20 @@ def main():
         rs, offs, us, smax = cap_fit(L['shin'], ok_, L['ak'], wsh[rad > rad.max() - 0.005].mean(0))   # 先端の面の中央へ向ける
         t0, t1 = offt, (ok_ - oh) + offt
         s0, s1 = offs, offs + us * (smax - rs)
+        if AXIS_SHIFT:
+            # 股・腿・脛の体を関節の軸の向きへ、腿のカプセルの軸の向きのずれ ｓ だけずらす（股と膝の軸は平行で同じ直線のまま → 運動は同じ）。
+            # カプセルは骨の線の上に置く（env の rebuild が骨の線へ作り直すので、XML をその形で書いて XML ＝ シミュレーションにする）
+            a = L['ah']
+            assert abs(a @ L['ak']) > 0.999, f'脚 {k}: 股と膝の軸が平行でない（AXIS_SHIFT は使えない）'
+            sa = float(offt @ a)
+            lost = [float(np.linalg.norm(offt - (offt @ a) * a)), float(abs(offs @ a - sa))]
+            oh, ok_ = oh + sa * a, ok_ + sa * a
+            ctg, csh = ctg - sa * a, csh - sa * a
+            offs_in = offs - (offs @ a) * a
+            t0, t1 = np.zeros(3), ok_ - oh
+            s0, s1 = np.zeros(3), offs_in + us * (smax - rs)
+            report.append(f'脚 {k}: 軸の向きへ {sa*1000:+.1f} mm ずらした。骨の線へ寄せて捨てたずれ: 腿の脚の面の中 {lost[0]*1000:.1f} mm・'
+                          f'脛の軸の向き {lost[1]*1000:.1f} mm')
         geoms_low += [float(oh[2] + min(t0[2], t1[2]) - rt), float(ok_[2] + min(s0[2], s1[2]) - rs)]
         xml_legs.append(dict(k=k, oh=oh, ok=ok_, mount=(mm, cm_, Im), thigh=(mtg, ctg, Itg), shin=(msh, csh, Ish),
                              rt=rt, t0=t0, t1=t1, rs=rs, s0=s0, s1=s1))
