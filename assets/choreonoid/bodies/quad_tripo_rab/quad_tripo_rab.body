@@ -1,0 +1,2244 @@
+format: ChoreonoidBody
+format_version: 2.0
+angle_unit: degree
+name: quad_tripo_rab
+root_link: '0'
+links:
+- name: '0'
+  joint_name: root
+  joint_type: free
+  translation: [0, 0, 0.199378]
+  mass: 0.0676332
+  center_of_mass: [0, 0, 0]
+  inertia: [9.23995e-05, 0, 0, 0, 9.23995e-05, 0, 0, 0, 0.000184684]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [-0.064, -0.064, 0.0016]
+      rotation: [0.0, 0.0, 1.0, 0.0]
+      elements:
+      - type: Transform
+        translation: [0.064, 0.064, -0.0016]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.128, 0.128, 0.0032]
+          appearance:
+            material:
+              diffuseColor: &id001 [0.6, 0.6, 0.62]
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [0, 0, 0.0001]
+      geometry:
+        type: Box
+        size: [0.128, 0.128, 0.003]
+      appearance:
+        material:
+          diffuseColor: [0.9, 0.1, 0.1]
+- name: '1'
+  parent: '0'
+  joint_type: fixed
+  translation: [0, 0, 0]
+  mass: 0.062695
+  center_of_mass: [-0.0398304, 0.0473873, -0.0265665]
+  inertia: [1.1034e-05, 9.17297e-07, 5.8409e-07, 9.17297e-07, 1.60694e-05, -8.64376e-08,
+    5.8409e-07, -8.64376e-08, 1.7467e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [-0.032, 0.04600000000000001, -0.0246]
+      rotation: [0.7071067811865475, 0.7071067811865476, 0.0, 180.0]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0225]
+        rotation: [1.0, 0.0, 0.0, 180.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: &id004 [0.8, 0.9, 0.9]
+    - type: Transform
+      translation: [-0.056000000000000015, 0.06500021098165541, -0.02459996163760879]
+      rotation: [-0.5773465779261064, 0.5773465779261063, 0.5773576516458655, 119.99936552665079]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: &id002 [0.15, 0.15, 0.15]
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [-0.028, 0.0325001, -0.0123]
+      rotation: [-0.402191, 0, 0.915556, 43.26]
+      geometry: {type: Capsule, radius: 0.01, height: 0.0892535}
+      appearance:
+        material:
+          diffuseColor: [0.1, 0.55, 0.95]
+- name: '11'
+  parent: '1'
+  joint_name: 11_joint
+  joint_type: revolute
+  joint_id: 0
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [-0.056, 0.0650002, -0.0246]
+  mass: 0.144723
+  center_of_mass: [-0.055797, -0.0174633, -0.0536153]
+  inertia: [8.61892e-05, -5.69022e-07, -6.74854e-05, -5.69022e-07, 0.000180866, 6.50534e-07,
+    -6.74854e-05, 6.50534e-07, 0.00012586]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [-1.3877787807814457e-17, -0.018999989014849762, -3.2606110356159235e-07]
+      rotation: [-0.3789661997893367, -0.3789823927168722, 0.8442493502679306, 99.65409731092436]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: &id003 [0.8, 0.9, 0.9]
+    - type: Transform
+      translation: [-0.016090164148630577, -0.032999180266310706, -0.04216629885878895]
+      rotation: [3.6477811462399717e-06, -0.9999999999473619, -9.590091967919586e-06,
+        138.34939582347775]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.02804554675587604, -0.032999384216545906, -0.03153291620448854]
+      rotation: [3.6477811462399717e-06, -0.9999999999473619, -9.590091967919586e-06,
+        138.34939582347775]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.04638095895687535, -0.032999450582918644, -0.02807276311321604]
+      rotation: [-0.6828381630110256, -0.6828431447175511, 0.2597253989273546, 150.87963810434363]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.046380958956875364, -0.0169994505858617, -0.02807245623027308]
+      rotation: [-0.6828381630110256, -0.6828431447175511, 0.2597253989273546, 150.87963810434363]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.05276098855062913, -0.0009993130049421872, -0.03524537891035808]
+      rotation: [-0.9346687683164915, -3.409458858169791e-06, 0.355519751240502, 179.99897285317397]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.040805605943383595, -0.0009991090547070008, -0.04587876156465846]
+      rotation: [-0.9346687683164915, -3.409458858169791e-06, 0.355519751240502, 179.99897285317397]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.0352302529298918, -0.000998767520609442, -0.06368537378198669]
+      rotation: [0.6828408218938606, -0.6828358402042818, -0.25973761238571014, 150.88113890850968]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.0352302529298918, -0.016998767517666435, -0.06368568066492959]
+      rotation: [0.6828408218938606, -0.6828358402042818, -0.25973761238571014, 150.88113890850968]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.041610282523645535, -0.03299862993086092, -0.07085921711090035]
+      rotation: [3.6477811452504564e-06, -0.9999999999473619, -9.590091966150315e-06,
+        138.3493958234781]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.05356566513089107, -0.032998833881096104, -0.060225834456600014]
+      rotation: [3.6477811452504564e-06, -0.9999999999473619, -9.590091966150315e-06,
+        138.3493958234781]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.04373695905489677, -0.03299858406957343, -0.07325029363190966]
+      rotation: [3.647781145250459e-06, -0.9999999999473619, -9.590091966150308e-06,
+        138.34939582347823]
+      elements:
+      - type: Transform
+        translation: [0.016, 0.016, -0.0016]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.032, 0.032, 0.0032]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.07230700206254267, -0.018998429731075336, -0.08129692777541951]
+      rotation: [-0.6828381630110264, -0.682843144717551, 0.25972539892735264, 150.87963810434402]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0235]
+        rotation: [1.0, 0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_socket_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: &id005 [0.9, 0.8, 0.8]
+    - type: Transform
+      translation: [-0.07230697656741855, 1.7812465353955753e-06, -0.0812965346830617]
+      rotation: [-0.8442470245700964, -0.3789651557073322, -0.3789886175919492, 99.65316952979104]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id002
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [-0.043252, -0.0189992, -0.0343351]
+      rotation: [-0.747212, 0, 0.664586, 90]
+      geometry: {type: Capsule, radius: 0.0255, height: 0.1088}
+      appearance:
+        material:
+          diffuseColor: [0.15, 0.75, 0.2]
+- name: '111'
+  parent: '11'
+  joint_name: 111_joint
+  joint_type: revolute
+  joint_id: 1
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [-0.072307, 1.77026e-06, -0.0812966]
+  mass: 0.103164
+  center_of_mass: [0.0328981, -0.0172778, -0.0503884]
+  inertia: [5.42174e-05, -5.85221e-07, 2.25644e-05, -5.85221e-07, 6.62489e-05, 8.96193e-07,
+    2.25644e-05, 8.96193e-07, 3.43898e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [-2.1875832290074726e-07, -0.01899998900125211, -5.714079506918823e-07]
+      rotation: [-0.660376240790447, -0.6603798037416753, 0.35749368583176977, 140.65398997963473]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id003
+    - type: Transform
+      translation: [0.036467489069939796, -0.03299956282441125, -0.02658925731986414]
+      rotation: [1.1359156695048556e-05, 0.9999999998250824, 1.4859504028944774e-05,
+        146.85932594981995]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.023070195795048307, -0.0329990989177251, -0.03533640157906884]
+      rotation: [1.1359156695048556e-05, 0.9999999998250824, 1.4859504028944774e-05,
+        146.85932594981995]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.014921189081634062, -0.03299843252962962, -0.0521219218015897]
+      rotation: [0.6919633196632339, 0.6919475996022473, 0.2059011501797049, 156.73292625076132]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.014921393031869318, -0.01699843253991383, -0.0521213856122095]
+      rotation: [0.6919633196632339, 0.6919475996022473, 0.2059011501797049, 156.73292625076132]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.020169883543581776, -0.0009982300687886997, -0.06015922538614549]
+      rotation: [-0.9584703515622487, 1.0887416726179383e-05, -0.28519218968548843,
+        179.99836794250152]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.03356717681847331, -0.0009986939754749041, -0.05141208112694079]
+      rotation: [-0.9584703515622487, 1.0887416726179383e-05, -0.28519218968548843,
+        179.99836794250152]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.052212756654842, -0.0009989554007517748, -0.0507033128310522]
+      rotation: [-0.6919505293180933, 0.6919662494456389, -0.20588145765111063, 156.7305697586101]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.05221255270460673, -0.01699895539046755, -0.05070384902043237]
+      rotation: [-0.6919505293180933, 0.6919662494456389, -0.20588145765111063, 156.7305697586101]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.05746063531584876, -0.03299875289877406, -0.05874276117312871]
+      rotation: [1.135915669499303e-05, 0.9999999998250824, 1.4859504028928255e-05,
+        146.85932594981998]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.04406334204095727, -0.0329982889920879, -0.06748990543233346]
+      rotation: [1.135915669499303e-05, 0.9999999998250824, 1.4859504028928255e-05,
+        146.85932594981998]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.03591433532754304, -0.032997622603992444, -0.08427542565485427]
+      rotation: [0.6919633196632338, 0.6919475996022473, 0.20590115017970487, 156.73292625076132]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.03591453927777828, -0.01699762261427669, -0.0842748894654741]
+      rotation: [0.6919633196632338, 0.6919475996022473, 0.20590115017970487, 156.73292625076132]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.04116302978949078, -0.000997420143151559, -0.09231272923941003]
+      rotation: [-0.9584703515622487, 1.0887416726179383e-05, -0.28519218968548843,
+        179.99836794250152]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.05456032306438227, -0.0009978840498377495, -0.08356558498020533]
+      rotation: [-0.9584703515622487, 1.0887416726179383e-05, -0.28519218968548843,
+        179.99836794250152]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [0.0229063, -0.0189991, -0.0350848]
+      rotation: [-0.837331, 0, -0.546696, 90]
+      geometry: {type: Capsule, radius: 0.016, height: 0.0838}
+      appearance:
+        material:
+          diffuseColor: [0.95, 0.6, 0.05]
+- name: '2'
+  parent: '0'
+  joint_type: fixed
+  translation: [0, 0, 0]
+  mass: 0.062695
+  center_of_mass: [0.0420105, -0.0513869, -0.0265665]
+  inertia: [1.1034e-05, 7.27711e-07, 1.53155e-06, 7.27711e-07, 1.69112e-05, 8.63197e-08,
+    1.53155e-06, 8.63197e-08, 1.83088e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [0.056, -0.04999999999999999, -0.0246]
+      rotation: [0.7071067811865475, 0.7071067811865476, 0.0, 180.0]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0225]
+        rotation: [1.0, 0.0, 0.0, 180.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id004
+    - type: Transform
+      translation: [0.05600000000000003, -0.06899978901135487, -0.024600690484598387]
+      rotation: [0.5773539603823462, 0.5773539603823468, -0.5773428867333863, 120.00063447740571]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id002
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [0.028, -0.0344999, -0.0123003]
+      rotation: [-0.4022, 0, -0.915552, 138.4]
+      geometry: {type: Capsule, radius: 0.01, height: 0.0922072}
+      appearance:
+        material:
+          diffuseColor: [0.65, 0.2, 0.85]
+- name: '12'
+  parent: '2'
+  joint_name: 12_joint
+  joint_type: revolute
+  joint_id: 2
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [0.056, -0.0689998, -0.0246007]
+  mass: 0.144723
+  center_of_mass: [0.0555521, 0.0174654, -0.0538683]
+  inertia: [8.6805e-05, -5.74567e-07, 6.76633e-05, -5.74567e-07, 0.000180866, -6.45807e-07,
+    6.76633e-05, -6.45807e-07, 0.000125244]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [2.7755575615628914e-17, 0.019000010985150292, 3.7393889639608657e-07]
+      rotation: [-0.3806105963752398, 0.3806267609012151, -0.842768558272515, 99.7532388321259]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id003
+    - type: Transform
+      translation: [0.01589788775550175, 0.03300082112620076, -0.042237931901983744]
+      rotation: [-0.9354762295165134, 3.3890328020605652e-06, -0.35338962067112556,
+        179.99897196505822]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.027901592587517197, 0.03300061822281576, -0.031659129027145815]
+      rotation: [-0.9354762295165134, 3.3890328020605652e-06, -0.35338962067112556,
+        179.99897196505822]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.04625257914560297, 0.033000553459390736, -0.02828254905019245]
+      rotation: [-0.6831528328894106, 0.6831577827531966, -0.25806520644772957, 151.057929893134]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.04625257914560297, 0.017000553462333763, -0.028282855933135446]
+      rotation: [-0.6831528328894106, 0.6831577827531966, -0.25806520644772957, 151.057929893134]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.0525998608716732, 0.0010006916052367476, -0.03548538571396285]
+      rotation: [3.622795379898646e-06, 0.9999999999474527, 9.59009196711428e-06,
+        138.61043962231398]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.04059615603965772, 0.0010008945086217302, -0.04606418858880075]
+      rotation: [3.622795379898646e-06, 0.9999999999474527, 9.59009196711428e-06,
+        138.61043962231398]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.034939732933712435, 0.0010012355519666283, -0.0638452143615231]
+      rotation: [0.683155472649302, 0.683150522802254, 0.2580774367981747, 151.05943138888807]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.034939732933712435, 0.01700123554902358, -0.06384490747858017]
+      rotation: [0.683155472649302, 0.683150522802254, 0.2580774367981747, 151.05943138888807]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.04128701465978266, 0.0330013736860405, -0.07104682349352179]
+      rotation: [-0.9354762295165139, 3.389035896128495e-06, -0.3533896206711242,
+        179.9989719647037]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.053290719491798165, 0.03300117078265554, -0.06046802061868395]
+      rotation: [-0.9354762295165139, 3.389035896128495e-06, -0.3533896206711242,
+        179.9989719647037]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.04340277523513939, 0.03300141973269382, -0.0734475644594833]
+      rotation: [-0.9354762295165139, 3.389035896128495e-06, -0.3533896206711242,
+        179.9989719647037]
+      elements:
+      - type: Transform
+        translation: [0.016, 0.016, -0.0016]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.032, 0.032, 0.0032]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.07193585956212944, 0.019001576571363005, -0.0816248189037948]
+      rotation: [-0.683152832889411, 0.6831577827531964, -0.258065206447729, 151.05792989313417]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0235]
+        rotation: [1.0, 0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_socket_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id005
+    - type: Transform
+      translation: [0.07193583419786853, 1.3655926504457794e-06, -0.08162515455065979]
+      rotation: [0.3042094945087331, -0.673597108063833, 0.6735900232773508, 146.15873915117533]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id002
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [0.0430951, 0.0190005, -0.034531]
+      rotation: [-0.750232, 0, -0.661175, 90]
+      geometry: {type: Capsule, radius: 0.0255, height: 0.1088}
+      appearance:
+        material:
+          diffuseColor: [0.95, 0.85, 0.1]
+- name: '112'
+  parent: '12'
+  joint_name: 112_joint
+  joint_type: revolute
+  joint_id: 3
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [0.0719358, 1.3546e-06, -0.0816252]
+  mass: 0.103164
+  center_of_mass: [-0.0306048, 0.0172797, -0.0518127]
+  inertia: [5.61998e-05, -5.43634e-07, -2.15851e-05, -5.43634e-07, 6.62489e-05, -9.203e-07,
+    -2.15851e-05, -9.203e-07, 3.24073e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [2.7514563824548866e-07, 0.019000010990904627, 1.3647083080270406e-07]
+      rotation: [-0.6557156130709508, 0.6557257214329818, -0.3742469946788925, 138.96373937628616]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id003
+    - type: Transform
+      translation: [-0.035238067266266326, 0.0330005929475881, -0.02819707844368792]
+      rotation: [0.9646271266720139, -6.778067164886153e-06, -0.26361810719780254,
+        179.99954368693864]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.021461891472953812, 0.03300045722852373, -0.03633446011676507]
+      rotation: [0.9646271266720139, -6.778067164886153e-06, -0.26361810719780254,
+        179.99954368693864]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.012568144682648857, 0.03300042302352321, -0.05273754726610287]
+      rotation: [0.6942585616464273, -0.6942664569810412, -0.189734383525038, 158.51407817006876]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.012568347586033854, 0.01700042302499335, -0.052737623915779144]
+      rotation: [0.6942585616464273, -0.6942664569810412, -0.189734383525038, 158.51407817006876]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.0174509794924263, 0.00100052454052732, -0.06100340604171618]
+      rotation: [-5.68613061149882e-06, -0.9999999999753133, -4.1281288830830086e-06,
+        149.43028667430394]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.03122715528573887, 0.001000660259591682, -0.052866024368639034]
+      rotation: [-5.68613061149882e-06, -0.9999999999753133, -4.1281288830830086e-06,
+        149.43028667430394]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.049885760082058875, 0.0010008974927198516, -0.05299434817182265]
+      rotation: [-0.6942672120268981, -0.6942593166836983, 0.18972885785320712, 158.51342132972243]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.04988555717867381, 0.017000897491249688, -0.05299427152214632]
+      rotation: [-0.6942672120268981, -0.6942593166836983, 0.18972885785320712, 158.51342132972243]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.05476778327829643, 0.033000999003843345, -0.0612599003487307]
+      rotation: [0.9646271266720137, -6.7780835445067146e-06, -0.2636181071978028,
+        179.99954368374378]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.0409916074849839, 0.03300086328477899, -0.06939728202180782]
+      rotation: [0.9646271266720137, -6.7780835445067146e-06, -0.2636181071978028,
+        179.99954368374378]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.03209786069467889, 0.03300082907977843, -0.0858003691711456]
+      rotation: [0.6942585616464274, -0.694266456981041, -0.18973438352503788, 158.51407817006873]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.03209806359806386, 0.017000829081248593, -0.08580044582082193]
+      rotation: [0.6942585616464274, -0.694266456981041, -0.18973438352503788, 158.51407817006873]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.0369806955044564, 0.001000930596782551, -0.09406622794675885]
+      rotation: [-5.686130611387799e-06, -0.9999999999753133, -4.12812888311335e-06,
+        149.43028667430394]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.050756871297768916, 0.001001066315846913, -0.08592884627368173]
+      rotation: [-5.686130611387799e-06, -0.9999999999753133, -4.12812888311335e-06,
+        149.43028667430394]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [-0.0213095, 0.0190005, -0.0360763]
+      rotation: [-0.861011, 0, 0.508587, 90]
+      geometry: {type: Capsule, radius: 0.016, height: 0.0838}
+      appearance:
+        material:
+          diffuseColor: [0.1, 0.8, 0.75]
+- name: '3'
+  parent: '0'
+  joint_type: fixed
+  translation: [0, 0, 0]
+  mass: 0.062695
+  center_of_mass: [0.0398304, 0.0513869, -0.0258034]
+  inertia: [1.11856e-05, -9.17273e-07, -9.71775e-07, -9.17273e-07, 1.6221e-05, -1.89173e-07,
+    -9.71775e-07, -1.89173e-07, 1.7467e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [0.032, 0.05000000000000002, -0.0246]
+      rotation: [-0.7071067811865475, 0.7071067811865476, -0.0, 180.0]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0225]
+        rotation: [1.0, 0.0, 0.0, 180.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id004
+    - type: Transform
+      translation: [0.05600000000000003, 0.06899978901135484, -0.024600690484598373]
+      rotation: [-0.5773539603823469, -0.5773539603823464, -0.5773428867333861, 120.00063447740567]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id002
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [0.028, 0.0344999, -0.0123003]
+      rotation: [-0.4022, 0, -0.915552, 41.56]
+      geometry: {type: Capsule, radius: 0.01, height: 0.0922072}
+      appearance:
+        material:
+          diffuseColor: [0.9, 0.3, 0.6]
+- name: '13'
+  parent: '3'
+  joint_name: 13_joint
+  joint_type: revolute
+  joint_id: 4
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [0.056, 0.0689998, -0.0246007]
+  mass: 0.144723
+  center_of_mass: [0.0565819, -0.0174654, -0.0533833]
+  inertia: [8.218e-05, 6.67088e-07, 6.91668e-05, 6.67088e-07, 0.000185374, 8.57819e-07,
+    6.91668e-05, 8.57819e-07, 0.000134377]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [1.3877787807814457e-17, -0.019000010985150292, 3.7393889642384215e-07]
+      rotation: [-0.6737538684811305, -0.673748047196673, 0.30351160374091324, 146.2340507465787]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id003
+    - type: Transform
+      translation: [0.03994572974277554, -0.03300041384802538, -0.021003611278065118]
+      rotation: [-3.6333274559730034e-06, 0.9999999999474146, -9.590091968386367e-06,
+        138.50034868611812]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.02796237369041287, -0.03300061719341712, -0.031605459120821314]
+      rotation: [-3.6333274559730034e-06, 0.9999999999474146, -9.590091968386367e-06,
+        138.50034868611812]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.02234012634487393, -0.033000958444592735, -0.04939732059367255]
+      rotation: [0.6830204029678473, 0.6830253662594462, 0.25876529553977834, 150.98272824415614]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.022340126344874, -0.017000958447535755, -0.04939762747661554]
+      rotation: [0.6830204029678473, 0.6830253662594462, 0.25876529553977834, 150.98272824415614]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.028701235051697686, -0.0010010963562626513, -0.05658794798965347]
+      rotation: [0.9351362877282855, 3.3976493196416513e-06, 0.35428819252441557,
+        179.99897233950546]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.040684591104060384, -0.0010008930108709596, -0.04598610014689733]
+      rotation: [0.9351362877282855, 3.3976493196416513e-06, 0.35428819252441557,
+        179.99897233950546]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.05902905586324684, -0.0010008275712631715, -0.0425742659342363]
+      rotation: [-0.6830230507867158, 0.6830180875119424, -0.25877751877923244, 150.984229448853]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.05902905586324681, -0.017000827568320186, -0.04257395905129338]
+      rotation: [-0.6830230507867158, 0.6830180875119424, -0.25877751877923244, 150.984229448853]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.06539016457007057, -0.033000965471161, -0.04976366579844553]
+      rotation: [-3.633327455579965e-06, 0.9999999999474146, -9.59009196693574e-06,
+        138.50034868611834]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.05340680851770787, -0.03300116881655271, -0.06036551364120164]
+      rotation: [-3.633327455579965e-06, 0.9999999999474146, -9.59009196693574e-06,
+        138.50034868611834]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.06751053413901187, -0.03300101143975565, -0.05216033700847725]
+      rotation: [-3.6333274555799696e-06, 0.9999999999474146, -9.590091966935731e-06,
+        138.50034868611849]
+      elements:
+      - type: Transform
+        translation: [0.016, 0.016, -0.0016]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.032, 0.032, 0.0032]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.09006759942254661, -0.019001268899280638, -0.06558367543804694]
+      rotation: [0.6830204029678479, 0.6830253662594462, 0.25876529553977673, 150.98272824415656]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0235]
+        rotation: [1.0, 0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_socket_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id005
+    - type: Transform
+      translation: [0.07209253992448783, -1.3629386565183754e-06, -0.08148678289783534]
+      rotation: [-0.8433959110319814, 0.37991879571218934, 0.3799276851180155, 99.71230202825761]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id002
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [0.0431614, -0.0190005, -0.0344482]
+      rotation: [-0.74896, 0, -0.662616, 90]
+      geometry: {type: Capsule, radius: 0.0255, height: 0.1088}
+      appearance:
+        material:
+          diffuseColor: [0.9, 0.1, 0.1]
+- name: '113'
+  parent: '13'
+  joint_name: 113_joint
+  joint_type: revolute
+  joint_id: 5
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [0.0720925, -1.35195e-06, -0.0814868]
+  mass: 0.103164
+  center_of_mass: [-0.0310907, -0.0172797, -0.0515226]
+  inertia: [5.57918e-05, 5.52261e-07, -2.1805e-05, 5.52261e-07, 6.62489e-05, 9.15143e-07,
+    -2.1805e-05, 9.15143e-07, 3.28153e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [2.813971405335458e-07, -0.019000010986901746, 1.0858712858052844e-07]
+      rotation: [-0.44116934833051547, -0.4411711923242359, 0.7814970154497332, 103.98581747995989]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id003
+    - type: Transform
+      translation: [-0.008103541061005123, -0.03300032775540629, -0.044397630003349065]
+      rotation: [5.684430001631767e-06, -0.9999999999751232, 4.176249621593791e-06,
+        148.89152500168518]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.021802591801913962, -0.03300046205436463, -0.03613107033321014]
+      rotation: [5.684430001631767e-06, -0.9999999999751232, 4.176249621593791e-06,
+        148.89152500168518]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.04046157834406017, -0.0330006989661205, -0.036083941107881545]
+      rotation: [-0.6937920695249506, -0.6937999571946978, 0.19311702064013342, 158.1401648069267]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.04046178168945193, -0.01700069896759817, -0.036084018147851143]
+      rotation: [-0.6937920695249506, -0.6937999571946978, 0.19311702064013342, 158.1401648069267]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.04542192083608097, -0.001000801581873323, -0.04430352563263115]
+      rotation: [0.963377047486267, 6.795297121672255e-06, -0.26815045092348233, 179.99953896618368]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.03172287009517211, -0.001000667282914966, -0.0525700853027701]
+      rotation: [0.963377047486267, 6.795297121672255e-06, -0.26815045092348233, 179.99953896618368]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.022983755155500482, -0.0010006355967540903, -0.06905607541771935]
+      rotation: [0.6938007336157083, -0.6937928459371344, -0.19311144181730083, 158.13950075641438]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.022983551810108763, -0.017000635595276495, -0.0690559983777497]
+      rotation: [0.6938007336157083, -0.6937928459371344, -0.19311144181730083, 158.13950075641438]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.02794328426595427, -0.0330007382065963, -0.07727535178259043]
+      rotation: [5.684430001631765e-06, -0.9999999999751232, 4.176249621593775e-06,
+        148.89152500168515]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.04164233500686322, -0.033000872505554626, -0.0690087921124515]
+      rotation: [5.684430001631765e-06, -0.9999999999751232, 4.176249621593775e-06,
+        148.89152500168515]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.060301321549009454, -0.03300110941731056, -0.06896166288712291]
+      rotation: [-0.6937920695249509, -0.6937999571946976, 0.19311702064013347, 158.1401648069267]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.06030152489440117, -0.017001109418788136, -0.06896173992709251]
+      rotation: [-0.6937920695249509, -0.6937999571946976, 0.19311702064013347, 158.1401648069267]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.06526166404103023, -0.0010012120330633728, -0.07718124741187249]
+      rotation: [0.9633770474862667, 6.79531345976123e-06, -0.2681504509234826, 179.99953896381209]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.051562613300121254, -0.0010010777341050159, -0.08544780708201141]
+      rotation: [0.9633770474862667, 6.79531345976123e-06, -0.2681504509234826, 179.99953896381209]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [-0.0216478, -0.0190005, -0.0358743]
+      rotation: [-0.856191, 0, 0.51666, 90]
+      geometry: {type: Capsule, radius: 0.016, height: 0.0838}
+      appearance:
+        material:
+          diffuseColor: [0.1, 0.55, 0.95]
+- name: '4'
+  parent: '0'
+  joint_type: fixed
+  translation: [0, 0, 0]
+  mass: 0.062695
+  center_of_mass: [-0.0420105, -0.0473873, -0.0258034]
+  inertia: [1.11856e-05, -7.27667e-07, -1.2481e-06, -7.27667e-07, 1.70628e-05, 1.89291e-07,
+    -1.2481e-06, 1.89291e-07, 1.83088e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [-0.056, -0.046, -0.0246]
+      rotation: [-0.7071067811865475, 0.7071067811865476, -0.0, 180.0]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0225]
+        rotation: [1.0, 0.0, 0.0, 180.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id004
+    - type: Transform
+      translation: [-0.05600000000000002, -0.06500021098165541, -0.02459996163760877]
+      rotation: [0.5773465779261066, -0.5773465779261066, 0.5773576516458652, 119.99936552665082]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id002
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [-0.028, -0.0325001, -0.0123]
+      rotation: [-0.402191, 0, 0.915556, 136.7]
+      geometry: {type: Capsule, radius: 0.01, height: 0.0892535}
+      appearance:
+        material:
+          diffuseColor: [0.15, 0.75, 0.2]
+- name: '14'
+  parent: '4'
+  joint_name: 14_joint
+  joint_type: revolute
+  joint_id: 6
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [-0.056, -0.0650002, -0.0246]
+  mass: 0.144723
+  center_of_mass: [-0.0568245, 0.0174633, -0.0531256]
+  inertia: [8.15508e-05, 6.6052e-07, -6.89261e-05, 6.6052e-07, 0.000185374, -8.62788e-07,
+    -6.89261e-05, -8.62788e-07, 0.000135006]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [-6.245004513516506e-17, 0.018999989014849734, -3.2606110354077567e-07]
+      rotation: [-0.6741302017442269, 0.6741244126053246, -0.301835629814994, 146.40998758262117]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id003
+    - type: Transform
+      translation: [-0.040041016275667744, 0.03299958964187125, -0.020822626555900323]
+      rotation: [0.9343267416926326, -3.418070001369919e-06, -0.35641764791652103,
+        179.99897322901]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.02810608954759828, 0.03299938525136237, -0.031478963823171745]
+      rotation: [0.9343267416926326, -3.418070001369919e-06, -0.35641764791652103,
+        179.99897322901]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.022564965181067688, 0.03299904351239958, -0.04929625712596766]
+      rotation: [0.6827047596042373, -0.6827097547447306, -0.26042580899386775, 150.80446264722283]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.022564965181067674, 0.016999043515342607, -0.04929595024302469]
+      rotation: [0.6827047596042373, -0.6827097547447306, -0.26042580899386775, 150.80446264722283]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.02895876754260652, 0.0009989061698317259, -0.056456599395606336]
+      rotation: [-3.658332645584345e-06, -0.9999999999473235, 9.59009196712572e-06,
+        138.23929243213402]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.040893694270676, 0.0009991105603405909, -0.045800262128334934]
+      rotation: [-3.658332645584345e-06, -0.9999999999473235, 9.59009196712572e-06,
+        138.23929243213402]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.05922242336028443, 0.0009991776023954985, -0.0423048808965881]
+      rotation: [-0.6827074265670907, -0.6827024314436317, 0.26043801529556704, 150.80596315819236]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.05922242336028446, 0.016999177599452457, -0.042305187779531]
+      rotation: [-0.6827074265670907, -0.6827024314436317, 0.26043801529556704, 150.80596315819236]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.0656162257218234, 0.03299904024805552, -0.04946645069799846]
+      rotation: [0.9343267416926334, -3.4180700018917523e-06, -0.35641764791651925,
+        179.99897322936494]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.053681298993753894, 0.032998835857546684, -0.06012278796526983]
+      rotation: [0.9343267416926334, -3.4180700018917523e-06, -0.35641764791651925,
+        179.99897322936494]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.06774749317566969, 0.03299899446523755, -0.0518534360431733]
+      rotation: [0.9343267416926334, -3.4180700018917528e-06, -0.35641764791651925,
+        179.99897322936494]
+      elements:
+      - type: Transform
+        translation: [0.016, 0.016, -0.0016]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.032, 0.032, 0.0032]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [-0.09036548352287865, 0.01899873898480165, -0.06517332189614101]
+      rotation: [0.6827047596042375, -0.6827097547447305, -0.260425808993867, 150.804462647223]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/long_frame_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, -0.012, -0.0235]
+        rotation: [1.0, 0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_socket_4_5_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id005
+    - type: Transform
+      translation: [-0.07246306788061313, -1.7785785732943316e-06, -0.08115743475373619]
+      rotation: [0.3018212468707785, 0.6741211674042461, -0.6741398865182988, 146.40817423799368]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/XL-430_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id002
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [-0.0433179, 0.0189992, -0.0342519]
+      rotation: [-0.745933, 0, 0.666021, 90]
+      geometry: {type: Capsule, radius: 0.0255, height: 0.1088}
+      appearance:
+        material:
+          diffuseColor: [0.95, 0.6, 0.05]
+- name: '114'
+  parent: '14'
+  joint_name: 114_joint
+  joint_type: revolute
+  joint_id: 7
+  joint_axis: [0, 1, 0]
+  joint_range: [-30, 30]
+  joint_damping: 0.235
+  translation: [-0.0724631, -1.7676e-06, -0.0811575]
+  mass: 0.103164
+  center_of_mass: [0.0329471, 0.0172778, -0.0503563]
+  inertia: [5.41735e-05, 5.86091e-07, 2.25837e-05, 5.86091e-07, 6.62489e-05, -8.95621e-07,
+    2.25837e-05, -8.95621e-07, 3.44337e-05]
+  elements:
+  - type: Visual
+    elements:
+    - type: Transform
+      translation: [-2.1059434249237619e-07, 0.01899998900922316, -5.710127125302389e-07]
+      rotation: [-0.429552422801177, 0.42952033504437004, -0.7943531946489616, 103.07632808711807]
+      elements:
+      - type: Transform
+        translation: [0.0, 0.0, 0.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/x_series/short_hone_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id001
+      - type: Transform
+        translation: [0.002, 0.032100000000000004, 0.0]
+        rotation: [1.0, 0.0, 0.0, -90.0]
+        scale: [0.001, 0.001, 0.001]
+        elements:
+        - type: Shape
+          geometry: {type: Resource, uri: /choreonoid_ws/install/share/choreonoid-2.3/robot_assembler/irsl/meshes_vis/universal/attachment_plug_4_4_mm.stl}
+          appearance:
+            material:
+              diffuseColor: *id003
+    - type: Transform
+      translation: [0.009715771607015242, 0.032998637229394806, -0.04407411793000507]
+      rotation: [0.9583315776436051, 1.0904025095857007e-05, 0.285658164896824, 179.9983703462597]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.023104552814227575, 0.03299910161762311, -0.03531395026210385]
+      rotation: [0.9583315776436051, 1.0904025095857007e-05, 0.285658164896824, 179.9983703462597]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.041749434628135365, 0.03299936413682217, -0.034587051316929684]
+      rotation: [-0.691911109795311, 0.6918953646655573, -0.20625183755820578, 156.69437402140292]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.0417496390186443, 0.016999364147098836, -0.03458651551989694]
+      rotation: [-0.691911109795311, 0.6918953646655573, -0.20625183755820578, 156.69437402140292]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.047005944015848775, 0.0009991622883462337, -0.04261924844559123]
+      rotation: [-1.1378129848332606e-05, 0.9999999998251597, -1.4839768427228469e-05,
+        146.80361145572493]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.03361716280863644, 0.0009986979001179175, -0.05137941611349245]
+      rotation: [-1.1378129848332606e-05, 0.9999999998251597, -1.4839768427228469e-05,
+        146.80361145572493]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.025484482208119566, 0.000998031642860317, -0.06817285250412075]
+      rotation: [0.691898295031566, 0.6919140402280056, 0.20623217563651428, 156.69202083662762]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.025484277817610604, 0.016998031632583635, -0.06817338830115349]
+      rotation: [0.691898295031566, 0.6919140402280056, 0.20623217563651428, 156.69202083662762]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.030740174033797057, 0.03299782975327769, -0.07620719282091332]
+      rotation: [0.9583315776436052, 1.0904025095784057e-05, 0.28565816489682394,
+        179.9983703462597]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.044128955241009404, 0.032998294141506, -0.0674470251530121]
+      rotation: [0.9583315776436052, 1.0904025095784057e-05, 0.28565816489682394,
+        179.9983703462597]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.06277383705491715, 0.03299855666070503, -0.0667201262078379]
+      rotation: [-0.6919111097953115, 0.6918953646655567, -0.20625183755820606, 156.69437402140287]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.06277404144542612, 0.016998556670981706, -0.06671959041080516]
+      rotation: [-0.6919111097953115, 0.6918953646655567, -0.20625183755820606, 156.69437402140287]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.06803034644263053, 0.0009983548122291103, -0.07475232333649945]
+      rotation: [-1.1378129848610168e-05, 0.9999999998251597, -1.4839768427311206e-05,
+        146.80361145572493]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+    - type: Transform
+      translation: [0.0546415652354182, 0.0009978904240007802, -0.08351249100440067]
+      rotation: [-1.1378129848610168e-05, 0.9999999998251597, -1.4839768427311206e-05,
+        146.80361145572493]
+      elements:
+      - type: Transform
+        translation: [0.008, 0.016, -0.0048]
+        elements:
+        - type: Shape
+          geometry:
+            type: Box
+            size: [0.016, 0.032, 0.0096]
+          appearance:
+            material:
+              diffuseColor: *id001
+  - type: Collision
+    elements:
+    - type: Shape
+      translation: [0.0229404, 0.0189991, -0.0350625]
+      rotation: [-0.836799, 0, -0.54751, 90]
+      geometry: {type: Capsule, radius: 0.016, height: 0.0838}
+      appearance:
+        material:
+          diffuseColor: [0.65, 0.2, 0.85]
