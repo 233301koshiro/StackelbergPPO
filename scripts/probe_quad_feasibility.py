@@ -95,7 +95,7 @@ def main():
         dx = (x_end if ends else float(env.get_body_com('0')[0])) - x0
         zs, angs = np.array(zs), np.array(angs)
         print(f'[quad] {label}: 有限 {fin}・胴の高さ 最小 {zs.min():.3f} / 最後 {zs[-1]:.3f} / 最大 {zs.max():.3f} m・'
-              f'傾き 最大 {angs.max():.1f}°・x の進み {dx:+.3f} m・終わり {ends or "なし"}（{STEPS} step、dt {env.dt:.3f} s）', flush=True)
+              f'傾き 最大 {angs.max():.1f}°・x の進み {dx:+.3f} m・終わり {ends or "なし"}（{STEPS} step）', flush=True)
         ok1 = fin and zs.min() > MIN_Z and angs.max() < 60
         return ok1, dx
 
@@ -112,7 +112,10 @@ def main():
             hip = bd.parent
         phase[i] = 0.0 if hip.pos[0] * hip.pos[1] > 0 else np.pi
     print(f'[quad] 位相 {dict(zip(names, np.round(phase, 2)))}・膝 {[n for n, k in zip(names, is_knee) if k]}', flush=True)
-    dt = env.dt
+    # ⚠️ Bug 94: CNOID_SUBSTEPS=K のとき env.dt は 1 step の本当の長さの 1/K を返す（物理の刻みを割った値 × frame_skip）。
+    #   1 step で進む時間は timestep × frame_skip のまま（tick を K 倍回す）なので、台本の時刻はその長さで刻む
+    dt = env.dt * max(1, int(os.environ.get('CNOID_SUBSTEPS') or 1))
+    print(f'[quad] 1 step の長さ {dt:.3f} s（env.dt {env.dt:.4f} s・刻みの分割 {os.environ.get("CNOID_SUBSTEPS") or 1}）', flush=True)
 
     okA, dxA = run('A 入力 0', lambda t: np.zeros(nb))
     trot = lambda t: np.where(np.array(names) == '0', 0.0,
