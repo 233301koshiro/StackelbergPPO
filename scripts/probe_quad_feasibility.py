@@ -23,9 +23,12 @@
     USE_CHOREONOID=1 OMP_NUM_THREADS=1 CNOID_TICK_SYNC=1 CNOID_JOINT_LIMIT_TORQUE=1 \\
     timeout -k 10 600 /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/probe_quad_feasibility.py > out.txt 2>&1
 
+⛔ Bug 95: 研究室の部品の XML（gear 1.4）は `PROBE_CFG=quad_gearonly_ra` で回す。既定の `quad_gearonly`（ギア比の範囲 20〜400）だと、
+   設計の段階が範囲の外の 1.4 を 20 に切り詰める。実行の段階のギア比を出力に出すので、XML の値と並べて確かめる。
 ⚠️ 末尾は os._exit(0)（Choreonoid は自分では終わらない、Bug 43）。
 """
 import os
+import re
 import sys
 import traceback
 
@@ -78,6 +81,10 @@ def main():
 
     def run(label, ctrl_fn):
         to_exec()
+        # ⭐ Bug 95: 設計の段階は値を cfg のギア比の範囲へ切り詰めて戻すので、範囲の外の XML のギア比は端へ置き換わる
+        #   （quad_gearonly 20〜400 に XL430 の 1.4 を通すと 20）。Choreonoid が実際にトルクを掛ける値を出す
+        print(f'[quad] {label}: 実行の段階のギア比 {sorted({a["gear"] for a in env._world.actuators_map.values()})}'
+              f'（XML {sorted(set(re.findall(r"gear=\"([^\"]+)\"", open(f"assets/mujoco_envs/{XML}.xml").read())))}）', flush=True)
         x0 = float(env.get_body_com('0')[0])
         zs, angs, fin, ends = [], [], True, None
         for t in range(STEPS):

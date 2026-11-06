@@ -1,0 +1,86 @@
+<!-- scripts/make_quad_ra_xml.py（ブランチ feat/layer4-robotassembler）が quad_tripo_parts.json から作った（系譜 9-342 の追記、2026-11-06）。手で直さない。
+     研究室の部品を RobotAssembler で組んだ四脚。雛形 quad_tripo_ra.xml の名前・関節の軸・可動域・ギア比はそのままで、関節の位置・質量・当たり判定を部品から。
+     質量の合計 1310.0 g。胴に制御基板・電池は載せていない。 -->
+<mujoco model="quad_tripo_rab">
+  <compiler angle="degree" />
+  <option integrator="RK4" timestep="0.01" />
+  <default>
+    <joint armature="0.008" damping="0.235" limited="true" />
+    <geom conaffinity="0" condim="3" density="1" friction="1 0.5 0.5" margin="0.002" rgba=".7 .5 .3 1" />
+  </default>
+  <worldbody>
+    <geom conaffinity="1" condim="3" name="floor" pos="0 0 0" rgba="1 1 1 1" size="200 200 .125" type="plane" />
+    <body name="0" pos="0 0 0.199378">
+      <inertial pos="0 0 0" mass="0.0676332" fullinertia="9.23995e-05 9.23995e-05 0.000184684 0 0 0" />
+      <geom pos="0 0 0.0001" size="0.064 0.064 0.0015" type="box" />
+      <joint armature="0" damping="0" limited="false" margin="0.01" name="root" pos="0 0 0" type="free" />
+      <body name="1" pos="0 0 0">
+        <inertial pos="-0.0398304 0.0473873 -0.0265665" mass="0.062695" fullinertia="1.1034e-05 1.60694e-05 1.7467e-05 9.17297e-07 5.8409e-07 -8.64376e-08" />
+        <geom fromto="0 0 0 -0.056 0.0650002 -0.0246" size="0.0100" type="capsule" />
+        <body name="11" pos="-0.056 0.0650002 -0.0246">
+          <inertial pos="-0.055797 -0.0174633 -0.0536153" mass="0.144723" fullinertia="8.61892e-05 0.000180866 0.00012586 -5.69022e-07 -6.74854e-05 6.50534e-07" />
+          <joint axis="0 1 0" name="11_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="-0.00709851 -0.0190001 0.00631321 -0.0794055 -0.0189984 -0.0749834" size="0.0255" type="capsule" />
+          <body name="111" pos="-0.072307 1.77026e-06 -0.0812966">
+            <inertial pos="0.0328981 -0.0172778 -0.0503884" mass="0.103164" fullinertia="5.42174e-05 6.62489e-05 3.43898e-05 -5.85221e-07 2.25644e-05 8.96193e-07" />
+            <joint axis="0 1 0" name="111_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="-2.42191e-07 -0.019 -6.36725e-07 0.0458129 -0.0189982 -0.070169" size="0.0160" type="capsule" />
+          </body>
+        </body>
+      </body>
+      <body name="2" pos="0 0 0">
+        <inertial pos="0.0420105 -0.0513869 -0.0265665" mass="0.062695" fullinertia="1.1034e-05 1.69112e-05 1.83088e-05 7.27711e-07 1.53155e-06 8.63197e-08" />
+        <geom fromto="0 0 0 0.056 -0.0689998 -0.0246007" size="0.0100" type="capsule" />
+        <body name="12" pos="0.056 -0.0689998 -0.0246007">
+          <inertial pos="0.0555521 0.0174654 -0.0538683" mass="0.144723" fullinertia="8.6805e-05 0.000180866 0.000125244 -5.74567e-07 6.76633e-05 -6.45807e-07" />
+          <joint axis="0 1 0" name="12_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0.0071272 0.0189999 0.00628153 0.079063 0.0190012 -0.0753436" size="0.0255" type="capsule" />
+          <body name="112" pos="0.0719358 1.3546e-06 -0.0816252">
+            <inertial pos="-0.0306048 0.0172797 -0.0518127" mass="0.103164" fullinertia="5.61998e-05 6.62489e-05 3.24073e-05 -5.43634e-07 -2.15851e-05 -9.203e-07" />
+            <joint axis="0 1 0" name="112_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="2.40948e-07 0.019 9.10215e-08 -0.0426193 0.0190009 -0.0721526" size="0.0160" type="capsule" />
+          </body>
+        </body>
+      </body>
+      <body name="3" pos="0 0 0">
+        <inertial pos="0.0398304 0.0513869 -0.0258034" mass="0.062695" fullinertia="1.11856e-05 1.6221e-05 1.7467e-05 -9.17273e-07 -9.71775e-07 -1.89173e-07" />
+        <geom fromto="0 0 0 0.056 0.0689998 -0.0246007" size="0.0100" type="capsule" />
+        <body name="13" pos="0.056 0.0689998 -0.0246007">
+          <inertial pos="0.0565819 -0.0174654 -0.0533833" mass="0.144723" fullinertia="8.218e-05 0.000185374 0.000134377 6.67088e-07 6.91668e-05 8.57819e-07" />
+          <joint axis="0 1 0" name="13_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0.00711512 -0.0189999 0.00629521 0.0792077 -0.0190012 -0.0751916" size="0.0255" type="capsule" />
+          <body name="113" pos="0.0720925 -1.35195e-06 -0.0814868">
+            <inertial pos="-0.0310907 -0.0172797 -0.0515226" mass="0.103164" fullinertia="5.57918e-05 6.62489e-05 3.28153e-05 5.52261e-07 -2.1805e-05 9.15143e-07" />
+            <joint axis="0 1 0" name="113_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="2.41473e-07 -0.019 9.1485e-08 -0.0432959 -0.0190009 -0.0717487" size="0.0160" type="capsule" />
+          </body>
+        </body>
+      </body>
+      <body name="4" pos="0 0 0">
+        <inertial pos="-0.0420105 -0.0473873 -0.0258034" mass="0.062695" fullinertia="1.11856e-05 1.70628e-05 1.83088e-05 -7.27667e-07 -1.2481e-06 1.89291e-07" />
+        <geom fromto="0 0 0 -0.056 -0.0650002 -0.0246" size="0.0100" type="capsule" />
+        <body name="14" pos="-0.056 -0.0650002 -0.0246">
+          <inertial pos="-0.0568245 0.0174633 -0.0531256" mass="0.144723" fullinertia="8.15508e-05 0.000185374 0.000135006 6.6052e-07 -6.89261e-05 -8.62788e-07" />
+          <joint axis="0 1 0" name="14_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="-0.00708636 0.0190001 0.00632684 -0.0795494 0.0189984 -0.0748306" size="0.0255" type="capsule" />
+          <body name="114" pos="-0.0724631 -1.7676e-06 -0.0811575">
+            <inertial pos="0.0329471 0.0172778 -0.0503563" mass="0.103164" fullinertia="5.41735e-05 6.62489e-05 3.44337e-05 5.86091e-07 2.25837e-05 -8.95621e-07" />
+            <joint axis="0 1 0" name="114_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="-2.42714e-07 0.019 -6.36259e-07 0.0458811 0.0189982 -0.0701244" size="0.0160" type="capsule" />
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint" gear="1.4" name="11_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="111_joint" gear="1.4" name="111_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="12_joint" gear="1.4" name="12_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="112_joint" gear="1.4" name="112_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="13_joint" gear="1.4" name="13_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="113_joint" gear="1.4" name="113_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="14_joint" gear="1.4" name="14_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="114_joint" gear="1.4" name="114_joint" />
+  </actuator>
+
+</mujoco>

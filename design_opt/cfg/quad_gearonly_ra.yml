@@ -1,0 +1,49 @@
+# quad_gearonly_ra: 研究室の部品で組んだ四脚（`quad_*_ra`・RobotAssembler で組んだ版）のプローブ用（2026-11-06、系譜 9-342）。
+#   quad_gearonly と違うのはギア比の範囲だけ。⛔ quad_gearonly（20〜400）に XL430 の 1.4 N·m の XML を通すと、設計の段階で
+#   [-1, 1] に切り詰めてから戻すので 20 に置き換わる（Bug 95）。1.4 を範囲の内側に入れ、行動 0 で 1.4 のまま実行の段階へ入れる。
+# quad_gearonly: 四脚の可否のプローブ用（系譜 9-342、2026-11-06）。crawler.yml（env は ant）から、設計変数をギア比だけにした版。
+#   ⚠️ crawler の offset `xy`・geom の size・ext_start は BodyGen の ant の表し方（胴は原点の球、脚は体の原点から伸びる）を前提にしており、
+#   胴をカプセルにし脚を胴の四隅に付けた quad_4x2.xml を通すと、胴のカプセルの端が NaN、脚の付け根が全部原点へ書き換わった（9-342）。
+#   形を書き換えない設計変数（ギア比）だけにして、経路が通るかを先に見る。
+env_name: ant
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 4
+
+add_body_condition:
+  max_nchild: 2
+
+env_specs:
+  # ⭐ 2026-11-06（9-342）: ant.py の reset_state は既定で胴の高さを 0.4 m に置き直す（BodyGen の ant の胴の高さ）。
+  #   quad_tripo は胴の中心が 0.576 m なので、置き直すと足が床の 17 cm 下から始まった。XML の高さのまま始める
+  init_height: false
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  body_params: {}
+  joint_params: {}
+  geom_params: {}
+  actuator_params:
+    gear:
+      lb: 0.7
+      ub: 2.8
