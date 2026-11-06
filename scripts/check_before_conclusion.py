@@ -445,6 +445,9 @@ COMPARISONS = [
     # ⭐ 9-339・9-340（11-06）: 助言を強める閉ループ（queue_1106_advice.sh、想定問答 Q64）
     ('閉ループ 押しの倍率に押す距離を足す 2.36 対 2.11 倍（9-339 ㊻）', ['tripo_pjr236p_phys', 'tripo_pjr211p_phys'], {'xml_name'}),
     ('第2層の助言 ギア比の上限 300 対 150（9-340 ㊼）', ['tripo_pjp_mid_phys_ub300', 'tripo_pjp_mid_phys'], {'cfg'}),
+    # ⭐ 9-343（11-06）: 軸6 L-4 の取り直し、制御コスト 0.04 → 0.16（Bug 94。queue_ra15_cc016.sh、ブランチ）
+    ('軸6 L-4 取り直し β 対 α・制御コスト 0.16（9-343 ㊾）', ['ra15_pusher_beta_cc016', 'ra15_pusher_alpha_cc016'], {'robot_param_scale'}),
+    ('軸6 L-4 β の制御コスト 0.16 対 0.04（9-343）', ['ra15_pusher_beta_cc016', 'ra15_pusher_beta'], {'reward_specs.ctrl_cost_coeff'}),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
