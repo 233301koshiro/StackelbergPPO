@@ -18,6 +18,7 @@
   - 足先の最も低い点が床から CLEAR の高さに来るよう上下にずらす
 
     python3 scripts/quad_ra_approx.py --src quad_tripo [--scale 0.3] [--frame-g 100]   # → assets/mujoco_envs/quad_tripo_ra.xml
+    python3 scripts/quad_ra_approx.py --src quad_walk --scale 0.235 --name quad_walk_ra235   # 縮尺を変えた版を別の名前で（既定は <src>_ra）
 """
 import argparse
 import csv
@@ -57,11 +58,13 @@ def main():
     ap.add_argument('--src', required=True)
     ap.add_argument('--scale', type=float, default=0.3)
     ap.add_argument('--frame-g', type=float, default=100.0)
+    ap.add_argument('--name', help='出力の XML とモデルの名前（既定 <src>_ra）')
     a = ap.parse_args()
     LB = buildable_lengths()
     tree = ET.parse(f'assets/mujoco_envs/{a.src}.xml')
     root = tree.getroot()
-    root.set('model', f'{a.src}_ra')
+    name = a.name or f'{a.src}_ra'
+    root.set('model', name)
     d = root.find('default')
     d.find('joint').attrib.update(armature='0.008', damping='0.235')
     d.find('geom').attrib.update(density='1', margin='0.002')   # 質量は <inertial> で与える（カプセルの密度は使わない）
@@ -166,7 +169,7 @@ def main():
     tp = vec(torso.get('pos')); tp[2] += CLEAR - z
     torso.set('pos', fmt(tp))
 
-    out = f'assets/mujoco_envs/{a.src}_ra.xml'
+    out = f'assets/mujoco_envs/{name}.xml'
     ET.indent(tree)
     body = ET.tostring(root, encoding='unicode')
     # ⚠️ XML のコメントの中に「--」を書けない（lxml が読めない。最初の版で起動の引数をそのまま書いて落ちた）
