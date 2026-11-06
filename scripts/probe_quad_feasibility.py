@@ -13,7 +13,7 @@
      A = PROBE_AMP（既定 0.8）、f = PROBE_FREQ（既定 1.5 Hz）。胴の x の進みと高さ・傾きを測る。B は A の後に env を reset して始める。
 
 読み（回す前に決めた。⑤-2 のとおりプローブは本番より弱い証拠で、言えるのは「経路が通るか」まで）:
-  ① 全 step で状態が有限・胴の中心の高さが 0.15 m（胴の球の半径）より上・傾きが 60° 未満 → 床に立てる（A）・振っても転ばない（B）
+  ① 全 step で状態が有限・胴の中心の高さが PROBE_MIN_Z（既定 0.15 m＝quad_4x2 の胴の球の半径。quad_tripo は箱の半分の高さ 0.10）より上・傾きが 60° 未満 → 床に立てる（A）・振っても転ばない（B）
      （⚠️ 最初の版は胴がカプセル〔半径 0.06〕で閾値 0.06 だった。形を作り直したので、回す前に胴の半径へ合わせた。9-342）
   ② B で胴の x の進みの絶対値が 0.10 m 以上 → 足と床の接触と摩擦で前後に進める（進む向きは問わない。台本は最適な歩き方ではない）
   ③ どちらも満たす → 学習のスモーク（GPU、数エポック）へ進んでよい。満たさなければ、どこで崩れたかを出力から読んで止まる
@@ -35,6 +35,7 @@ STEPS = int(os.environ.get('PROBE_STEPS', '250'))
 AMP = float(os.environ.get('PROBE_AMP', '0.8'))
 FREQ = float(os.environ.get('PROBE_FREQ', '1.5'))
 XML = os.environ.get('PROBE_XML', 'quad_4x2')
+MIN_Z = float(os.environ.get('PROBE_MIN_Z', '0.15'))   # ① の胴の中心の高さの下限（胴の半分の高さ。quad_4x2 は球の半径 0.15、quad_tripo は箱の半分の高さ 0.10）
 
 import numpy as np
 
@@ -95,17 +96,21 @@ def main():
         zs, angs = np.array(zs), np.array(angs)
         print(f'[quad] {label}: 有限 {fin}・胴の高さ 最小 {zs.min():.3f} / 最後 {zs[-1]:.3f} / 最大 {zs.max():.3f} m・'
               f'傾き 最大 {angs.max():.1f}°・x の進み {dx:+.3f} m・終わり {ends or "なし"}（{STEPS} step、dt {env.dt:.3f} s）', flush=True)
-        ok1 = fin and zs.min() > 0.15 and angs.max() < 60
+        ok1 = fin and zs.min() > MIN_Z and angs.max() < 60
         return ok1, dx
 
+    # 股＝親にアクチュエータが無い駆動の体、膝＝親にアクチュエータがある駆動の体（quad_4x2 と、関節の無い取り付けを挟む quad_tripo の両方で成り立つ）。
+    # 位相は脚の股の位置の象限で決め、対角（前左＋後右・前右＋後左）を同じ位相にする
     phase = np.zeros(nb)
     is_knee = np.zeros(nb, bool)
-    for i, n in enumerate(names):
-        if n == '0':
+    for i, bd in enumerate(env.robot.bodies):
+        if bd.get_actuator_name() is None:
             continue
-        leg = n[-1]                      # 股 '1'..'4'、膝 '11'..'14' の最後の桁が脚の番号
-        phase[i] = 0.0 if leg in ('1', '4') else np.pi   # 対角（前左＋後右・前右＋後左）を同じ位相
-        is_knee[i] = len(n) == 2
+        hip = bd
+        is_knee[i] = bd.parent is not None and bd.parent.get_actuator_name() is not None
+        if is_knee[i]:
+            hip = bd.parent
+        phase[i] = 0.0 if hip.pos[0] * hip.pos[1] > 0 else np.pi
     print(f'[quad] 位相 {dict(zip(names, np.round(phase, 2)))}・膝 {[n for n, k in zip(names, is_knee) if k]}', flush=True)
     dt = env.dt
 

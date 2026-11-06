@@ -154,7 +154,19 @@ def main():
     for nm, lb in (('マゼンタ法', label_mag), ('くびれ法', label_neck)):
         print(f'  {nm}: 胴 {np.mean(lb == 0):.3f}・腿 {np.mean(lb == 1):.3f}・脛 {np.mean(lb == 2):.3f}（ボクセルの割合）')
     print(f'  2 つの分け方でボクセルの割り当てが一致する割合 {agree:.3f}')
-    json.dump(dict(rows=rows, agree=agree, pitch=PITCH, radius=RADIUS), open(out / 'seg_summary.json', 'w'), ensure_ascii=False, indent=1)
+    # quad_mesh_to_xml.py に渡す骨格: 関節の位置・足先・リンクの太さ（断面積の平らな所の中央値から、同じ面積の円の半径）・胴の外形
+    def plateau_r(tc, area, lo, hi):
+        w = (tc > lo) & (tc < hi)
+        return float(np.sqrt(np.median(area[w]) * PITCH ** 2 / np.pi))
+    torso = P[label_mag == 0]
+    skel = dict(unit='Tripo の正規化した単位・高さは y', center=center.tolist(),
+                torso_min=np.percentile(torso, 1, axis=0).tolist(), torso_max=np.percentile(torso, 99, axis=0).tolist(),
+                legs=[dict(name=L['name'], hip=L['hip'].tolist(), knee=L['knee'].tolist(), foot=L['foot'].tolist(),
+                           hip_r=L['hip_r'], knee_r=L['knee_r'],
+                           thigh_r=plateau_r(*L['prof']['股→膝'], L['hip_r'] + 0.03, np.linalg.norm(L['knee'] - L['hip']) - L['knee_r'] - 0.03),
+                           shin_r=plateau_r(*L['prof']['膝→足先'], L['knee_r'] + 0.03, np.linalg.norm(L['foot'] - L['knee']) - 0.05))
+                      for L in legs])
+    json.dump(dict(rows=rows, agree=agree, pitch=PITCH, radius=RADIUS, skeleton=skel), open(out / 'seg_summary.json', 'w'), ensure_ascii=False, indent=1)
 
     # 6. 図
     import matplotlib
