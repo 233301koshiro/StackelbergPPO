@@ -442,6 +442,9 @@ COMPARISONS = [
     ('D-5 長い腕の形の固定（9-320）', ['e2e_a1v_obspen_reach_phys_long', 'e2e_a1v_obspen_reach_phys_long_frozen'], {'robot_param_scale'}),
     # ⭐ 9-329（10-29）: 軸6 L-4 の押し、β（長さだけ学習）と α（形を固定）。比べる変数は robot_param_scale だけ（queue_ra15_l4.sh、ブランチ）
     ('軸6 L-4 押し β 対 α（9-329）', ['ra15_pusher_beta', 'ra15_pusher_alpha'], {'robot_param_scale'}),
+    # ⭐ 9-339・9-340（11-06）: 助言を強める閉ループ（queue_1106_advice.sh、想定問答 Q64）
+    ('閉ループ 押しの倍率に押す距離を足す 2.36 対 2.11 倍（9-339 ㊻）', ['tripo_pjr236p_phys', 'tripo_pjr211p_phys'], {'xml_name'}),
+    ('第2層の助言 ギア比の上限 300 対 150（9-340 ㊼）', ['tripo_pjp_mid_phys_ub300', 'tripo_pjp_mid_phys'], {'cfg'}),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
