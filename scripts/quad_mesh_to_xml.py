@@ -18,6 +18,7 @@
   - 物理の値（density 5・gear 150・armature 1・damping 1・可動域 ±30°）は quad_4x2.xml（ant の既定）と同じ。実在の部品から導いていない
 
     python3 scripts/quad_mesh_to_xml.py [--seg data/api/quad/seg/seg_summary.json] [--out assets/mujoco_envs/quad_tripo.xml]
+        [--image data/api/quad/quad_a1_0.png]   # XML の注記に書く参照画（11-06 夜の quad_walk は data/api/quad/quad_walk_0.png）
 """
 import argparse
 import json
@@ -31,6 +32,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--seg', default='data/api/quad/seg/seg_summary.json')
     ap.add_argument('--out', default='assets/mujoco_envs/quad_tripo.xml')
+    ap.add_argument('--image', default='data/api/quad/quad_a1_0.png')
     a = ap.parse_args()
     sk = json.load(open(a.seg))['skeleton']
     T = lambda p: np.array([p[2], p[0], p[1]], float)          # Tripo → MuJoCo
@@ -59,9 +61,10 @@ def main():
         </body>
       </body>  <!-- {L['name']}の脚 -->''')
         act += [f'    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="{j}_joint" gear="150" name="{j}_joint" />' for j in (t, s)]
-    xml = f'''<mujoco model="quad_tripo">
+    model = a.out.rsplit('/', 1)[-1].removesuffix('.xml')
+    xml = f'''<mujoco model="{model}">
   <!-- scripts/quad_mesh_to_xml.py が {a.seg} から作った（系譜 9-342 の追記、2026-11-06）。手で直さない。
-       Gemini の参照画（data/api/quad/quad_a1_0.png）→ Tripo の立体 → マゼンタの球で関節・断面積で太さ → この XML。
+       Gemini の参照画（{a.image}）→ Tripo の立体 → マゼンタの球で関節・断面積で太さ → この XML。
        ⚠️ 物理の値は ant の既定（density 5・gear 150）のままで、実在の部品から導いていない。 -->
   <compiler angle="degree" />
   <option integrator="RK4" timestep="0.01" />

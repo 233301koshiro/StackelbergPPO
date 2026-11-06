@@ -7,7 +7,9 @@ Text2Robot（Ringel et al., 2025）は、体積をそろえたメッシュを重
 
 やり方（学習しない・Choreonoid を使わない）:
   1. メッシュを PITCH の立方体で埋める（`voxelized().fill()`）。各ボクセルの色は最も近い頂点の色
-  2. マゼンタの頂点を 1 cm のつながりで塊にし、大きい 8 つを関節とする。高い 4 つが股、低い 4 つが膝。x と z の符号で脚ごとに組にする
+  2. マゼンタの頂点を 1 cm のつながりで塊にし、中心が MERGE 以内の塊（MIN_BLOB 頂点を超えるもの）を 1 つにまとめ、大きい 8 つを関節とする。
+     高い 4 つが股、低い 4 つが膝。x と z の符号で脚ごとに組にする
+     ⚠️ まとめるのは、リンクが球を貫くと球が左右 2 つの塊に割れるため（quad_walk_0 の膝。8 つの最大が膝の半分 8 個になり、股を落とした）
   3. 足先 = その脚の側（x・z の符号が同じ）で、膝より低い点のうち膝から最も遠い点
   4. 脚ごとに軸「胴の中心 → 股 → 膝 → 足先」を引き、ボクセルを最も近い軸の区間に割り当て（軸から RADIUS 以内）、
      軸に沿った位置 s ごとのボクセル数＝断面積 A(s) を出す
@@ -28,6 +30,8 @@ import numpy as np
 PITCH = 0.008
 RADIUS = 0.12
 DS = 0.01
+MERGE = 0.12      # 同じ球の割れた塊の中心どうしの距離の上限（quad_walk_0 の膝で 0.08。股と膝は 0.29 以上離れている）
+MIN_BLOB = 300
 
 
 def main():
@@ -56,9 +60,20 @@ def main():
     pairs = cKDTree(Q).query_pairs(0.01, output_type='ndarray')
     A = sp.coo_matrix((np.ones(len(pairs)), (pairs[:, 0], pairs[:, 1])), shape=(len(Q), len(Q)))
     _n, lab = connected_components(A, directed=False)
-    big = np.argsort(-np.bincount(lab))[:8]
-    J = np.array([Q[lab == k].mean(0) for k in big])
-    Jr = np.array([np.linalg.norm(Q[lab == k] - Q[lab == k].mean(0), axis=1).mean() for k in big])
+    cnt = np.bincount(lab)
+    blobs = [k for k in np.argsort(-cnt) if cnt[k] > MIN_BLOB]
+    groups = []   # 中心が MERGE 以内の塊を 1 つの球にまとめる
+    for k in blobs:
+        c = Q[lab == k].mean(0)
+        g = next((g for g in groups if np.linalg.norm(Q[np.isin(lab, g)].mean(0) - c) < MERGE), None)
+        (g.append(k) if g is not None else groups.append([k]))
+    groups.sort(key=lambda g: -cnt[g].sum())
+    print(f'マゼンタの塊 {len(blobs)} 個（{MIN_BLOB} 頂点超）→ 球 {len(groups)} 個にまとめた（2 つ以上の塊をまとめた球 {sum(len(g) > 1 for g in groups)} 個）')
+    if len(groups) < 8:
+        raise SystemExit(f'⛔ 関節の球が 8 個に満たない（{len(groups)} 個）')
+    sel = [np.isin(lab, g) for g in groups[:8]]
+    J = np.array([Q[m_].mean(0) for m_ in sel])
+    Jr = np.array([np.linalg.norm(Q[m_] - Q[m_].mean(0), axis=1).mean() for m_ in sel])
     hip_i = np.argsort(-J[:, 1])[:4]
     knee_i = np.argsort(-J[:, 1])[4:]
     center = P.mean(0)
