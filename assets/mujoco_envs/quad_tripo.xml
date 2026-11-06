@@ -1,0 +1,72 @@
+<mujoco model="quad_tripo">
+  <!-- scripts/quad_mesh_to_xml.py が data/api/quad/seg/seg_summary.json から作った（系譜 9-342 の追記、2026-11-06）。手で直さない。
+       Gemini の参照画（data/api/quad/quad_a1_0.png）→ Tripo の立体 → マゼンタの球で関節・断面積で太さ → この XML。
+       ⚠️ 物理の値は ant の既定（density 5・gear 150）のままで、実在の部品から導いていない。 -->
+  <compiler angle="degree" />
+  <option integrator="RK4" timestep="0.01" />
+  <default>
+    <joint armature="1" damping="1" limited="true" />
+    <geom conaffinity="0" condim="3" density="5.0" friction="1 0.5 0.5" margin="0.01" rgba=".7 .5 .3 1" />
+  </default>
+  <worldbody>
+    <geom conaffinity="1" condim="3" name="floor" pos="0 0 0" rgba="1 1 1 1" size="200 200 .125" type="plane" />
+    <body name="0" pos="0 0 0.5756">
+      <geom size="0.304 0.208 0.1" type="box" />
+      <joint armature="0" damping="0" limited="false" margin="0.01" name="root" pos="0 0 0" type="free" />
+      <body name="1" pos="0 0 0">
+        <geom fromto="0 0 0 -0.2032 0.2255 0.0322" size="0.03" type="capsule" />
+        <body name="11" pos="-0.2032 0.2255 0.0322">
+          <joint axis="0 1 0" name="11_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 -0.2413 -0.0001 -0.2713" size="0.0570" type="capsule" />
+          <body name="111" pos="-0.2413 -0.0001 -0.2713">
+            <joint axis="0 1 0" name="111_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="0 0 0 0.1866 -0.0056 -0.2858" size="0.0460" type="capsule" />
+          </body>
+        </body>
+      </body>  <!-- 後左の脚 -->
+      <body name="2" pos="0 0 0">
+        <geom fromto="0 0 0 0.2031 -0.2261 0.0321" size="0.03" type="capsule" />
+        <body name="12" pos="0.2031 -0.2261 0.0321">
+          <joint axis="0 1 0" name="12_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 0.2398 -0.0093 -0.2721" size="0.0572" type="capsule" />
+          <body name="112" pos="0.2398 -0.0093 -0.2721">
+            <joint axis="0 1 0" name="112_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="0 0 0 -0.1687 -0.0354 -0.2856" size="0.0467" type="capsule" />
+          </body>
+        </body>
+      </body>  <!-- 前右の脚 -->
+      <body name="3" pos="0 0 0">
+        <geom fromto="0 0 0 0.2039 0.2262 0.032" size="0.03" type="capsule" />
+        <body name="13" pos="0.2039 0.2262 0.032">
+          <joint axis="0 1 0" name="13_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 0.2402 0.0087 -0.2715" size="0.0573" type="capsule" />
+          <body name="113" pos="0.2402 0.0087 -0.2715">
+            <joint axis="0 1 0" name="113_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="0 0 0 -0.1718 0.035 -0.2847" size="0.0467" type="capsule" />
+          </body>
+        </body>
+      </body>  <!-- 前左の脚 -->
+      <body name="4" pos="0 0 0">
+        <geom fromto="0 0 0 -0.2029 -0.2254 0.0315" size="0.03" type="capsule" />
+        <body name="14" pos="-0.2029 -0.2254 0.0315">
+          <joint axis="0 1 0" name="14_joint" pos="0 0 0" range="-30 30" type="hinge" />
+          <geom fromto="0 0 0 -0.2417 0.0005 -0.2707" size="0.0571" type="capsule" />
+          <body name="114" pos="-0.2417 0.0005 -0.2707">
+            <joint axis="0 1 0" name="114_joint" pos="0 0 0" range="-30 30" type="hinge" />
+            <geom fromto="0 0 0 0.1868 0.0061 -0.2855" size="0.0460" type="capsule" />
+          </body>
+        </body>
+      </body>  <!-- 後右の脚 -->
+    </body>
+  </worldbody>
+  <actuator>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="11_joint" gear="150" name="11_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="111_joint" gear="150" name="111_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="12_joint" gear="150" name="12_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="112_joint" gear="150" name="112_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="13_joint" gear="150" name="13_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="113_joint" gear="150" name="113_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="14_joint" gear="150" name="14_joint" />
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="114_joint" gear="150" name="114_joint" />
+  </actuator>
+</mujoco>

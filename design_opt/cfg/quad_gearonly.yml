@@ -29,6 +29,11 @@ max_body_depth: 4
 add_body_condition:
   max_nchild: 2
 
+env_specs:
+  # ⭐ 2026-11-06（9-342）: ant.py の reset_state は既定で胴の高さを 0.4 m に置き直す（BodyGen の ant の胴の高さ）。
+  #   quad_tripo は胴の中心が 0.576 m なので、置き直すと足が床の 17 cm 下から始まった。XML の高さのまま始める
+  init_height: false
+
 robot:
   param_mapping: sin
   no_root_offset: true
