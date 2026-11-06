@@ -14,6 +14,7 @@
 ⚠️ 当たり判定はカプセルの近似で、部品の形そのものではない。胴に制御基板・電池は載せていない（部品の質量だけ）。
 
     QUAD=tripo IN=data/axis6/quad/quad_tripo_parts.json OUT=assets/mujoco_envs/quad_tripo_rab.xml python3 scripts/make_quad_ra_xml.py
+    QUAD=walk IN=data/axis6/quad/quad_walk_ra235_parts.json TPL=assets/mujoco_envs/quad_walk_ra235.xml OUT=assets/mujoco_envs/quad_walk_ra235_rab.xml python3 scripts/make_quad_ra_xml.py
 """
 import json
 import os
@@ -199,7 +200,7 @@ def main():
 '''
     head = open(TPL).read()
     head = head[head.index('<mujoco'):head.index('<worldbody>')]
-    head = re.sub(r'model="[^"]+"', f'model="quad_{QUAD}_rab"', head, count=1)
+    head = re.sub(r'model="[^"]+"', f'model="{os.path.basename(OUT).removesuffix(".xml")}"', head, count=1)   # 名前は出力のファイル名（tripo は従来どおり quad_tripo_rab）
     # モータ: 雛形の並び（脚ごとに股・膝）とギア比・ctrlrange をそのまま、名前だけ出力の関節へ
     ren = {TN[j](k): f'{n}{k}_joint' for k in legs for j, n in (('hipj', '1'), ('kneej', '11'))}
     act_el = tpl.find('actuator')

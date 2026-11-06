@@ -12,6 +12,12 @@
       connect_point ↔ right-side）の、近似の関節の間（THIGH_MM、既定 108.8 mm）にいちばん近い行 → 膝のサーボ
     - 脛: 膝のホーン → TIP_HINGE ＋ ブロックの段（継ぎ目を直交）。先端までの長さが FOOT_MM（既定 102.4 mm ＝ 近似の脛 82.4 ＋ 半径 20.0）に
       いちばん近い段数（0〜8）を選ぶ
+  QUAD=walk（股・膝とも水平の軸。`quad_walk_ra235` を組む。11-06 深夜、ユーザー「おすすめで」。四脚の形のノウハウ.md の K4「股は胴の側面の外」）
+    - 股の位置は雛形 TPL の取り付けのカプセルの先から読む（tripo のように手で書かない）。腿・脛の長さは THIGH_MM・FOOT_MM で渡す
+    - RAIL（例 plate_4_8）を付けると、股のサーボを胴の板の下に直接吊らず、板の下に RAIL を付けて側面の外へはみ出させ、
+      そのはみ出した所に Frame_Long_Plug でサーボを吊る（サーボを板の下に直接吊ると、ホーンは板の縁から 5 mm 外の y = 69 mm が限り）。
+      RAIL のポッチのうち胴の板の下に入るものはすべて板の穴に入り、入るのは 2 列以上
+    - 狙うホーンの位置: x は雛形の股、y は雛形の足先の y ＋ HINGE_IN（19 mm。Hinge は脚の中心線をホーンより内側へ寄せる、K4）
 出力: OUT の JSON（部品ごとの型・姿勢 T〔mm〕・脚の番号・部分〔torso / mount / thigh / shin〕、関節のホーンの姿勢）。XML は `make_quad_ra_xml.py`。
 
     QUAD=tripo OUT=data/axis6/quad/quad_tripo_parts.json \\
@@ -36,6 +42,8 @@ THIGH_MM = float(os.environ.get('THIGH_MM', '108.8'))
 FOOT_MM = float(os.environ.get('FOOT_MM', '102.4'))
 TIP_HINGE = os.environ.get('TIP_HINGE', 'Hinge_Short_Plug')
 PLATE = os.environ.get('PLATE', 'plate_16_16')
+RAIL = os.environ.get('RAIL', '')          # 股のサーボを胴の側面の外へ出す板（QUAD=walk。空なら胴の板の下に直接吊る）
+HINGE_IN = 19.0                            # Hinge の side_connect_point から Hinge の中心（脚の中心線）まで、ホーンの軸に沿って（mm）
 TPL = os.environ.get('TPL', f'/userdir/StackelbergPPO/assets/mujoco_envs/quad_{QUAD}_ra.xml')   # 近似の XML（0° の姿勢の向き）
 # 近似（quad_tripo_ra.xml）の股の位置（胴の中心から、mm）。脚 1〜4 の順
 HIPS = {'tripo': [(-60.96, 67.65), (60.93, -67.83), (61.17, 67.86), (-60.87, -67.62)],
@@ -276,7 +284,7 @@ def main():
         shin = [(MT, TIP_HINGE)] + [(x[4], lt) for lt, lay in spt[0] for x in lay]
         return thigh, shin, MK, layers, spt[0]
 
-    def posed_score(MS, chain, leg, row):
+    def posed_score(MS, chain, leg, row, extra=()):
         """0° の姿勢にそろえ、股・膝 −30 / 0 / +30° の 9 姿勢で、脛が腿に・腿と脛が胴と股に入る体積の最大（mm³）"""
         thigh, shin, MK, _, _ = chain
         oh, ah = MS[:3, 3], MS[:3, :3] @ hz
@@ -296,7 +304,7 @@ def main():
         sh = signed(tip, vec(tb[f'11{leg}'].find('geom').get('fromto'))[3:], ak)
         M2 = rot_about(ok_, ak, sh)
         shin = [(M2 @ m, t) for m, t in shin]
-        base = [(Mpl, PLATE), (MS, 'XL-430')]
+        base = [(Mpl, PLATE), (MS, 'XL-430')] + list(extra)     # extra: 股の RAIL・フレーム（walk）
         worst = 0
         for hdeg in (-30, 0, 30):
             Mh_ = rot_about(oh, ah, hdeg)
@@ -305,23 +313,33 @@ def main():
             for kdeg in (-30, 0, 30):
                 Mk_ = rot_about(ko, ka, kdeg)
                 sh_ = [(Mk_ @ (Mh_ @ m), t) for m, t in shin]
-                worst = max(worst, overlap(sh_, th_), overlap(th_[1:] + sh_, base))
+                # 腿の Hinge はホーンと股のサーボに接して付くので、股のサーボを除いた胴の側（板・RAIL・フレーム）とだけ見る
+                worst = max(worst, overlap(sh_, th_), overlap(th_[1:] + sh_, base), overlap(th_[:1], base[:1] + base[2:]))
         return worst, th, sh
 
-    for leg, (tx, ty) in enumerate(HIPS[QUAD] if QUAD == 'tripo' else [], start=1):
-        sy = np.sign(ty)
-        target = center[:2] + np.array([tx, ty])
-        mounts = []
-        for hn in holes:
+    if QUAD not in HIPS and QUAD != 'x42':
+        # 雛形の取り付けのカプセルの先（股）。y は足先の y ＋ HINGE_IN（組んだ脚の中心線が雛形の足先の面に来るホーンの位置）
+        HIPS[QUAD] = []
+        for k in range(1, 5):
+            hp = vec(tb[str(k)].find('geom').get('fromto'))[3:]
+            ft = hp + vec(tb[f'11{k}'].get('pos')) + vec(tb[f'11{k}'].find('geom').get('fromto'))[3:]
+            HIPS[QUAD].append((hp[0], ft[1] + np.sign(ft[1]) * HINGE_IN))
+        log(f'{QUAD}: 狙うホーンの xy（胴の中心から、mm）{[tuple(np.round(h, 1)) for h in HIPS[QUAD]]}')
+
+    def servo_mounts(host_M, host_t, host_holes, sy, target, avoid):
+        """host（胴の板か RAIL）の穴に Frame_Long_Plug を差し、ホーンが外向き（sy）のサーボを吊る付け方。avoid の部品に食い込むものは外す"""
+        out = []
+        hw = np.array([wp(host_M, host_t, n) for n in host_holes])
+        for hn in host_holes:
             for fp in corners('Frame_Long_Plug', 'PC1'):
                 for c in CF:
-                    r = rel(PLATE, hn, 'Frame_Long_Plug', fp, c)
+                    r = rel(host_t, hn, 'Frame_Long_Plug', fp, c)
                     if r is None:
                         continue
-                    MF = Mpl @ r
+                    MF = host_M @ r
                     fw = np.array([wp(MF, 'Frame_Long_Plug', n) for n in pts('Frame_Long_Plug', 'PC1')])
-                    if not all(np.min(np.linalg.norm(hole_w - f, axis=1)) < TOL for f in fw):
-                        continue                       # フレームのポッチがすべてプレートの穴に入る
+                    if not all(np.min(np.linalg.norm(hw - f, axis=1)) < TOL for f in fw):
+                        continue                       # フレームのポッチがすべて host の穴に入る
                     for fs in ('connect_point', 'connect_point2'):
                         for ss in SERVO_PTS:
                             r2 = rel('Frame_Long_Plug', fs, 'XL-430', ss, 'fixed')
@@ -334,31 +352,87 @@ def main():
                             sv = Shape('XL-430', P).pts @ MS[:3, :3].T + MS[:3, 3]
                             if sv[:, 2].max() > center[2] - 1.6 + TOL:
                                 continue               # サーボはプレートの下
-                            mounts.append((float(np.linalg.norm(MS[:2, 3] - target)), hn, fp, c, fs, ss, MS))
+                            d = float(np.linalg.norm(MS[:2, 3] - target))
+                            if avoid and overlap([(MS, 'XL-430')], avoid):
+                                continue
+                            out.append((d, hn, fp, c, fs, ss, MS, MF))
+        return out
+
+    rails = {}
+    if RAIL:
+        # 胴の板の下に RAIL を付け、側面（±y）の外へはみ出させる。板の下に入るポッチはすべて穴に入り、入るのは 2 列（8 個）以上
+        rp_all = pts(RAIL, 'PC1')
+        seen_r = set()
+        for hn in holes:
+            for rp in corners(RAIL, 'PC1'):
+                for c in CF:
+                    r = rel(PLATE, hn, RAIL, rp, c)
+                    if r is None:
+                        continue
+                    MR = Mpl @ r
+                    rw = np.array([wp(MR, RAIL, n) for n in rp_all]) - center
+                    inside = np.all(np.abs(rw[:, :2]) < 64.0, axis=1)
+                    if inside.sum() < 8 or inside.all():
+                        continue
+                    if not all(np.min(np.linalg.norm(hole_w - (q + center), axis=1)) < TOL for q in rw[inside]):
+                        continue
+                    sy_ = np.sign(rw[~inside, 1].mean())
+                    if not np.all(np.abs(rw[~inside, 1]) >= 64.0) or np.any(np.sign(rw[~inside, 1]) != sy_):
+                        continue                       # はみ出すのは片方の側面（±y）の外だけ
+                    key = (tuple(np.round(MR[:3, 3], 1)), tuple(np.round(MR[:3, :3].ravel(), 2)))
+                    if key in seen_r:
+                        continue
+                    seen_r.add(key)
+                    rails.setdefault(sy_, []).append((hn, rp, c, MR))
+        log(f'{RAIL} を側面の外へはみ出させる付け方: +y {len(rails.get(1.0, []))}・−y {len(rails.get(-1.0, []))}')
+
+    for leg, (tx, ty) in enumerate(HIPS[QUAD] if QUAD != 'x42' else [], start=1):
+        sy = np.sign(ty)
+        target = center[:2] + np.array([tx, ty])
+        if RAIL:
+            mounts = []
+            for rhn, rp, rc, MR in rails[sy]:
+                if abs(MR[:3, :3] @ np.mean([CPT[RAIL][n][0] for n in rp_all], 0) + MR[:3, 3] - np.r_[target, 0])[0] > 40:
+                    continue                           # RAIL の中心が狙いの x から遠い
+                for m in servo_mounts(MR, RAIL, pts(RAIL, 'SC1'), sy, target, [(Mpl, PLATE), (MR, RAIL)]):
+                    mounts.append(m + ((rhn, rp, rc, MR),))
+        else:
+            mounts = [m + (None,) for m in servo_mounts(Mpl, PLATE, holes, sy, target, [])]
         assert mounts, f'脚 {leg}: 股の付け方が無い'
         dmin = min(m[0] for m in mounts)
+        near = [m for m in mounts if m[0] <= dmin + 0.5]
         cand = []
         for fi, row in enumerate(fam_rows):
-            for d, hn, fp, c, fs, ss, MS in [m for m in mounts if m[0] <= dmin + 0.5]:
+            for mi, (d, hn, fp, c, fs, ss, MS, MF, rl) in enumerate(near):
+                extra = [(MF, 'Frame_Long_Plug')] + ([(rl[3], RAIL)] if rl else [])
                 for ch in CF:
                     for cs in CF:
                         chain = leg_chain(MS, ch, cs, row)
                         if chain is None:
                             continue
-                        sc = posed_score(MS, chain, leg, row)
+                        sc = posed_score(MS, chain, leg, row, extra if rl else ())
                         if sc is None:
                             continue
-                        cand.append((sc[0], abs(sc[2]), d, hn, fp, c, fs, ss, ch, cs, sc[1], sc[2], fi))
+                        cand.append((sc[0], abs(sc[2]), d, mi, ch, cs, sc[1], sc[2], fi))
             if cand and min(x[0] for x in cand) < 400:
                 break                                  # 接している面のぶん（約 250 mm³）だけの組み方が見つかった
         assert cand, f'脚 {leg}: 表どおりの腿が組める付け方が無い'
         cand.sort(key=lambda x: (x[0], x[1]))
-        log(f'脚 {leg}: 候補 {len(cand)}（股の付け方 {sum(1 for m in mounts if m[0] <= dmin + 0.5)} × 腿の Hinge の向き × 脛の Hinge の向き）。'
-            f'食い込みの最大（mm³）の少ない順: {[(x[0], FAMS[x[12]], x[8], x[9], round(x[11])) for x in cand[:4]]}')
-        worst, _, d, hn, fp, c, fs, ss, ch, cs, th, sh, fi = cand[0]
+        log(f'脚 {leg}: 候補 {len(cand)}（股の付け方 {len(near)} × 腿の Hinge の向き × 脛の Hinge の向き）。'
+            f'食い込みの最大（mm³）の少ない順: {[(x[0], FAMS[x[8]], x[4], x[5], round(x[7])) for x in cand[:4]]}')
+        worst, _, d, mi, ch, cs, th, sh, fi = cand[0]
+        _, hn, fp, c, fs, ss, _, _, rl = near[mi]
         row = fam_rows[fi]
+        host = PL
+        if rl:
+            RL = ru.makeParts(RAIL)
+            assert R.attach(RL, f'{RL.name}/{rl[1]}', f'{PL.name}/{rl[0]}', rl[2])
+            parts.append(dict(name=f'脚{leg}の股の板（側面の外へ）', type=RAIL, p=RL, leg=leg, seg='mount'))
+            host = RL
+            log(f'  股の板 {RAIL}: 胴の板の穴 {rl[0]}・{rl[1]}・{rl[2]}、板の中心（胴の中心から）'
+                f'{np.round(pose(RL)[:3, :3] @ np.mean([CPT[RAIL][n][0] for n in rp_all], 0) + pose(RL)[:3, 3] - center, 1).tolist()} mm')
         F = ru.makeParts('Frame_Long_Plug')
-        assert R.attach(F, f'{F.name}/{fp}', f'{PL.name}/{hn}', c)
+        assert R.attach(F, f'{F.name}/{fp}', f'{host.name}/{hn}', c)
         S = ru.makeParts('XL-430')
         assert R.attach(S, f'{S.name}/{ss}', f'{F.name}/{fs}', 'fixed')
         parts += [dict(name=f'脚{leg}の股のフレーム', type='Frame_Long_Plug', p=F, leg=leg, seg='mount'),
