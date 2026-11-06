@@ -7,6 +7,8 @@
 出すもの（全話。1 話で判定しない、CLAUDE.md ⑤-3）:
   - 話ごと: step 数・終わり方（胴の高さの下限 / 傾きの上限 / 打ち切り）・胴の x の進み・y のずれ・胴の高さの最低・傾きの最大・足先の高さの最低
     終わり方の判定は env（`ant.py`）と同じ量で: 高さ ＝ 胴の原点の z、傾き ＝ 胴の z 軸と鉛直の角。閾値は run の cfg の `done_condition`
+  - 最後の行 `[quad] 判定:` に ⛔（nan・足先のめり込み・体の原点が床の下・跳ねた・ギア比が話で違う）と ⚠️（すぐ倒れる・横へ・後ろへ）。
+    見張り（`queue_quad_walk.sh`）がこの行を拾う
   - 図（<軌跡>.png、既定は `<run>/trace/quad_view.png`）: ① 上から見た胴の道筋と足先の着いた点 ② 胴の高さ ③ 傾き ④ 足先の高さ（中央値の話。歩き方の型を見る）
   - 足先 ＝ 脛（名前が `11` で始まる 3 桁の体）のカプセルの終点からカプセルの半径だけ下（床に着く点の近似）。全部の体の z の最低も出す（床より下へ出ていないか）
     ⚠️ 実行の段階に入るときの姿勢の乱れ（ant.py の ±0.1、傾き 3〜13°）で、足が床に最大 22 mm 埋まって始まり 5 step ほどで抜ける（Bug 98 の残り）。
@@ -64,15 +66,37 @@ def main():
             how = '打ち切り（最後まで）'
         else:
             how = '⚠️ 不明（再生の step の上限か）'
-        e = dict(T=T, how=how, dx=tor[-1, 0] - tor[0, 0], dy=tor[-1, 1] - tor[0, 1], hmin=tor[:, 2].min(), tmax=tilt.max(),
+        e = dict(T=T, how=how, dx=tor[-1, 0] - tor[0, 0], dx250=tor[min(T, 250) - 1, 0] - tor[0, 0], zmax=tor[:, 2].max(), finite=bool(np.isfinite(xp).all()), dy=tor[-1, 1] - tor[0, 1], hmin=tor[:, 2].min(), tmax=tilt.max(),
                  fmin=feet[10:, ..., 2].min() if T > 10 else np.nan, f0=feet[:10, ..., 2].min(), zmin=xp[..., 2].min(), tor=tor, tilt=tilt, feet=feet)
         eps.append(e)
-        print(f'[quad] 話 {k+1}: {T} step・{how}・x の進み {e["dx"]:+.3f} m・y {e["dy"]:+.3f} m・胴の高さの最低 {e["hmin"]:.3f} m・'
+        print(f'[quad] 話 {k+1}: {T} step・{how}・x の進み {e["dx"]:+.3f} m（250 step で {e["dx250"]:+.3f}）・y {e["dy"]:+.3f} m・胴の高さの最低 {e["hmin"]:.3f} m・'
               f'傾きの最大 {e["tmax"]:.1f}°・足先の最低 {e["fmin"]*1000:+.1f} mm（最初の 10 step は {e["f0"]*1000:+.1f} mm）・体の原点の最低 {e["zmin"]*1000:+.1f} mm')
     dx = np.array([e['dx'] for e in eps])
     print(f'[quad] x の進み: 中央値 {np.median(dx):+.3f} m・幅 {dx.min():+.3f}〜{dx.max():+.3f} m（{len(eps)} 話）')
+    # ⭐ 見張り（queue_quad_walk.sh）が拾う判定。⛔ は「止めて調べる」、⚠️ は「見ておく」
+    bad, warn = [], []
+    if not all(e['finite'] for e in eps):
+        bad.append('位置に nan / inf')
     if min(e['fmin'] for e in eps) < -0.005:
-        print('[quad] ⛔ 最初の 10 step の後に、足先が床より 5 mm 以上下へ出た話がある（めり込み）')
+        bad.append(f'最初の 10 step の後に足先が床より 5 mm 以上下（最低 {min(e["fmin"] for e in eps)*1000:+.1f} mm、めり込み）')
+    if min(e['zmin'] for e in eps) < 0:
+        bad.append(f'体の原点が床より下（{min(e["zmin"] for e in eps)*1000:+.1f} mm）')
+    h0 = float(np.median([e['tor'][0, 2] for e in eps]))
+    if max(e['zmax'] for e in eps) > 2 * h0:
+        bad.append(f'胴が最初の高さの 2 倍より上へ出た（{max(e["zmax"] for e in eps):.3f} m、跳ねた・飛んだ）')
+    gear = [np.asarray(g, float) for g in d['ep_gear'] if g is not None]
+    if gear and not all(np.allclose(g[np.isfinite(g)], gear[0][np.isfinite(gear[0])]) for g in gear):
+        bad.append('話によってギア比が違う（固定のはず）')
+    if gear:
+        print(f'[quad] ギア比（1 話目）: {np.round(gear[0][np.isfinite(gear[0])], 3).tolist()}')
+    if sum(e['how'] in ('高さの下限', '傾きの上限') for e in eps) == len(eps) and np.median([e['T'] for e in eps]) < 50:
+        warn.append(f'全話が 50 step 未満で倒れて終わる（中央値 {np.median([e["T"] for e in eps]):.0f} step）')
+    if np.median([abs(e['dy']) for e in eps]) > max(abs(np.median(dx)), 0.05):
+        warn.append('y のずれが x の進みより大きい（横へ進んでいる）')
+    if np.median(dx) < -0.05:
+        warn.append(f'後ろへ進む（x の進み 中央値 {np.median(dx):+.3f} m。報酬は +x）')
+    print(f'[quad] 250 step（10 s）の x の進み: 中央値 {np.median([e["dx250"] for e in eps]):+.3f} m')
+    print('[quad] 判定: ' + ('⛔ ' + ' / '.join(bad) if bad else '✅ 異常なし') + (('  ⚠️ ' + ' / '.join(warn)) if warn else ''))
     rep = eps[int(np.argsort(dx)[len(dx) // 2])]
 
     _jp = '/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
