@@ -229,13 +229,16 @@ def _queue_launches(t, r):
         return True
     # 変数は、末尾なら seed の接尾辞（`$X` ＝ 空か `_s2`）、途中なら 1〜2 語（`tripo_${1}_phys_s2` の `pjp_long`）にだけ一致させる。
     #   何にでも一致させると `tripo_pjp_mid_phys$X` が `tripo_pjp_mid_phys_nosync` まで拾う
+    #   ⛔ Bug 99（11-07）: 途中の変数は 1〜2 語なら何でも通したので、queue_phys.sh の `tripo_${1}_phys_s2` が
+    #   `tripo_pjr236p_phys_s2` まで拾った。途中の変数に入る値は、同じキューに単独の語として書いてあるもの（`for A in "pjp_long …"`）に限る
     var = r'\$\{?\w+\}?'
     for m in re.finditer(rf'[A-Za-z0-9_]{{4,}}(?:{var}[A-Za-z0-9_]*)+', t):
         parts = re.split(var, m.group(0))
         pat = ''.join(re.escape(p) + ('' if i == len(parts) - 1 else
-                      ('(?:_s\\d+)?' if i == len(parts) - 2 and not parts[-1] else '[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?'))
+                      ('(?:_s\\d+)?' if i == len(parts) - 2 and not parts[-1] else '([A-Za-z0-9]+(?:_[A-Za-z0-9]+)?)'))
                       for i, p in enumerate(parts))
-        if re.fullmatch(pat, r):
+        mm = re.fullmatch(pat, r)
+        if mm and all(re.search(rf'(?<!\w){re.escape(v)}(?!\w)', t) for v in mm.groups()):
             return True
     for suf in set(re.findall(r'\$\{?1\}?(_[A-Za-z0-9_]+)', t)):
         if r.endswith(suf) and re.search(rf'(?<![\w]){re.escape(r[:-len(suf)])}(?![\w])', t):
@@ -716,6 +719,11 @@ def reproduce():
         ('変数で名前を組むキューの run（R1 の `_fx_s2`）の事前登録を拾う', ck_prereg('tripo_pjp_mid_frozen_phys_fx_s2')[0] is True),
         ('接尾辞を足すキューの run（`tripo_pjp_long_phys_s2_ws`）の事前登録を拾う', ck_prereg('tripo_pjp_long_phys_s2_ws')[0] is True),
         ('どのキューにも無い名前は拾わない', ck_prereg('tripo_pjp_mid_frozen_phys_zz_s9')[0] is False),
+        # ⛔ Bug 99（11-07）: 途中の変数（`tripo_${1}_phys_s2`）はキューに書いてある値にだけ一致させる
+        ('queue_phys.sh の `tripo_${1}_phys_s2` は書いてある値（pjp_long）を拾う',
+         _queue_launches((ROOT / 'scripts/queue_phys.sh').read_text(encoding='utf-8'), 'tripo_pjp_long_phys_s2')),
+        ('queue_phys.sh は書いていない値（pjr236p）を拾わない',
+         not _queue_launches((ROOT / 'scripts/queue_phys.sh').read_text(encoding='utf-8'), 'tripo_pjr236p_phys_s2')),
         # ⭐ Bug 82（10-27）: 柱に食い込んで NaN で切れる D-5 は ⛔、柱なしの到達は ✅
         ('話が NaN で切れて短くなった D-5（Bug 82）を ⛔', ck_ep_len('e2e_a1v_obspen_reach_phys')[0] is False),
         ('柱なしの到達は話の長さ ✅', ck_ep_len('e2e_a1v_reach_phys')[0] is True),
