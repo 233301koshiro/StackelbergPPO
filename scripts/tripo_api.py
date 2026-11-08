@@ -89,8 +89,12 @@ def wait(tid, quiet=False):
 
 
 def fetch(url, dest):
+    # ⭐ 2026-11-06（Bug 92）: 配布のサーバーが urllib の既定の User-Agent（Python-urllib）を 403 で弾くようになった
+    #   （同じ URL を curl で取ると 200）。落ちると生成済みの task を捨てることになり、打ち直すと 30 クレジットをもう一度払う。
+    #   落ちたら --resume <task_id> で、生成し直さずに取り直せる
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with urllib.request.urlopen(url, timeout=300) as f:
+    r = urllib.request.Request(url, headers={'User-Agent': 'curl/8.5.0'})
+    with urllib.request.urlopen(r, timeout=300) as f:
         dest.write_bytes(f.read())
     return dest
 
@@ -103,11 +107,21 @@ def main() -> int:
     ap.add_argument('--out')
     ap.add_argument('--verify-seed', action='store_true',
                     help='⭐ 同じ seed で 2 回生成し、出力が同一かを実測する')
+    ap.add_argument('--resume', metavar='TASK_ID',
+                    help='⭐ 作った task の結果だけを取りに行く（生成し直さない・クレジットを使わない。Bug 92）')
     a = ap.parse_args()
 
     if a.balance:
         b, f = balance()
         print(f'残高 {b} クレジット（凍結 {f}）／ 1 生成 = 30 クレジット ≒ {b // 30} 回ぶん')
+        return 0
+    if a.resume:
+        d = wait(a.resume)
+        if d['status'] != 'success':
+            print(f"⛔ {d['status']}"); return 1
+        url = (d.get('output') or {}).get('pbr_model') or (d.get('output') or {}).get('model')
+        out = fetch(url, Path(a.out or 'data/api') / f'{a.resume[:8]}.glb')
+        print(f'  → {out} ({out.stat().st_size} bytes) sha256={hashlib.sha256(out.read_bytes()).hexdigest()[:16]}…')
         return 0
     if not a.image:
         ap.error('--image か --balance を指定してください')

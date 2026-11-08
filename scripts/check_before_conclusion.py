@@ -229,13 +229,16 @@ def _queue_launches(t, r):
         return True
     # 変数は、末尾なら seed の接尾辞（`$X` ＝ 空か `_s2`）、途中なら 1〜2 語（`tripo_${1}_phys_s2` の `pjp_long`）にだけ一致させる。
     #   何にでも一致させると `tripo_pjp_mid_phys$X` が `tripo_pjp_mid_phys_nosync` まで拾う
+    #   ⛔ Bug 99（11-07）: 途中の変数は 1〜2 語なら何でも通したので、queue_phys.sh の `tripo_${1}_phys_s2` が
+    #   `tripo_pjr236p_phys_s2` まで拾った。途中の変数に入る値は、同じキューに単独の語として書いてあるもの（`for A in "pjp_long …"`）に限る
     var = r'\$\{?\w+\}?'
     for m in re.finditer(rf'[A-Za-z0-9_]{{4,}}(?:{var}[A-Za-z0-9_]*)+', t):
         parts = re.split(var, m.group(0))
         pat = ''.join(re.escape(p) + ('' if i == len(parts) - 1 else
-                      ('(?:_s\\d+)?' if i == len(parts) - 2 and not parts[-1] else '[A-Za-z0-9]+(?:_[A-Za-z0-9]+)?'))
+                      ('(?:_s\\d+)?' if i == len(parts) - 2 and not parts[-1] else '([A-Za-z0-9]+(?:_[A-Za-z0-9]+)?)'))
                       for i, p in enumerate(parts))
-        if re.fullmatch(pat, r):
+        mm = re.fullmatch(pat, r)
+        if mm and all(re.search(rf'(?<!\w){re.escape(v)}(?!\w)', t) for v in mm.groups()):
             return True
     for suf in set(re.findall(r'\$\{?1\}?(_[A-Za-z0-9_]+)', t)):
         if r.endswith(suf) and re.search(rf'(?<![\w]){re.escape(r[:-len(suf)])}(?![\w])', t):
@@ -442,6 +445,12 @@ COMPARISONS = [
     ('D-5 長い腕の形の固定（9-320）', ['e2e_a1v_obspen_reach_phys_long', 'e2e_a1v_obspen_reach_phys_long_frozen'], {'robot_param_scale'}),
     # ⭐ 9-329（10-29）: 軸6 L-4 の押し、β（長さだけ学習）と α（形を固定）。比べる変数は robot_param_scale だけ（queue_ra15_l4.sh、ブランチ）
     ('軸6 L-4 押し β 対 α（9-329）', ['ra15_pusher_beta', 'ra15_pusher_alpha'], {'robot_param_scale'}),
+    # ⭐ 9-339・9-340（11-06）: 助言を強める閉ループ（queue_1106_advice.sh、想定問答 Q64）
+    ('閉ループ 押しの倍率に押す距離を足す 2.36 対 2.11 倍（9-339 ㊻）', ['tripo_pjr236p_phys', 'tripo_pjr211p_phys'], {'xml_name'}),
+    ('第2層の助言 ギア比の上限 300 対 150（9-340 ㊼）', ['tripo_pjp_mid_phys_ub300', 'tripo_pjp_mid_phys'], {'cfg'}),
+    # ⭐ 9-343（11-06）: 軸6 L-4 の取り直し、制御コスト 0.04 → 0.16（Bug 94。queue_ra15_cc016.sh、ブランチ）
+    ('軸6 L-4 取り直し β 対 α・制御コスト 0.16（9-343 ㊾）', ['ra15_pusher_beta_cc016', 'ra15_pusher_alpha_cc016'], {'robot_param_scale'}),
+    ('軸6 L-4 β の制御コスト 0.16 対 0.04（9-343）', ['ra15_pusher_beta_cc016', 'ra15_pusher_beta'], {'reward_specs.ctrl_cost_coeff'}),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
@@ -710,6 +719,11 @@ def reproduce():
         ('変数で名前を組むキューの run（R1 の `_fx_s2`）の事前登録を拾う', ck_prereg('tripo_pjp_mid_frozen_phys_fx_s2')[0] is True),
         ('接尾辞を足すキューの run（`tripo_pjp_long_phys_s2_ws`）の事前登録を拾う', ck_prereg('tripo_pjp_long_phys_s2_ws')[0] is True),
         ('どのキューにも無い名前は拾わない', ck_prereg('tripo_pjp_mid_frozen_phys_zz_s9')[0] is False),
+        # ⛔ Bug 99（11-07）: 途中の変数（`tripo_${1}_phys_s2`）はキューに書いてある値にだけ一致させる
+        ('queue_phys.sh の `tripo_${1}_phys_s2` は書いてある値（pjp_long）を拾う',
+         _queue_launches((ROOT / 'scripts/queue_phys.sh').read_text(encoding='utf-8'), 'tripo_pjp_long_phys_s2')),
+        ('queue_phys.sh は書いていない値（pjr236p）を拾わない',
+         not _queue_launches((ROOT / 'scripts/queue_phys.sh').read_text(encoding='utf-8'), 'tripo_pjr236p_phys_s2')),
         # ⭐ Bug 82（10-27）: 柱に食い込んで NaN で切れる D-5 は ⛔、柱なしの到達は ✅
         ('話が NaN で切れて短くなった D-5（Bug 82）を ⛔', ck_ep_len('e2e_a1v_obspen_reach_phys')[0] is False),
         ('柱なしの到達は話の長さ ✅', ck_ep_len('e2e_a1v_reach_phys')[0] is True),
