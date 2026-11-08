@@ -21,6 +21,15 @@ if os.environ.get('CONTACT_LOG_OFF') != '1':
     os.environ['CNOID_CONTACT_LOG'] = '1'
 assert os.environ.get('TRACE_OUT'), 'TRACE_OUT を渡す（run の arm_trace.npz を上書きしないため）'
 
+# ⛔ Bug 102（2026-11-08）: env のモジュールは物理の環境変数（CNOID_SUBSTEPS・STRICT・TICK_SYNC ほか）を import の瞬間に定数へ読む。
+#   launch_env.json を当てるのは record_arm_trace.py だが、このプローブはその前に env を import するので、学習時の物理が 1 つも効かなかった
+#   （四脚で刻みの分割・速さの上限・可動域のトルク・減衰のトルクの起動の行が 0 行、胴の x が 14.11 → 0.16 m）。import の前に同じやり方で当てる
+import json
+_le = os.path.join(os.environ['EVAL_RESTORE_DIR'], 'launch_env.json')
+if os.path.exists(_le):
+    for _k, _v in json.load(open(_le)).items():
+        os.environ.setdefault(_k, _v)
+
 import numpy as np
 from khrylib.rl.envs.common import mujoco_env_choreonoid as M
 
