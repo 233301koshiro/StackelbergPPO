@@ -1154,11 +1154,20 @@ class ChoreonoidSimWorld:
             self.world_item.setDefaultMaterialTableFile(_mt)
             print(f'[choreonoid] 材質テーブルを差し替えた: {_mt}', flush=True)
 
-        for candidate in (
+        # ⭐ Bug 100（2026-11-08、系譜 9-342）: 内蔵の floor.body は 10 × 10 m（端は ±5 m）で、
+        #   四脚は x = 5 m で床の端から落ちて話が終わっていた。腕は根元が固定なので効いたことが無い。
+        #   ⚠️ **既定では何もしない。**`CNOID_FLOOR_BODY` を指定したときだけ床の .body を差し替える
+        #   （例: assets/choreonoid/bodies/floor_wide/floor_wide.body、200 × 200 m）。
+        _fb = os.environ.get('CNOID_FLOOR_BODY')
+        if _fb and not os.path.exists(_fb):
+            raise FileNotFoundError(f'CNOID_FLOOR_BODY が無い: {_fb}')
+        for candidate in ((_fb,) if _fb else (
             '/choreonoid_ws/install/share/choreonoid-2.3/model/misc/floor.body',
             '/choreonoid_ws/install/share/choreonoid-2.0/model/misc/floor.body',
-        ):
+        )):
             if os.path.exists(candidate):
+                if _fb:
+                    print(f'[choreonoid] 床を差し替えた: {_fb}', flush=True)
                 floor_item = BodyItem()
                 floor_item.load(candidate)
                 self.world_item.addChildItem(floor_item)
