@@ -980,6 +980,11 @@ _JOINT_FRICTION_VS = float(os.environ.get('CNOID_JOINT_FRICTION_VS') or 0.05)
 if _ACT_DELAY:
     print(f'[choreonoid] ⭐ 腕への指令を {_ACT_DELAY} 制御 step 遅らせる（CNOID_ACT_DELAY、系譜 9-332）', flush=True)
 _FRICTION_SAID = False
+# ⭐ 2026-11-08（系譜 9-342、四脚の実物とのずれ）: `CNOID_TORQUE_SPEED=ω0` [rad/s] で DC モータのトルクと速さの直線の特性を掛ける。
+#   回っている向きにトルクを出すときだけ、上限を 停動トルク × max(0, 1 − |q̇|/ω0) に下げる（停動トルク ＝ |gear| × ctrlrange の上限）。
+#   止める向き（ブレーキ）は停動トルクまで。tick ごとに掛ける。⚠️ 既定（指定なし）では従来どおり（速さによらず停動トルクまで出せる）
+_TORQUE_SPEED = float(os.environ.get('CNOID_TORQUE_SPEED') or 0.0)
+_TS_SAID = False
 
 class ChoreonoidSimWorld:
     def __init__(self):
@@ -1672,6 +1677,12 @@ class ChoreonoidSimWorld:
     def reset(self) -> dict:
         self._puck_dq_target = None      # 反射の当て直しを話の境で持ち越さない（Bug 70）
         self._ctrl_hist = []             # 指令の遅れ（CNOID_ACT_DELAY）を話の境で持ち越さない（9-332）
+        _ts = getattr(self, '_ts_stats', None)
+        if _TORQUE_SPEED and _ts and _ts[0]:
+            # ⭐ 効いたことを話ごとに出す（⑤-3-2）: 回る向きに出そうとした tick のうち削った割合と、削った tick の出せた割合の中央値
+            print(f'[choreonoid] ⭐ トルクと速さの特性（ω0 {_TORQUE_SPEED} rad/s）: 関節×tick {_ts[0]} のうち、指令を削った {_ts[1]}（{100 * _ts[1] / _ts[0]:.0f} %）・'
+                  f'削った tick で指令の何割を出せたか 中央値 {np.median(_ts[2]) if _ts[2] else float("nan"):.2f}', flush=True)
+        self._ts_stats = [0, 0, []]
         self.sim_item.stopSimulation()
         IU.processEvent()  # flush stop signal before restart
         for item in self.body_items.values():
@@ -1701,6 +1712,7 @@ class ChoreonoidSimWorld:
             self._ctrl_hist = hist[-(_ACT_DELAY + 1):]
             ctrl = self._ctrl_hist[0] if len(self._ctrl_hist) > _ACT_DELAY else [0.0] * len(ctrl)
         self._base_u = {}
+        _ts_j = []                       # CNOID_TORQUE_SPEED を掛ける (関節, 停動トルク)
         robot_sb, _ = self._sim_body_entries[0]
         b = robot_sb.body()
         for i, (jname, ainfo) in enumerate(self.actuators_map.items()):
@@ -1714,11 +1726,33 @@ class ChoreonoidSimWorld:
                     u = min(max(u, lo), hi)
                 j.u = u * ainfo['gear']
                 self._base_u[id(j)] = j.u
+                if _TORQUE_SPEED:
+                    _ts_j.append((j, abs(ainfo['gear']) * max(abs(x) for x in ainfo.get('ctrlrange', (-1.0, 1.0)))))
 
         self._ticks_per_step = n_frames * _SUBSTEPS     # 反射の当て直しの長さ（Bug 70）
         for _ in range(n_frames * _SUBSTEPS):
+            _bu = self._base_u
+            if _TORQUE_SPEED:
+                global _TS_SAID
+                if not _TS_SAID:
+                    _TS_SAID = True
+                    print(f'[choreonoid] ⭐ トルクと速さの特性を掛ける: {len(_ts_j)} 関節 {[(j.jointName, round(ts, 3)) for j, ts in _ts_j]}'
+                          f'（名前, 停動トルク [N·m]）・無負荷回転数 {_TORQUE_SPEED} rad/s（CNOID_TORQUE_SPEED）', flush=True)
+                _bu = dict(self._base_u)
+                st = getattr(self, '_ts_stats', None) or [0, 0, []]
+                self._ts_stats = st
+                for j, ts in _ts_j:
+                    u0, dq = _bu[id(j)], j.dq
+                    if u0 * dq > 0:
+                        st[0] += 1
+                        cap = ts * max(0.0, 1.0 - abs(dq) / _TORQUE_SPEED)
+                        if abs(u0) > cap:
+                            st[1] += 1
+                            st[2].append(cap / abs(u0))
+                            _bu[id(j)] = math.copysign(cap, u0)
+                    j.u = _bu[id(j)]
             for j, b in getattr(self, '_hinge_damp', ()):
-                j.u = self._base_u.get(id(j), 0.0) - b * j.dq
+                j.u = _bu.get(id(j), 0.0) - b * j.dq
             if getattr(self, '_limit_torque', None):
                 _hd = {id(j): b for j, b in self._hinge_damp}
                 for j, lo, hi, k, c in self._limit_torque:      # Bug 85: 端を越えた分だけ戻すトルク
@@ -1731,7 +1765,7 @@ class ChoreonoidSimWorld:
                         t = 0.0
                     if t:
                         self._limit_overshoot = max(self._limit_overshoot, (q - hi) if q > hi else (lo - q))
-                    j.u = self._base_u.get(id(j), 0.0) - _hd.get(id(j), 0.0) * dq + t
+                    j.u = _bu.get(id(j), 0.0) - _hd.get(id(j), 0.0) * dq + t
             if _JOINT_FRICTION:
                 global _FRICTION_SAID
                 if not _FRICTION_SAID:
