@@ -36,7 +36,8 @@ PHYSICS_ENV = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_CTRL_CLIP',
                'CNOID_RESTITUTION', 'HOCKEY_WALL_RESTITUTION', 'HOCKEY_ARM_BLOCK', 'ARM_SWEEP_OFF',
                'CNOID_SUBSTEPS',   # ⭐ 10-27 Bug 82: 刻みも物理（無いと 0.002 s で学習した run を 0.01 s で再生する）
                'CNOID_JOINT_LIMIT_TORQUE', 'CNOID_JOINT_LIMIT_SLACK',   # ⭐ 10-29 Bug 85（系譜 9-329）: 可動域の掛け方も物理（無いと軸6 の run を書き戻しで再生する）
-               'CNOID_ACT_DELAY', 'CNOID_JOINT_FRICTION', 'CNOID_JOINT_FRICTION_VS')   # ⭐ 11-02 系譜 9-332: 軸6 の指令の遅れと関節の摩擦も物理（ブランチの口。無いと遅れ・摩擦なしで再生する）
+               'CNOID_ACT_DELAY', 'CNOID_JOINT_FRICTION', 'CNOID_JOINT_FRICTION_VS',   # ⭐ 11-02 系譜 9-332: 軸6 の指令の遅れと関節の摩擦も物理（ブランチの口。無いと遅れ・摩擦なしで再生する）
+               'CNOID_FLOOR_BODY')   # ⭐ 11-08 Bug 100: 床の大きさも物理（無いと広い床で学習した四脚を 10 m 四方の床で再生する）
 _rd = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('hydra.run.dir=')), None)
 if _rd:
     import json
