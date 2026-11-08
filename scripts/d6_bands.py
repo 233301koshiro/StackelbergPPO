@@ -33,8 +33,8 @@ from check_before_conclusion import _worker_seeds  # noqa: E402
 #   ⭐ A1 の押しと R1 の凍結は、Bug 76 を直した後に起動したので元の seed 1 がすでに新しい種
 GROUPS = [
     ('4.4.1', 'R1 形の凍結（押し、中間）', 'push', [
-        ('凍結', 'tripo_pjp_mid_frozen_phys_fx', 'tripo_pjp_mid_frozen_phys_fx_s2', 'tripo_pjp_mid_frozen_phys_fx_s2'),
-        ('最適化', 'tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2', 'tripo_pjp_mid_phys_s2_ws')]),
+        ('凍結', 'tripo_pjp_mid_frozen_phys_fx', 'tripo_pjp_mid_frozen_phys_fx_s2', 'tripo_pjp_mid_frozen_phys_fx_s2', 'tripo_pjp_mid_frozen_phys_fx_s3'),
+        ('最適化', 'tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2', 'tripo_pjp_mid_phys_s2_ws', 'tripo_pjp_mid_phys_s3')]),
     ('4.4.2', 'R2 縦型 A1v（到達 対 押し）', 'design', [
         ('到達', 'e2e_a1v_reach_phys', 'e2e_a1v_reach_phys_s2', 'e2e_a1v_reach_phys_s2_ws', 'e2e_a1v_reach_phys_s3'),
         ('押し', 'e2e_a1v_pusher_phys', 'e2e_a1v_pusher_phys_s2', 'e2e_a1v_pusher_phys_s2_ws', 'e2e_a1v_pusher_phys_s3')]),
@@ -47,24 +47,33 @@ GROUPS = [
         ('中間', 'tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2', 'tripo_pjp_mid_phys_s2_ws', 'tripo_pjp_mid_phys_s3'),
         ('長腕', 'tripo_pjp_long_phys', 'tripo_pjp_long_phys_s2', 'tripo_pjp_long_phys_s2_ws', 'tripo_pjp_long_phys_s3')]),
     ('4.4.3.3', 'R3 配分 到達', 'reach', [
-        ('根元重', 'tripo_pjd_prox_phys', 'tripo_pjd_prox_phys_s2', 'tripo_pjd_prox_phys_s2_ws'),
-        ('先端重', 'tripo_pjd_dist_phys_cg', 'tripo_pjd_dist_phys_cg_s2', 'tripo_pjd_dist_phys_cg_s2_ws')]),
+        ('根元重', 'tripo_pjd_prox_phys', 'tripo_pjd_prox_phys_s2', 'tripo_pjd_prox_phys_s2_ws', 'tripo_pjd_prox_phys_s3'),
+        ('先端重', 'tripo_pjd_dist_phys_cg', 'tripo_pjd_dist_phys_cg_s2', 'tripo_pjd_dist_phys_cg_s2_ws', 'tripo_pjd_dist_phys_cg_s3')]),
     ('4.4.3.3', 'R3 配分 押し', 'push', [
-        ('根元重', 'tripo_pjdp_prox_phys', 'tripo_pjdp_prox_phys_s2', 'tripo_pjdp_prox_phys_s2_ws'),
+        ('根元重', 'tripo_pjdp_prox_phys', 'tripo_pjdp_prox_phys_s2', 'tripo_pjdp_prox_phys_s2_ws', 'tripo_pjdp_prox_phys_s3'),
         # seed 1 は門を直す前の run（9-279 の帯 [5.38, 7.04] が使った組）。取り直しは `_s2_ws`
-        ('先端重', 'tripo_pjdp_dist_phys_cg', 'tripo_pjdp_dist_phys_s2', 'tripo_pjdp_dist_phys_s2_ws')]),
+        ('先端重', 'tripo_pjdp_dist_phys_cg', 'tripo_pjdp_dist_phys_s2', 'tripo_pjdp_dist_phys_s2_ws', 'tripo_pjdp_dist_phys_cg_s3')]),
     ('4.5.4', '閉ループ 伸ばす 到達（1.99 倍）', 'reach', [
         ('短腕', 'tripo_pj_short_phys_cg', None, None),
         ('1.99 倍', 'tripo_pjr199_phys', 'tripo_pjr199_phys_s2', 'tripo_pjr199_phys_s2_ws')]),
     ('4.5.4', '閉ループ 伸ばす 押し（2.11 倍）', 'push', [
         ('短腕', 'tripo_pjp_short_phys_cg', None, None),
         ('2.11 倍', 'tripo_pjr211p_phys', 'tripo_pjr211p_phys_s2', 'tripo_pjr211p_phys_s2_ws')]),
+    # seed 2 は 9-334 ㊶（queue_1104_frozen_alloc_455.sh）
     ('4.5.5', '閉ループ 関節固定 到達（A1）', 'reach', [
-        ('可動', 'e2e_a1_reach_phys', 'e2e_a1_reach_phys_s2', 'e2e_a1_reach_phys_s2_ws'),
-        ('固定', 'e2e_a1_fix3_reach_phys', 'e2e_a1_fix3_reach_phys_s2', 'e2e_a1_fix3_reach_phys_s2_ws')]),
+        ('可動', 'e2e_a1_reach_phys', 'e2e_a1_reach_phys_s2', 'e2e_a1_reach_phys_s2_ws', 'e2e_a1_reach_phys_s3'),
+        ('固定', 'e2e_a1_fix3_reach_phys', 'e2e_a1_fix3_reach_phys_s2', 'e2e_a1_fix3_reach_phys_s2_ws', 'e2e_a1_fix3_reach_phys_s3')]),
     ('4.5.5', '閉ループ 関節固定 押し（A1）', 'push', [
-        ('可動', 'e2e_a1_pusher_phys', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s2'),
-        ('固定', 'e2e_a1_fix3_pusher_phys', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s2')]),
+        ('可動', 'e2e_a1_pusher_phys', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s3'),
+        ('固定', 'e2e_a1_fix3_pusher_phys', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s3')]),
+    ('4.5.5', '第3層の提案 関節 1 固定 到達（中間）', 'reach', [
+        # 関節 1 固定の seed 1 は新しい種でしか回していない（queue_1029_fix1_seed2.sh が `_s2_ws` と比べた）ので、可動も元・新とも `_s2_ws`
+        ('可動', 'tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'),
+        ('固定', 'tripo_pj_mid_phys_fix1', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s3')]),
+    # 9-334 ㊵: 形を凍結した押しの配分（想定問答 Q58）。読みは凍結どうしの帯（seed 2 は 9-335 で足した）。最適化の帯は 4.4.3.3 の組
+    ('9-334', '凍結の配分 押し', 'push', [
+        ('根元重 凍結', 'tripo_pjdp_prox_frozen_phys_fx', 'tripo_pjdp_prox_frozen_phys_fx_s2', 'tripo_pjdp_prox_frozen_phys_fx_s2', 'tripo_pjdp_prox_frozen_phys_fx_s3'),
+        ('先端重 凍結', 'tripo_pjdp_dist_frozen_phys_cg_fx', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2', 'tripo_pjdp_dist_frozen_phys_cg_fx_s2', 'tripo_pjdp_dist_frozen_phys_cg_fx_s3')]),
 ]
 EPOCHS = 200
 

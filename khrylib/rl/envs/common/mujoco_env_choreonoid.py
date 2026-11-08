@@ -683,12 +683,27 @@ def mujoco_xml_to_body(xml_str: str):
                     #   ⚠️ 新しい body を足すとシミュレーションの状態の並びが変わりうるので避けた
                     tx, ty, tz = (float(v) for v in _mark.split(','))
                     rx, ry, rz = lk['translation']
+                    # ⭐ 2026-11-06: CNOID_TARGET_MARK_SHAPE=star で、鉛直に立った金色の星（厚み 0.2 R の押し出し、面は ±y を向く）。
+                    #   大きさは CNOID_TARGET_MARK_SIZE（球の半径・星の外の半径、既定 0.04 m）。既定は今までの球
+                    _size = float(os.environ.get('CNOID_TARGET_MARK_SIZE', '0.04'))
+                    if os.environ.get('CNOID_TARGET_MARK_SHAPE', 'sphere') == 'star':
+                        _pts = []
+                        for _k in range(11):   # 外と内を交互に 10 点、最後に最初の点へ戻して閉じる
+                            _r = _size if _k % 2 == 0 else 0.4 * _size
+                            _a = np.pi / 2 + np.pi * (_k % 10) / 5
+                            _pts += [_r * np.cos(_a), _r * np.sin(_a)]   # 押し出しの断面は (x, z)
+                        _geom = ('{ type: Extrusion, crossSection: [ ' + ', '.join(f'{v:.5g}' for v in _pts) + ' ], '
+                                 f'spine: [ 0, {-0.1 * _size:.5g}, 0, 0, {0.1 * _size:.5g}, 0 ] }}')
+                        _diff, _emis = '[ 1.0, 0.82, 0.1 ]', '[ 0.7, 0.5, 0.0 ]'
+                    else:
+                        _geom = f'{{ type: Sphere, radius: {_size:.5g} }}'
+                        _diff, _emis = '[ 1.0, 0.62, 0.0 ]', '[ 0.6, 0.35, 0.0 ]'
                     out += ['      -', '        type: Visual',
                             f'        translation: [ {tx - rx:.6g}, {ty - ry:.6g}, {tz - rz:.6g} ]',
-                            '        shape:', '          geometry: { type: Sphere, radius: 0.04 }',
+                            '        shape:', f'          geometry: {_geom}',
                             '          appearance:', '            material:',
-                            '              diffuseColor: [ 1.0, 0.62, 0.0 ]',
-                            '              emissiveColor: [ 0.6, 0.35, 0.0 ]']
+                            f'              diffuseColor: {_diff}',
+                            f'              emissiveColor: {_emis}']
         return '\n'.join(out) + '\n'
 
     # Process each top-level worldbody child as its own independent .body file.

@@ -169,6 +169,13 @@ TIP_RADIUS_UB = 0.10   # design_opt/cfg/*.yml の geom_params.size.ub
 #     「通過」と答えてしまう。
 CUBE_POS_NOISE = 0.10  # design_opt/envs/pusher.py reset_state(add_noise=True) の一様ノイズ幅
 
+# ⭐ 系譜 9-339（2026-11-06）: 押しの助言は「最も奥の箱に触れる」だけでは足りない。
+#   押せたかは「箱を 0.1 m 以上動かしたか」で判定している（修論 4.5.4・系譜 9-306）のに、
+#   旧い倍率（短腕 2.11 倍）は触れる距離までしか含まず、奥の箱で 42〜45 / 50 に落ちた。
+#   これは 9-11 の「余裕」ではなく、タスクの要求（押す距離）そのものなので助言にだけ足す。棄却には足さない。
+#   `--push-stroke 0` で旧い倍率を再現する。
+PUSH_STROKE = 0.10
+
 
 def tip_radius(geo, ub=TIP_RADIUS_UB):
     """⭐ 判定に使う先端カプセルの半径。**設計空間の上限と実値の大きい方**。
@@ -569,7 +576,7 @@ def strikeable(lengths, ranges_deg, d_strike, puck, dirs, puck_z,
 
 
 def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFSET_HALF,
-           tip_ub=TIP_RADIUS_UB, cube_noise=CUBE_POS_NOISE):
+           tip_ub=TIP_RADIUS_UB, cube_noise=CUBE_POS_NOISE, push_stroke=PUSH_STROKE):
     """第1層: 幾何だけで即答できる不適合。(所見リスト, 致命的か) を返す。"""
     findings = []
     fatal = False
@@ -834,19 +841,20 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
             # ⭐⭐⭐ Bug 51: 対象は毎話 ±CUBE_POS_NOISE 揺れる。**棄却は最も有利な位置で、
             #   助言は最も不利な位置で**（上の定数のコメント）。
             near_reject = near - cube_noise      # 手前に来た話でも届かないなら確実に棄却
-            near_advise = near + cube_noise      # 奥に来た話でも届く倍率を返す
+            near_advise = near + cube_noise + push_stroke   # 奥に来た話でも push_stroke 押し込める倍率を返す（9-339）
             findings.append(('info',
                 f'打点までの距離: {near:.3f} m'
                 f'（対象の手前の面 − 先端半径 {r_tip:.3f}）\n'
                 f'      ⚠️ **対象は毎話 ±{cube_noise:.2f} m 揺れる**（Bug 51）ので、'
-                f'実際の打点は **{near_reject:.3f}〜{near_advise:.3f} m**'))
+                f'実際の打点は **{near_reject:.3f}〜{near + cube_noise:.3f} m**'
+                f'（助言はさらに箱を {push_stroke:.2f} m 押し込むぶんを足す。9-339）'))
             if near_reject > r_max:
                 fatal = True
                 findings.append(('fatal',
                     f'**腕が短すぎて対象に触れません**'
                     f'（届く範囲 {r_max:.3f} m、最も手前に来た話でも {near_reject:.3f} m 先）。\n'
                     f'      → 腕全体を **{scale_advice(near_advise / r_max):.2f} 倍**に伸ばしてください'
-                    f'（⭐ **最も奥に来た話でも届く倍率**）。\n'
+                    f'（⭐ **最も奥に来た話でも箱を {push_stroke:.2f} m 押し込める倍率**）。\n'
                     f'      　（これが判定を覆すのに必要な最小の倍率です。'
                     f'余裕を上乗せすると到達精度はむしろ単調に悪化します。実験系譜 9-11）'))
             elif r_max > near + 2 * half:
@@ -1192,6 +1200,8 @@ def main():
                          '指定すると分布の最遠点で判定する（9-46）')
     ap.add_argument('--cube-noise', type=float, default=None, dest='cube_noise',
                     help=f'対象の初期位置の一様なずれの幅。run 指定時は env_specs.cube_init_noise から。既定 {CUBE_POS_NOISE}（Bug 51）')
+    ap.add_argument('--push-stroke', type=float, default=PUSH_STROKE, dest='push_stroke',
+                    help=f'押しの助言に足す、箱を押し込む距離。既定 {PUSH_STROKE}（9-339）。0 で旧い倍率（短腕 2.11 倍）')
     ap.add_argument('--length-scale', type=float, default=None, dest='length_scale',
                     help='長さの定数に掛ける縮尺（run 指定時は cfg の length_scale）。既定 1（9-329、軸6）')
     ap.add_argument('--length-free', action='store_true',
@@ -1319,7 +1329,8 @@ def main():
     f1, fatal = layer1(geo, args.task, np.array(args.target, dtype=float),
                        length_frozen, spread_y=args.spread_y, tip_ub=args.tip_ub,
                        offset_half=(OFFSET_HALF if args.offset_half is None else args.offset_half),
-                       cube_noise=(CUBE_POS_NOISE if args.cube_noise is None else args.cube_noise))
+                       cube_noise=(CUBE_POS_NOISE if args.cube_noise is None else args.cube_noise),
+                       push_stroke=args.push_stroke)
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
 
     if run:
