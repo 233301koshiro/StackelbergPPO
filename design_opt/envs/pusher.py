@@ -247,6 +247,14 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             elif use_target:
                 # 純粋な target PBRS（目標座標のみ）
                 reward_fwd_cube = target_pbrs
+                # ⭐ 系譜 9-344: `+reward_specs.target_rate=true` なら Δφ/dt（押しの Δx/dt と同じ「進む速さ」の形）。
+                #   Δφ のままでは箱を 1 cm 寄せて約 0.007 で、制御コストに埋もれていた（9-341 の追記）。
+                #   ⚠️ 既定 false なので、指定しない限り既存の run は変わらない。
+                if self.cfg.reward_specs.get('target_rate', False):
+                    reward_fwd_cube = target_pbrs / self.dt
+                    if not getattr(self, '_target_rate_logged', False):
+                        print(f'[target] 目標の報酬を Δφ/dt にする: dt = {self.dt:.4f} s（Δφ の × {1.0 / self.dt:.1f}）', flush=True)
+                        self._target_rate_logged = True
             elif use_dense_target:
                 # Dense 報酬: vel_reward - λ * dist(cube, target)（毎ステップ勾配あり）
                 # use_clipped_vel=true のとき vel は target を超えた分を加算しない
