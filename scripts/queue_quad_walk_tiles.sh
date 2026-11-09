@@ -15,6 +15,8 @@
 #   添え書き（判定には使わない）: best を同じ床で 20 話再生し、「2 mm 以上下の (step, 脛) が 200 件を超える話」の数と、
 #     quad_walk_ra_wide_s0 の best（広い床で 17 / 20、この床で 5 / 20）と並べる。残っていれば「床の接触がときどき抜ける物理での歩き」と書き添える。
 #     x が 25.25 m を超えた step は床が 5 cm 下がるので数えない。
+#   添え書き 2（投入前に足した。判定には使わない）: 同じ 20 話で「2 m 未満しか進まない話」（継ぎ目で止まる型、Bug 103 の追記）の数。
+#     広い床では 0 / 60、箱の床の quad_walk_ra_wide_s0 の best では 2 / 20。1 話でもあれば「継ぎ目で止まる話がある」と書き添える。
 #
 # 出力: single_run/queue_quad_walk_tiles.log、single_run/quad_walk_ra_tiles_s0/trace_mid/ep<N>.{npz,txt,png}
 #   nohup setsid bash scripts/queue_quad_walk_tiles.sh > /dev/null 2>&1 < /dev/null &
