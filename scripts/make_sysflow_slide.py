@@ -97,7 +97,8 @@ COL = {'sketch': 60, 'm1': 160, 'm2': 274, 'm3': 382, 'm4': 490, 'm5': 598,
        'gate': 718, 'm6': 828, 'm7': 940, 'pass': 1042}
 PY, PH, PW = 84, 62, 96          # 工程の箱
 IY, IH, IW = 172, 120, 98        # 状態の画像の枠
-CY, CH = 296, 34                 # 画像の下の説明
+CY, CH = 296, 38                 # 画像の下の説明
+CAP_FS, CAP_W = 14, 116          # 説明の字の大きさと箱の幅。14 で最も長い「「腕を1.99倍に」」が 111 px（隣の説明・段の境に触れない上限）
 NODES = [  # (id, 種類, 字)
     ('sketch', 'input', '手描きスケッチ'),
     ('m1', 'proc', '絵を整える\n（関節に印）'),
@@ -114,17 +115,17 @@ STATES = [  # (画像の key, 列, 説明, 枠の色)
     ('sketch', 'sketch', '入力', None),
     ('m1', 'm1', '整えた絵', None),
     ('m2', 'm2', '3D メッシュ', None),
-    ('m3', 'm3', '関節で分けた部品', None),
+    ('m3', 'm3', '関節ごとの部品', None),
     ('m4', 'm4', '長さ・太さ', None),
     ('m5', 'm5', 'モデル（XML）', None),
-    ('fail1', 'gate', '棄却＋助言\n「腕を 1.99 倍に」', NG),
-    ('m6', 'm6', '学習した方策と形', None),
-    ('fail2', 'm7', '指摘\n「ギア比が上限に」', NG),
-    ('pass', 'pass', '1.99 倍で届いた', END_EDGE),
+    ('fail1', 'gate', '棄却して助言\n「腕を1.99倍に」', NG),
+    ('m6', 'm6', '学習した\n方策と形', None),
+    ('fail2', 'm7', '指摘：\nギア比が上限', NG),
+    ('pass', 'pass', '1.99 倍で\n届いた', END_EDGE),
 ]
 CHAIN = ['sketch', 'm1', 'm2', 'm3', 'm4', 'm5', 'gate', 'm6', 'm7', 'pass']
 LOOP_Y = 352
-LOOP_LAB = (400, LOOP_Y + 4, 250, 16)   # 閉ループの説明（② の段の中、右端は段の境 655 の手前）
+LOOP_LAB = (374, LOOP_Y + 3, 272, 18)   # 閉ループの説明（② の段の中、右端は段の境 655 の手前）
 
 
 def node_box(nid, kind):
@@ -198,8 +199,8 @@ def build_drawio(imgs):
         vertex(f'img_{key}', '', st, box)
         color = border if border in (NG,) else INK
         vertex(f'cap_{key}', cap.replace('\n', '<br>'),
-               f'text;align=center;verticalAlign=top;fontSize=11;fontColor={color};{text}',
-               (COL[col] - 54, CY, 108, CH))
+               f'text;align=center;verticalAlign=top;fontSize={CAP_FS};fontColor={color};{text.replace("wrap", "nowrap")}',
+               (COL[col] - CAP_W / 2, CY, CAP_W, CH))
     flow = 'endArrow=block;endFill=1;strokeWidth=1.5;strokeColor=#333333;html=1;'
     for a, b in zip(CHAIN, CHAIN[1:]):
         edge(f'e_{a}_{b}', a, b, flow + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;')
@@ -210,14 +211,14 @@ def build_drawio(imgs):
         st = (f'endArrow=block;endFill=1;strokeColor={border};' if border
               else 'endArrow=none;dashed=1;dashPattern=1 3;strokeColor=#888888;') + down
         lab = '棄却' if key == 'fail1' else ''
-        edge(f'd_{key}', col, f'img_{key}', st + 'fontSize=11;fontColor=#b85450;labelBackgroundColor=#ffffff;', lab)
+        edge(f'd_{key}', col, f'img_{key}', st + f'fontSize={CAP_FS};fontColor={NG};labelBackgroundColor={tint(PHASES[2][3])};', lab)
     edge('e_loop', 'cap_fail1', 'cap_m5',
          f'edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;strokeColor={NG};fontColor={NG};fontSize=11;'
          'exitX=0.5;exitY=1;entryX=0.5;entryY=1;html=1;',
          '', points=[(COL['gate'], LOOP_Y), (COL['m5'], LOOP_Y)])
     # 説明は線のラベルにせず、② の段の中へ右寄せで置く（段の境をまたぐと塗りの違う 2 段に背景が掛かる）
     vertex('loop_lab', '閉ループ：助言どおりに伸ばして再び判定',
-           f'text;align=right;verticalAlign=top;fontSize=11;fontColor={NG};{text}', LOOP_LAB)
+           f'text;align=right;verticalAlign=top;fontSize={CAP_FS};fontColor={NG};{text.replace("wrap", "nowrap")}', LOOP_LAB)
     ET.indent(mxfile)
     ET.ElementTree(mxfile).write(OUT_DRAWIO, encoding='utf-8', xml_declaration=False)
     print(f'→ {OUT_DRAWIO}（{OUT_DRAWIO.stat().st_size // 1024} KB）')
@@ -255,7 +256,7 @@ def build_preview(imgs):
         ax.imshow(np.asarray(imgs[key].convert('RGB')), extent=(x, x + w, y + h, y), zorder=2)
         ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle='square,pad=0', fc='none', ec=border or IMG_EDGE,
                                     lw=2 if border else 1, zorder=3))
-        ax.text(COL[col], CY + 2, cap, ha='center', va='top', fontsize=pt(11),
+        ax.text(COL[col], CY + 2, cap, ha='center', va='top', fontsize=pt(CAP_FS),
                 color=NG if border == NG else INK, linespacing=1.2)
     arr = lambda p, q, c='#333333', lw=1.5, ls='-': ax.add_patch(FancyArrowPatch(
         p, q, arrowstyle='-|>', mutation_scale=12, color=c, lw=lw, ls=ls, shrinkA=0, shrinkB=0, zorder=4))
@@ -274,13 +275,13 @@ def build_preview(imgs):
         else:
             ax.plot([COL[col]] * 2, [y + h, iy], color='#888888', lw=1.2, ls=(0, (1, 3)), zorder=4)
         if key == 'fail1':
-            ax.text(COL[col] + 4, (y + h + iy) / 2, '棄却', fontsize=pt(11), color=NG, va='center')
+            ax.text(COL[col] + 4, (y + h + iy) / 2, '棄却', fontsize=pt(CAP_FS), color=NG, va='center')
     xs = [COL['gate'], COL['gate'], COL['m5'], COL['m5']]
     ys = [CY + CH, LOOP_Y, LOOP_Y, CY + CH]
     ax.plot(xs[:3], ys[:3], color=NG, ls='--', lw=1.2)
     arr((xs[2], ys[2]), (xs[3], ys[3]), c=NG, lw=1.2, ls='--')
     lx, ly, lw_, lh = LOOP_LAB
-    ax.text(lx + lw_, ly + 2, '閉ループ：助言どおりに伸ばして再び判定', ha='right', va='top', fontsize=pt(11), color=NG)
+    ax.text(lx + lw_, ly + 2, '閉ループ：助言どおりに伸ばして再び判定', ha='right', va='top', fontsize=pt(CAP_FS), color=NG)
     fig.savefig(OUT_PREVIEW, facecolor='white')
     plt.close(fig)
     print(f'→ {OUT_PREVIEW}')
