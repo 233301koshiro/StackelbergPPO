@@ -85,6 +85,13 @@ W, H = 1100, 392
 # 段ごとの外枠と題の色。赤（棄却）・緑（使える形）は図の中で意味を持つので避けた
 PHASES = [('① スケッチ整形', 5, 213, '#d9822b'), ('② 形にする', 218, 655, '#3b78c2'),
           ('③ タスクに向くか調べる', 660, 882, '#8e5ea2'), ('④ フィードバック', 887, 1095, '#2a8c8c')]
+IMG_EDGE = '#c8c8c8'             # 状態の画像の枠（色の枠＝判定の出力 以外）
+
+
+def tint(c, a=0.92):
+    """段の塗り: 外枠の色を白へ a だけ寄せる。"""
+    r, g, b = (int(c[i:i + 2], 16) for i in (1, 3, 5))
+    return '#%02x%02x%02x' % tuple(round(v + (255 - v) * a) for v in (r, g, b))
 COL = {'sketch': 60, 'm1': 160, 'm2': 274, 'm3': 382, 'm4': 490, 'm5': 598,
        'gate': 718, 'm6': 828, 'm7': 940, 'pass': 1042}
 PY, PH, PW = 84, 62, 96          # 工程の箱
@@ -116,6 +123,7 @@ STATES = [  # (画像の key, 列, 説明, 枠の色)
 ]
 CHAIN = ['sketch', 'm1', 'm2', 'm3', 'm4', 'm5', 'gate', 'm6', 'm7', 'pass']
 LOOP_Y = 352
+LOOP_LAB = (400, LOOP_Y + 4, 250, 16)   # 閉ループの説明（② の段の中、右端は段の境 655 の手前）
 
 
 def node_box(nid, kind):
@@ -170,7 +178,7 @@ def build_drawio(imgs):
 
     text = 'html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;'
     for i, (t, x0, x1, c) in enumerate(PHASES):
-        vertex(f'ph{i}', t, f'rounded=1;arcSize=4;fillColor=#fafafa;strokeColor={c};strokeWidth=2.5;fontColor={c};verticalAlign=top;'
+        vertex(f'ph{i}', t, f'rounded=1;arcSize=4;fillColor={tint(c)};strokeColor={c};strokeWidth=2.5;fontColor={c};verticalAlign=top;'
                f'fontStyle=1;fontSize=15;spacingTop=4;{text}', (x0, 6, x1 - x0, 370))
     vertex('task', 'タスク', f'shape=note;size=10;fillColor={IN_FILL};strokeColor={IN_EDGE};fontSize=12;{text}',
            (COL['m6'] - 34, 44, 68, 28))
@@ -185,10 +193,9 @@ def build_drawio(imgs):
     for key, col, cap, border in STATES:
         box = image_box(imgs[key], col)
         st = f'shape=image;imageAspect=0;aspect=fixed;verticalLabelPosition=bottom;image={to_data_uri(imgs[key], box)};'
-        if border:
-            st += f'imageBorder={border};strokeWidth=2;'
+        st += f'imageBorder={border};strokeWidth=2;' if border else f'imageBorder={IMG_EDGE};strokeWidth=1;'
         vertex(f'img_{key}', '', st, box)
-        color = border if border in (NG,) else MUTED
+        color = border if border in (NG,) else INK
         vertex(f'cap_{key}', cap.replace('\n', '<br>'),
                f'text;align=center;verticalAlign=top;fontSize=11;fontColor={color};{text}',
                (COL[col] - 54, CY, 108, CH))
@@ -196,17 +203,22 @@ def build_drawio(imgs):
     for a, b in zip(CHAIN, CHAIN[1:]):
         edge(f'e_{a}_{b}', a, b, flow + 'exitX=1;exitY=0.5;entryX=0;entryY=0.5;')
     edge('e_task_m6', 'task', 'm6', flow + 'exitX=0.5;exitY=1;entryX=0.5;entryY=0;')
-    down = 'endArrow=block;endFill=1;strokeWidth=1;strokeColor=#999999;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;'
+    # 工程 → その状態の画像: 出力の矢印と区別して、矢じりの無い点線にする。判定の出力（色の枠）だけ矢印
+    down = 'strokeWidth=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;'
     for key, col, cap, border in STATES:
         if key == 'sketch':
             continue
-        st = down.replace('#999999', border) if border else down
+        st = (f'endArrow=block;endFill=1;strokeColor={border};' if border
+              else 'endArrow=none;dashed=1;dashPattern=1 3;strokeColor=#888888;') + down
         lab = '棄却' if key == 'fail1' else ''
         edge(f'd_{key}', col, f'img_{key}', st + 'fontSize=11;fontColor=#b85450;labelBackgroundColor=#ffffff;', lab)
     edge('e_loop', 'cap_fail1', 'cap_m5',
          f'edgeStyle=orthogonalEdgeStyle;dashed=1;endArrow=block;strokeColor={NG};fontColor={NG};fontSize=11;'
-         'labelBackgroundColor=#fafafa;exitX=0.5;exitY=1;entryX=0.5;entryY=1;html=1;',
-         '閉ループ：助言どおりに伸ばして再び判定', points=[(COL['gate'], LOOP_Y), (COL['m5'], LOOP_Y)])
+         'exitX=0.5;exitY=1;entryX=0.5;entryY=1;html=1;',
+         '', points=[(COL['gate'], LOOP_Y), (COL['m5'], LOOP_Y)])
+    # 説明は線のラベルにせず、② の段の中へ右寄せで置く（段の境をまたぐと塗りの違う 2 段に背景が掛かる）
+    vertex('loop_lab', '閉ループ：助言どおりに伸ばして再び判定',
+           f'text;align=right;verticalAlign=top;fontSize=11;fontColor={NG};{text}', LOOP_LAB)
     ET.indent(mxfile)
     ET.ElementTree(mxfile).write(OUT_DRAWIO, encoding='utf-8', xml_declaration=False)
     print(f'→ {OUT_DRAWIO}（{OUT_DRAWIO.stat().st_size // 1024} KB）')
@@ -223,7 +235,7 @@ def build_preview(imgs):
     pt = lambda px: px * s * 0.72      # draw.io の px → matplotlib の pt（この倍率の図で）
     for t, x0, x1, c in PHASES:
         ax.add_patch(FancyBboxPatch((x0, 6), x1 - x0, 370, boxstyle='round,pad=0,rounding_size=8',
-                                    fc='#fafafa', ec=c, lw=2.5 * s * 0.72))
+                                    fc=tint(c), ec=c, lw=2.5 * s * 0.72))
         ax.text((x0 + x1) / 2, 18, t, ha='center', va='center', fontsize=pt(15), weight='bold', color=c)
     ax.add_patch(FancyBboxPatch((COL['m6'] - 34, 44), 68, 28, boxstyle='square,pad=0', fc=IN_FILL, ec=IN_EDGE))
     ax.text(COL['m6'], 58, 'タスク', ha='center', va='center', fontsize=pt(12))
@@ -242,10 +254,10 @@ def build_preview(imgs):
     for key, col, cap, border in STATES:
         x, y, w, h = image_box(imgs[key], col)
         ax.imshow(np.asarray(imgs[key].convert('RGB')), extent=(x, x + w, y + h, y), zorder=2)
-        if border:
-            ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle='square,pad=0', fc='none', ec=border, lw=2, zorder=3))
+        ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle='square,pad=0', fc='none', ec=border or IMG_EDGE,
+                                    lw=2 if border else 1, zorder=3))
         ax.text(COL[col], CY + 2, cap, ha='center', va='top', fontsize=pt(11),
-                color=NG if border == NG else MUTED, linespacing=1.2)
+                color=NG if border == NG else INK, linespacing=1.2)
     arr = lambda p, q, c='#333333', lw=1.5, ls='-': ax.add_patch(FancyArrowPatch(
         p, q, arrowstyle='-|>', mutation_scale=12, color=c, lw=lw, ls=ls, shrinkA=0, shrinkB=0, zorder=4))
     for a, b in zip(CHAIN, CHAIN[1:]):
@@ -260,16 +272,18 @@ def build_preview(imgs):
             continue
         x, y, w, h = node_box(col, kinds[col])
         ix, iy, iw, ih = image_box(imgs[key], col)
-        arr((COL[col], y + h), (COL[col], iy), c=border or '#999999', lw=1)
+        if border:
+            arr((COL[col], y + h), (COL[col], iy), c=border, lw=1)
+        else:
+            ax.plot([COL[col]] * 2, [y + h, iy], color='#888888', lw=1.2, ls=(0, (1, 3)), zorder=4)
         if key == 'fail1':
             ax.text(COL[col] + 4, (y + h + iy) / 2, '棄却', fontsize=pt(11), color=NG, va='center')
     xs = [COL['gate'], COL['gate'], COL['m5'], COL['m5']]
     ys = [CY + CH, LOOP_Y, LOOP_Y, CY + CH]
     ax.plot(xs[:3], ys[:3], color=NG, ls='--', lw=1.2)
     arr((xs[2], ys[2]), (xs[3], ys[3]), c=NG, lw=1.2, ls='--')
-    ax.text((COL['gate'] + COL['m5']) / 2, LOOP_Y + 12, '閉ループ：助言どおりに伸ばして再び判定',
-            ha='center', fontsize=pt(11), color=NG, zorder=5,
-            bbox=dict(fc='#fafafa', ec='none', pad=1))     # 段の外枠が字の上を通らないように（draw.io の labelBackgroundColor）
+    lx, ly, lw_, lh = LOOP_LAB
+    ax.text(lx + lw_, ly + 2, '閉ループ：助言どおりに伸ばして再び判定', ha='right', va='top', fontsize=pt(11), color=NG)
     fig.savefig(OUT_PREVIEW, facecolor='white')
     plt.close(fig)
     print(f'→ {OUT_PREVIEW}')
