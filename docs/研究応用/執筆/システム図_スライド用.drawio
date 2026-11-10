@@ -4,16 +4,16 @@
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-        <mxCell id="ph0" value="① スケッチ整形" style="rounded=1;arcSize=4;dashed=1;fillColor=#fafafa;strokeColor=#999999;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
+        <mxCell id="ph0" value="① スケッチ整形" style="rounded=1;arcSize=4;fillColor=#fafafa;strokeColor=#d9822b;strokeWidth=2.5;fontColor=#d9822b;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
           <mxGeometry x="5.0" y="6.0" width="208.0" height="370.0" as="geometry" />
         </mxCell>
-        <mxCell id="ph1" value="② 形にする" style="rounded=1;arcSize=4;dashed=1;fillColor=#fafafa;strokeColor=#999999;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
+        <mxCell id="ph1" value="② 形にする" style="rounded=1;arcSize=4;fillColor=#fafafa;strokeColor=#3b78c2;strokeWidth=2.5;fontColor=#3b78c2;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
           <mxGeometry x="218.0" y="6.0" width="437.0" height="370.0" as="geometry" />
         </mxCell>
-        <mxCell id="ph2" value="③ タスクに向くか調べる" style="rounded=1;arcSize=4;dashed=1;fillColor=#fafafa;strokeColor=#999999;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
+        <mxCell id="ph2" value="③ タスクに向くか調べる" style="rounded=1;arcSize=4;fillColor=#fafafa;strokeColor=#8e5ea2;strokeWidth=2.5;fontColor=#8e5ea2;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
           <mxGeometry x="660.0" y="6.0" width="222.0" height="370.0" as="geometry" />
         </mxCell>
-        <mxCell id="ph3" value="④ フィードバック" style="rounded=1;arcSize=4;dashed=1;fillColor=#fafafa;strokeColor=#999999;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
+        <mxCell id="ph3" value="④ フィードバック" style="rounded=1;arcSize=4;fillColor=#fafafa;strokeColor=#2a8c8c;strokeWidth=2.5;fontColor=#2a8c8c;verticalAlign=top;fontStyle=1;fontSize=15;spacingTop=4;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">
           <mxGeometry x="887.0" y="6.0" width="208.0" height="370.0" as="geometry" />
         </mxCell>
         <mxCell id="task" value="タスク" style="shape=note;size=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;" vertex="1" parent="1">

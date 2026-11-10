@@ -82,7 +82,9 @@ def load_images():
 
 # ---------------------------------------------------------------- 配置（px、draw.io の座標と同じ）
 W, H = 1100, 392
-PHASES = [('① スケッチ整形', 5, 213), ('② 形にする', 218, 655), ('③ タスクに向くか調べる', 660, 882), ('④ フィードバック', 887, 1095)]
+# 段ごとの外枠と題の色。赤（棄却）・緑（使える形）は図の中で意味を持つので避けた
+PHASES = [('① スケッチ整形', 5, 213, '#d9822b'), ('② 形にする', 218, 655, '#3b78c2'),
+          ('③ タスクに向くか調べる', 660, 882, '#8e5ea2'), ('④ フィードバック', 887, 1095, '#2a8c8c')]
 COL = {'sketch': 60, 'm1': 160, 'm2': 274, 'm3': 382, 'm4': 490, 'm5': 598,
        'gate': 718, 'm6': 828, 'm7': 940, 'pass': 1042}
 PY, PH, PW = 84, 62, 96          # 工程の箱
@@ -167,8 +169,8 @@ def build_drawio(imgs):
                 ET.SubElement(arr, 'mxPoint', x=str(x), y=str(y))
 
     text = 'html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;'
-    for i, (t, x0, x1) in enumerate(PHASES):
-        vertex(f'ph{i}', t, 'rounded=1;arcSize=4;dashed=1;fillColor=#fafafa;strokeColor=#999999;verticalAlign=top;'
+    for i, (t, x0, x1, c) in enumerate(PHASES):
+        vertex(f'ph{i}', t, f'rounded=1;arcSize=4;fillColor=#fafafa;strokeColor={c};strokeWidth=2.5;fontColor={c};verticalAlign=top;'
                f'fontStyle=1;fontSize=15;spacingTop=4;{text}', (x0, 6, x1 - x0, 370))
     vertex('task', 'タスク', f'shape=note;size=10;fillColor={IN_FILL};strokeColor={IN_EDGE};fontSize=12;{text}',
            (COL['m6'] - 34, 44, 68, 28))
@@ -219,10 +221,10 @@ def build_preview(imgs):
     ax.set_ylim(H, 0)
     ax.axis('off')
     pt = lambda px: px * s * 0.72      # draw.io の px → matplotlib の pt（この倍率の図で）
-    for t, x0, x1 in PHASES:
+    for t, x0, x1, c in PHASES:
         ax.add_patch(FancyBboxPatch((x0, 6), x1 - x0, 370, boxstyle='round,pad=0,rounding_size=8',
-                                    fc='#fafafa', ec='#999999', ls='--', lw=1))
-        ax.text((x0 + x1) / 2, 18, t, ha='center', va='center', fontsize=pt(15), weight='bold', color=INK)
+                                    fc='#fafafa', ec=c, lw=2.5 * s * 0.72))
+        ax.text((x0 + x1) / 2, 18, t, ha='center', va='center', fontsize=pt(15), weight='bold', color=c)
     ax.add_patch(FancyBboxPatch((COL['m6'] - 34, 44), 68, 28, boxstyle='square,pad=0', fc=IN_FILL, ec=IN_EDGE))
     ax.text(COL['m6'], 58, 'タスク', ha='center', va='center', fontsize=pt(12))
     for nid, kind, label in NODES:
@@ -266,7 +268,8 @@ def build_preview(imgs):
     ax.plot(xs[:3], ys[:3], color=NG, ls='--', lw=1.2)
     arr((xs[2], ys[2]), (xs[3], ys[3]), c=NG, lw=1.2, ls='--')
     ax.text((COL['gate'] + COL['m5']) / 2, LOOP_Y + 12, '閉ループ：助言どおりに伸ばして再び判定',
-            ha='center', fontsize=pt(11), color=NG)
+            ha='center', fontsize=pt(11), color=NG, zorder=5,
+            bbox=dict(fc='#fafafa', ec='none', pad=1))     # 段の外枠が字の上を通らないように（draw.io の labelBackgroundColor）
     fig.savefig(OUT_PREVIEW, facecolor='white')
     plt.close(fig)
     print(f'→ {OUT_PREVIEW}')
