@@ -85,6 +85,7 @@ W, H = 1100, 392
 # 段ごとの外枠と題の色。赤（棄却）・緑（使える形）は図の中で意味を持つので避けた
 PHASES = [('① スケッチ整形', 5, 213, '#d9822b'), ('② 形にする', 218, 655, '#3b78c2'),
           ('③ タスクに向くか調べる', 660, 882, '#8e5ea2'), ('④ フィードバック', 887, 1095, '#2a8c8c')]
+PHASE_FS = 18   # 段の題の字の大きさ。いちばん長い「③ タスクに向くか調べる」が段の幅 222 に収まる上限（19 で 213 px、枠の線まで 4 px しか残らない）に、4 段ともそろえる
 IMG_EDGE = '#c8c8c8'             # 状態の画像の枠（色の枠＝判定の出力 以外）
 
 
@@ -179,7 +180,7 @@ def build_drawio(imgs):
     text = 'html=1;whiteSpace=wrap;fontFamily=Noto Sans JP;'
     for i, (t, x0, x1, c) in enumerate(PHASES):
         vertex(f'ph{i}', t, f'rounded=1;arcSize=4;fillColor={tint(c)};strokeColor={c};strokeWidth=2.5;fontColor={c};verticalAlign=top;'
-               f'fontStyle=1;fontSize=15;spacingTop=4;{text}', (x0, 6, x1 - x0, 370))
+               f'fontStyle=1;fontSize={PHASE_FS};spacingTop=7;{text.replace("wrap", "nowrap")}', (x0, 6, x1 - x0, 370))
     vertex('task', 'タスク', f'shape=note;size=10;fillColor={IN_FILL};strokeColor={IN_EDGE};fontSize=12;{text}',
            (COL['m6'] - 34, 44, 68, 28))
     styles = {
@@ -206,8 +207,6 @@ def build_drawio(imgs):
     # 工程 → その状態の画像: 出力の矢印と区別して、矢じりの無い点線にする。判定の出力（色の枠）だけ矢印
     down = 'strokeWidth=1;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;'
     for key, col, cap, border in STATES:
-        if key == 'sketch':
-            continue
         st = (f'endArrow=block;endFill=1;strokeColor={border};' if border
               else 'endArrow=none;dashed=1;dashPattern=1 3;strokeColor=#888888;') + down
         lab = '棄却' if key == 'fail1' else ''
@@ -236,7 +235,7 @@ def build_preview(imgs):
     for t, x0, x1, c in PHASES:
         ax.add_patch(FancyBboxPatch((x0, 6), x1 - x0, 370, boxstyle='round,pad=0,rounding_size=8',
                                     fc=tint(c), ec=c, lw=2.5 * s * 0.72))
-        ax.text((x0 + x1) / 2, 18, t, ha='center', va='center', fontsize=pt(15), weight='bold', color=c)
+        ax.text((x0 + x1) / 2, 21, t, ha='center', va='center', fontsize=pt(PHASE_FS), weight='bold', color=c)
     ax.add_patch(FancyBboxPatch((COL['m6'] - 34, 44), 68, 28, boxstyle='square,pad=0', fc=IN_FILL, ec=IN_EDGE))
     ax.text(COL['m6'], 58, 'タスク', ha='center', va='center', fontsize=pt(12))
     for nid, kind, label in NODES:
@@ -268,8 +267,6 @@ def build_preview(imgs):
     arr((COL['m6'], 72), (COL['m6'], PY))
     kinds = dict((n, k) for n, k, _ in NODES)
     for key, col, cap, border in STATES:
-        if key == 'sketch':
-            continue
         x, y, w, h = node_box(col, kinds[col])
         ix, iy, iw, ih = image_box(imgs[key], col)
         if border:
