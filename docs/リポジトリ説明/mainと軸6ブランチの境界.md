@@ -17,7 +17,7 @@ python3 scripts/check_branch_isolation.py --reproduce  # 検査そのものが�
 |---|---|---|---|
 | ① RobotAssembler の設定 | 部品・スケール表・部品の質量・組み方・1/5 の腕の XML と cfg | **ブランチだけ**（`e2e_a1v_ra15.xml`・`e2e_a1v_ra15_mass.json`・`pusher_ra15.yml`・道具 19 本） | main には存在しない。main の run はこの XML と cfg を名指しできない |
 | ② 幾何のリンクの設定 | カプセルの骨・太さ・横のずれ・長さから作る質量 | **共用**（`khrylib/robot/xml_robot.py`）。ブランチの版だけが軸6 の口を持つ | 口は cfg のキー（`capsule_lateral`・`part_mass_file`）。キーが無ければ従来どおり。main の cfg と main の run の config にこのキーは無い（検査 C） |
-| ③ 物理の環境 | `CNOID_*` の環境変数、`*_phys` の XML の値 | **共用**（`mujoco_env_choreonoid.py`・`choreonoid_train.py`）。値は run ごとの `launch_env.json` に残る | 軸6 だけの値は環境変数の口（`CNOID_JOINT_LIMIT_TORQUE`）で、既定では効かない。main の run の launch_env に無く、軸6 の run の launch_env には必ずある（検査 C） |
+| ③ 物理の環境 | `CNOID_*` の環境変数、`*_phys` の XML の値 | **共用**（`mujoco_env_choreonoid.py`・`choreonoid_train.py`）。値は run ごとの `launch_env.json` に残る | 軸6 だけの値は環境変数の口（`CNOID_JOINT_LIMIT_TORQUE`）で、既定では効かない。main の run の launch_env に無く、軸6 の run の launch_env には必ずある（検査 C）。例外は四脚（`cfg=quad_walk_ra`、系譜 9-342）だけで、軸6 の部品を近似した物理の起動行を main で使うので `CNOID_JOINT_LIMIT_TORQUE` を持ってよい（検査の `MAIN_OK_ENV`。2026-11-10 ユーザー判断。腕の main の run が持てば ⛔ のまま） |
 
 見た目だけのもの（画面のデモ・mp4）は物理に触れない。`CNOID_VISUAL_RAW`・`ra_visual/` のメッシュは、学習・再生・判定のどれも読まない。
 
