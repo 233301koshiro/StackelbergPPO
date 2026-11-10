@@ -109,3 +109,28 @@ tools/yomiyasu/
 
 # 輪講の図の zip（論文の図を切り出した部品を含む。README「公開リポジトリには入れない」、2026-11-05）
 docs/研究応用/輪講/*.zip
+
+# Large binary research artifacts are kept locally but are not repository inputs.
+# This final block intentionally overrides the historical exceptions above.
+*.pdf
+*.PDF
+*.body
+*.glb
+*.gltf
+*.dae
+*.obj
+*.stl
+*.fbx
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.webp
+*.mp4
+*.mov
+*.avi
+*.pptx
+*.zip
+*.npz
+*.npy
