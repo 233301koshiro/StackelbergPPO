@@ -196,7 +196,7 @@ def eval_questions():
 def three_layers():
     """修論 3.12 の 3 層を模式図で。値は助言の文にある 1.99 倍・上限・10 % だけ。"""
     fig = plt.figure(figsize=(15, 5.4))
-    titles = [('① 幾何', '学習の前'), ('② 収束した形', '学習の後'), ('③ 動き', '学習の後')]
+    titles = [('第1層 幾何', '学習の前'), ('第2層 収束した形', '学習の後'), ('第3層 動き', '学習の後')]   # ①〜③ はスライドの段の番号とぶつかるので使わない
     advice = ['「腕全体を 1.99 倍にすれば届く」',
               '「ギア比が上限に張り付く\n＝出力が足りない」',
               '「可動域の 10 % 未満しか使わない\n関節は、固定を試す価値がある」']
@@ -208,8 +208,8 @@ def three_layers():
         a.axis('off')
         tile(a, 0.1, 0.1, 9.8, 9.8, r=0.3)
         a.text(0.6, 9.0, titles[i][0], fontsize=24, weight='bold', color=INK, va='center')
-        a.text(9.4, 9.0, titles[i][1], fontsize=15, color=MUTED, va='center', ha='right')
-        a.text(5.0, 1.5, advice[i], fontsize=16.5, color=ACCENT, ha='center', va='center', weight='bold')
+        a.text(9.4, 9.0, titles[i][1], fontsize=15, color=INK, va='center', ha='right')
+        a.text(5.0, 1.5, advice[i], fontsize=16.5, color=INK, ha='center', va='center', weight='bold')   # 青はスライドの役割の色（形態）なので使わない
         axes.append(a)
 
     # ① 腕と目標の間のすき間

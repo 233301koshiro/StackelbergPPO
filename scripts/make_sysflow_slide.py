@@ -36,6 +36,8 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 WRITE = ROOT / 'docs' / '研究応用' / '執筆'
 OUT_DRAWIO = WRITE / 'システム図_スライド用.drawio'
 OUT_PREVIEW = WRITE / 'yobi' / 'sysflow_preview.png'
+OUT_SLIDE = WRITE / 'yobi' / 'sysflow_slide.png'       # スライドに貼る版（3 倍）と、フロー詳細に貼る段の切り抜き sysflow_<段>.png
+CROPS = {'p12': (0, 658), 'p1': (0, 216), 'p2': (215, 658), 'p3': (657, 885), 'p4': (884, 1100)}
 
 for _ttc in sorted(pathlib.Path('/usr/share/fonts').rglob('*CJK*')):
     try:
@@ -83,8 +85,9 @@ def load_images():
 # ---------------------------------------------------------------- 配置（px、draw.io の座標と同じ）
 W, H = 1100, 392
 # 段ごとの外枠と題の色。赤（棄却）・緑（使える形）は図の中で意味を持つので避けた
-PHASES = [('① スケッチ整形', 5, 213, '#d9822b'), ('② 形にする', 218, 655, '#3b78c2'),
-          ('③ タスクに向くか調べる', 660, 882, '#8e5ea2'), ('④ フィードバック', 887, 1095, '#2a8c8c')]
+# 青（形態・リーダー）・緑（制御・フォロワー）はスライドの役割の色なので、段の色にも使わない（スライドの作り方.md §4 の④）
+PHASES = [('① スケッチ整形', 5, 213, '#d9822b'), ('② 形にする', 218, 655, '#8d6e63'),
+          ('③ タスクに向くか調べる', 660, 882, '#8e5ea2'), ('④ フィードバック', 887, 1095, '#546e7a')]
 PHASE_FS = 18   # 段の題の字の大きさ。いちばん長い「③ タスクに向くか調べる」が段の幅 222 に収まる上限（19 で 213 px、枠の線まで 4 px しか残らない）に、4 段ともそろえる
 IMG_EDGE = '#c8c8c8'             # 状態の画像の枠（色の枠＝判定の出力 以外）
 
@@ -225,8 +228,7 @@ def build_drawio(imgs):
 
 
 # ---------------------------------------------------------------- 確認用のプレビュー
-def build_preview(imgs):
-    s = 2.0
+def build_preview(imgs, s=2.0, out=OUT_PREVIEW):
     fig = plt.figure(figsize=(W * s / 100, H * s / 100), dpi=100)
     ax = fig.add_axes([0, 0, 1, 1])
     ax.set_xlim(0, W)
@@ -282,12 +284,19 @@ def build_preview(imgs):
     arr((xs[2], ys[2]), (xs[3], ys[3]), c=NG, lw=1.2, ls='--')
     lx, ly, lw_, lh = LOOP_LAB
     ax.text(lx + lw_, ly + 2, '閉ループ：助言どおりに伸ばして再び判定', ha='right', va='top', fontsize=pt(CAP_FS), color=NG)
-    fig.savefig(OUT_PREVIEW, facecolor='white')
+    fig.savefig(out, facecolor='white')
     plt.close(fig)
-    print(f'→ {OUT_PREVIEW}')
+    print(f'→ {out}')
 
 
 if __name__ == '__main__':
     imgs = load_images()
     build_drawio(imgs)
     build_preview(imgs)
+    build_preview(imgs, s=3.0, out=OUT_SLIDE)
+    big = Image.open(OUT_SLIDE)
+    k = big.size[0] / W
+    for name, (x0, x1) in CROPS.items():
+        out = OUT_SLIDE.with_name(f'sysflow_{name}.png')
+        big.crop((round(x0 * k), 0, round(x1 * k), round(380 * k))).save(out)
+        print(f'→ {out}')
