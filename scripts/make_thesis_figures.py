@@ -506,7 +506,78 @@ def fig_r4_settle():
     return 'r4_settle.png'
 
 
+# ── 図: 軸6 の目標位置までの押し（修論 4.7.4、系譜 9-346） ──────────────────────
+#   2026-11-13 ユーザー「修論に乗せていいよ」（11-06「印は映えを意識して星マークで」）。
+#   値は各 run の best を 50 話再生した `trace/arm_trace_50.npz`（9-346 の再生。表 4.15 の d_end の中央値・0.03 m 以内の数を
+#   この関数が出力に出すので、表と一致するかを見る）。上から見た図: 星＝目標（当たり判定なし）、灰の破線＝箱の初期位置、
+#   青＝50 話の箱の軌跡と最終位置、赤＝d_end が中央値の話の手先の軌跡、腕＝その話で箱が初めて 2 mm 動く 1 step 前の当たり判定
+#   （箱に触れない seed 0 は最後の step）。代表の話は d_end が中央値から 5 mm 以内の最初の話。
+def fig_target_star():
+    runs = [('シード 0', 'ra15_tp_rate_beta_ext400'), ('シード 1', 'ra15_tp_rate_beta_s2_ext400'),
+            ('シード 2', 'ra15_tp_rate_beta_s3_ext400')]
+    half = 0.03                                     # 箱の半辺（1 辺 60 mm、表 4.14）
+    gold, blue, red, arm = '#e6b800', '#2f6db5', '#c0392b', '#555555'
+
+    def stadium(p0, p1, r, n=24):
+        d = p1 - p0; L = np.linalg.norm(d)
+        u = d / L if L > 1e-9 else np.array([1.0, 0.0]); v = np.array([-u[1], u[0]])
+        a = np.linspace(-np.pi / 2, np.pi / 2, n)
+        e1 = p1 + r * (np.outer(np.cos(a), u) + np.outer(np.sin(a), v))
+        e0 = p0 + r * (np.outer(-np.cos(a), u) + np.outer(-np.sin(a), v))
+        return np.vstack([e1, e0, e1[:1]])
+
+    fig, axes = plt.subplots(1, 3, figsize=(10.5, 4.3), sharey=True)
+    for ax, (lab, run) in zip(axes, runs):
+        z = np.load(os.path.join(ROOT, 'single_run', run, 'trace', 'arm_trace_50.npz'), allow_pickle=True)
+        cube = np.asarray(z['ep_cubes'], float); tgt = np.asarray(z['target'], float)
+        xp = np.asarray(z['ep_xpos'], float); xm = np.asarray(z['ep_xmat'], float)
+        bone = np.asarray(z['ep_bone'], float); cap = np.asarray(z['ep_cap'], float); rad = np.asarray(z['ep_geom'], float)
+        dend = np.hypot(cube[:, -1, 0] - tgt[0], cube[:, -1, 1] - tgt[1])
+        print(f'  {run}: 50 話 d_end 中央値 {np.median(dend):.3f} m・0.03 m 以内 {(dend < 0.03).sum()} / {len(dend)}'
+              f'（表 4.15 と照らす）')
+        # 代表の話: d_end が中央値から 5 mm 以内の最初の話（11-13: 中央値に最も近い話を選ぶと、seed 0 では少数側〔腕を +y へ倒す 12 / 50 話〕を引いた）
+        e = int(np.where(np.abs(dend - np.median(dend)) <= 0.005)[0][0])
+        side = np.sign(xp[:, -1, -1, 1]); print(f'    代表は話 {e}。最後の step で腕の先が +y 側 {(side > 0).sum()}・−y 側 {(side < 0).sum()} 話')
+        moved = np.where(np.hypot(*(cube[e, :, :2] - cube[e, 0, :2]).T) > 0.002)[0]
+        k = max(int(moved[0]) - 1, 0) if len(moved) else len(cube[e]) - 1
+        tip = xp[e, :, -1] + np.einsum('tij,j->ti', xm[e, :, -1], bone[e, -1])
+        # 箱の初期位置（50 話の中央）・箱の軌跡・最終位置
+        c0 = np.median(cube[:, 0, :2], axis=0)
+        ax.add_patch(Rectangle((c0[0] - half, c0[1] - half), 2 * half, 2 * half, fill=False, ec='#888888', ls='--', lw=1.2))
+        for i in range(len(cube)):
+            ax.plot(cube[i, :, 0], cube[i, :, 1], color=blue, lw=0.6, alpha=0.25)
+        ax.plot(cube[:, -1, 0], cube[:, -1, 1], 'o', ms=3, color=blue, alpha=0.7)
+        # 腕（当てる直前）と手先の軌跡
+        for j in range(1, xp.shape[2]):
+            p0 = xp[e, k, j] + xm[e, k, j] @ cap[e, j, :3]; p1 = xp[e, k, j] + xm[e, k, j] @ cap[e, j, 3:]
+            if not (np.isfinite(p0).all() and np.isfinite(p1).all()):
+                p0, p1 = xp[e, k, j], xp[e, k, j] + xm[e, k, j] @ bone[e, j]
+            s = stadium(p0[:2], p1[:2], rad[e, j])
+            ax.fill(s[:, 0], s[:, 1], color=arm, alpha=0.35, lw=0)
+            ax.plot(s[:, 0], s[:, 1], color=arm, lw=0.8)
+        ax.plot(tip[:, 0], tip[:, 1], color=red, lw=1.2)
+        ax.plot(0, 0, 'k+', ms=9, mew=1.5)
+        # 目標（星）と 0.03 m の範囲
+        ax.add_patch(plt.Circle(tgt[:2], 0.03, fill=False, ec=gold, ls=':', lw=1.2))
+        ax.plot(tgt[0], tgt[1], marker='*', ms=24, mfc=gold, mec='#8a6d00', mew=1.0, zorder=5)
+        ax.set_title(lab, fontsize=11)
+        ax.set_aspect('equal'); ax.set_xlim(-0.12, 0.48); ax.set_ylim(-0.36, 0.20)
+        ax.set_xlabel('x [m]')
+    axes[0].set_ylabel('y [m]')
+    hs = [plt.Line2D([], [], ls='', marker='*', ms=13, mfc=gold, mec='#8a6d00', label='目標位置'),
+          Rectangle((0, 0), 1, 1, fill=False, ec='#888888', ls='--', label='キューブの初期位置'),
+          plt.Line2D([], [], color=blue, lw=1, marker='o', ms=3, label='キューブの軌跡と最終位置（50 試行）'),
+          plt.Line2D([], [], color=red, lw=1.2, label='手先の軌跡（代表の 1 試行）'),
+          Rectangle((0, 0), 1, 1, fc=arm, alpha=0.35, ec=arm, label='腕の姿勢（代表の 1 試行）')]
+    fig.legend(handles=hs, loc='lower center', ncol=3, fontsize=9, frameon=False, bbox_to_anchor=(0.5, -0.01))
+    fig.tight_layout(rect=(0, 0.12, 1, 1))
+    fig.savefig(os.path.join(OUT, 'ra_target_star.png'))
+    plt.close(fig)
+    return 'ra_target_star.png'
+
+
 FIGS = {'matrix': fig_matrix_reversal,
+        'star': fig_target_star,
         'r4': fig_r4_settle,
         'arm': fig_arm_forms,
         'transfer': fig_transfer_decomposition,
