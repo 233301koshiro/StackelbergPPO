@@ -23,6 +23,8 @@
 #   LINK_NAMES=""             リンク名（例: "upper_arm forearm hand"）
 #   RANGES=""                 関節可動域（例: "-60 60 -90 90 -45 45"）
 #   GEARS=""                  アクチュエータゲイン（例: "150 100 80"）
+#   EXPECT_JOINTS=3           Step 0 の検査で期待する関節の数（既定: LINK_NAMES の数 − 1、無ければ 3）
+#   SKIP_POSE_CHECK=1         Step 0 の検査（check_glb_pose.py）を飛ばす
 
 set -euo pipefail
 
@@ -43,6 +45,25 @@ echo "  GLB     : $GLB"
 echo "  OUT_DIR : $OUT_DIR"
 echo "  XML_NAME: $XML_NAME"
 echo "=========================================="
+
+# ----------------------------------------------------------------
+# Step 0: M2 の後の検査（マーカーの数と関節の高さの広がり）。通らなければ M3 へ進めない
+# ----------------------------------------------------------------
+# ⭐ 2026-11-13: 修論 3.6 は「M2 の後にマーカーの数と関節の高さの広がりを検査し、通らなければ M3 へ進めない」と書くが、
+#   このスクリプトは check_glb_pose.py を呼んでいなかった（ユーザー「見つけた食い違いは直して」）。
+#   期待する関節の数は EXPECT_JOINTS（既定: LINK_NAMES があれば名前の数 − 1、無ければ 3）。
+#   JOINTS（関節の高さを手で与える）を指定したときは色の検出を使わないので検査しない。SKIP_POSE_CHECK=1 で飛ばせる。
+if [ -z "$JOINTS" ] && [ "${SKIP_POSE_CHECK:-0}" != "1" ]; then
+  if [ -n "${EXPECT_JOINTS:-}" ]; then NJ="$EXPECT_JOINTS"
+  elif [ -n "$LINK_NAMES" ]; then read -ra _N <<< "$LINK_NAMES"; NJ=$(( ${#_N[@]} - 1 ))
+  else NJ=3; fi
+  echo ""
+  echo "[Step 0] M2 の後の検査（関節 ${NJ} 個を期待）"
+  if ! python3 scripts/check_glb_pose.py "$GLB" --joints "$NJ"; then
+    echo "ERROR: M2 の後の検査を通らなかった。M3 へ進まない（SKIP_POSE_CHECK=1 で飛ばせる）" >&2
+    exit 1
+  fi
+fi
 
 # ----------------------------------------------------------------
 # Step 1: GLB → per-link STL (link-local) + Choreonoid URDF

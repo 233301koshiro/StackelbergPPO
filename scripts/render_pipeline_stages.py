@@ -177,7 +177,8 @@ def m4(case, names, out, paper=False):
         a.set_title(f'{JA.get(n, n)}\n長さ {L:.3f} m・太さ（半径）{r:.3f} m'
                     + ('' if paper else f'\nはみ出し {over:.1f} %（黒い点）'))
         a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('骨からの距離 [m]')
-    ax[0].set_ylabel('骨の軸に沿った距離 [m]（▲＝自分の関節）')
+    # 論文用は ▲ の説明を軸の名前に入れない（文字の ▲ は黒く、図の ▲ はマゼンタで食い違う。意味は本文に書く。2026-11-13 ユーザーの指摘）
+    ax[0].set_ylabel('骨の軸に沿った距離 [m]' + ('' if paper else '（▲＝自分の関節）'))
     if not paper:
         fig.suptitle('M4 長さと太さの抽出 — 長さ＝関節と関節の距離、太さ＝骨に垂直な断面の幅（黒線がカプセル）', fontsize=13)
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)

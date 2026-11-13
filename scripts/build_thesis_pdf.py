@@ -14,6 +14,27 @@ DRAFT_DIR = ROOT / 'docs' / '研究応用' / '修論ドラフト'
 FIGURES_DIR = ROOT / 'figures'
 BUILD_DIR = ROOT / 'build_pdf'
 
+
+def _tex_safe_figure(path):
+    """PDF の図を xelatex が読める形に書き直した写しを返す（PNG などはそのまま）。
+
+    ⛔ 2026-11-13: draw.io（デスクトップ版）が書き出した PDF は、図の全体を URL エンコードして
+    メタデータ（Subject）に埋め込む。図 3.1 に画像を貼ったら 1 MB を超え、xdvipdfmx がその PDF を
+    取り込むところで Segmentation fault になった（PDF のビルドが止まる）。pdftocairo で描き直した写しは通る。
+    元のファイル（ユーザーが書き出した figures/*.pdf）は書き換えず、build_pdf/fig_safe/ に写しを置く。
+    """
+    if path.suffix.lower() != '.pdf':
+        return path
+    out = BUILD_DIR / 'fig_safe' / path.name
+    if out.exists() and out.stat().st_mtime >= path.stat().st_mtime:
+        return out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(['pdftocairo', '-pdf', str(path), str(out)], capture_output=True, text=True)
+    if r.returncode != 0 or not out.exists():
+        print(f'[warn] pdftocairo で {path.name} を書き直せなかった（元のまま使う）: {r.stderr.strip()[:200]}')
+        return path
+    return out
+
 # 章の読み込み順: (ファイル名, unnumbered)
 # unnumbered=True → \chapter* (LaTeX の章カウンタを進めない)
 # (ファイル名, unnumbered, opts)
@@ -178,6 +199,7 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 print(f'[warn] 図が見つからない: {rel}')
                 i += 1
                 continue
+            path = _tex_safe_figure(path)
             # 本ドラフトは図表番号を**本文側で手動管理**している（表と同じ流儀）。
             # \caption を使うと LaTeX が別途採番して本文の「図 4.2」とずれるので、
             # 番号込みのキャプションを小さめの地の文として自分で置く。

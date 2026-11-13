@@ -617,6 +617,7 @@ choreonoid --no-window --python scripts/choreonoid_train.py \
 ```
 
 > Step 1〜3 は `bash scripts/run_tripo_pipeline.sh <GLB> <OUT_DIR> <XML_NAME>` で一発実行できる（環境変数 `JOINTS`・`RANGES`・`GEARS` 等で上書き可能）。
+> ⭐ 2026-11-13〜: Step 1 の前に Step 0 として `check_glb_pose.py`（マーカーの数と関節の高さの広がり）を呼び、通らなければ止まる（修論 3.6 の「M3 へ進めない」と合わせた。それまでは呼んでいなかった）。期待する関節の数は `EXPECT_JOINTS`（既定は `LINK_NAMES` の数 − 1、無ければ 3）、`JOINTS` を手で与えたときと `SKIP_POSE_CHECK=1` のときは飛ばす。
 
 ### 抽出されたパラメータ
 
