@@ -235,6 +235,54 @@ def m5(xml_path, names, out, paper=False):
     print(f'[M5] → {out}')
 
 
+def m5_paper(xml_path, names, out):
+    """修論 図 3.5 用（2026-11-13 作り直し、ユーザー指摘「XML は読みやすい擬似コード・抜粋に、枠で囲って余白を詰める」
+    「関節の印を図 3.4 とそろえる」）。左は初期姿勢の模型で関節は図 3.4 と同じマゼンタの▲、
+    右は XML の入れ子を擬似コードにして枠で囲む。値は描く XML から読む（手で書かない）。"""
+    root = ET.parse(xml_path).getroot()
+    body0 = root.find('worldbody/body')
+    gears = {m.get('joint'): m.get('gear') for m in root.iter('motor')}
+    fig, ax = plt.subplots(1, 2, figsize=(10.5, 5.6), gridspec_kw={'width_ratios': [1, 1.25]})
+    a = ax[0]
+    p, k, b = np.array(list(map(float, body0.get('pos').split()))), 0, body0.find('body')
+    rows = []
+    while b is not None:
+        p = p + np.array(list(map(float, b.get('pos').split())))
+        g, j = b.find('geom'), b.find('joint')
+        ft = np.array(list(map(float, g.get('fromto').split())))
+        r = float(g.get('size'))
+        q0, q1 = p + ft[:3], p + ft[3:]
+        a.add_patch(plt.Rectangle((q0[0] - r, q0[2]), 2 * r, q1[2] - q0[2], color=COL[k % len(COL)], alpha=0.75))
+        for q in (q0, q1):
+            a.add_patch(plt.Circle((q[0], q[2]), r, color=COL[k % len(COL)], alpha=0.75))
+        ax_v = list(map(float, j.get('axis').split()))
+        kind = 'ヨー軸' if ax_v[2] else 'ピッチ軸'
+        a.plot(p[0], p[2], 'm^', ms=10)
+        a.annotate(f'{JA.get(names[k], names[k])}（{kind}）', (p[0] + r, (q0[2] + q1[2]) / 2),
+                   xytext=(12, 0), textcoords='offset points', fontsize=11, va='center')
+        rows.append((JA.get(names[k], names[k]), kind, j.get('range').split()[1].lstrip('-'),
+                     q1[2] - q0[2], r, float(b.get('pos').split()[2]), gears.get(j.get('name'))))
+        k += 1
+        b = b.find('body')
+    a.set_xlim(-0.3, 0.75); a.set_ylim(-0.12, p[2] + 0.4); a.set_aspect('equal'); a.grid(alpha=0.3)
+    a.set_xlabel('x [m]'); a.set_ylabel('z [m]')
+    a.set_title('初期姿勢（全関節 0°）')
+    lines = ['XML の入れ子（擬似コード）', '']
+    for i, (nm, kind, rng, L, r, pos, gear) in enumerate(rows):
+        ind = '　　' * i
+        where = '原点' if i == 0 else f'親の先端（{pos:.3f} m）'
+        lines += [f'{ind}リンク {nm}：取り付け位置＝{where}',
+                  f'{ind}　関節：{kind}、可動域 ±{float(rng):.0f}°',
+                  f'{ind}　形状：カプセル 長さ {L:.3f} m・半径 {r:.3f} m']
+    g = sorted({f'{float(v):g}' for v in gears.values() if v})
+    lines += ['', f'各関節：モーター（ギア比 {"・".join(g)} N·m、入力 −1〜1）']
+    ax[1].axis('off')
+    ax[1].text(0.02, 0.5, '\n'.join(lines), fontsize=10.5, va='center', ha='left', transform=ax[1].transAxes,
+               linespacing=1.55, bbox=dict(boxstyle='round,pad=0.8', fc='#f7f7f7', ec='0.55'))
+    fig.tight_layout(); fig.savefig(out, dpi=150, bbox_inches='tight'); plt.close(fig)
+    print(f'[M5 論文用] → {out}')
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--case', default='A1')
@@ -261,7 +309,7 @@ def main():
     m12(a.case, f'{a.out_dir}/pipeline_m12_paper.png')
     m3(a.case, names, f'{a.out_dir}/pipeline_m3_paper.png', paper=True)
     m4(a.case, names, f'{a.out_dir}/pipeline_m4_paper.png', paper=True)
-    m5(f'{tmp}/model.xml', names, f'{a.out_dir}/pipeline_m5_paper.png', paper=True)
+    m5_paper(f'{tmp}/model.xml', names, f'{a.out_dir}/pipeline_m5_paper.png')
 
 
 if __name__ == '__main__':

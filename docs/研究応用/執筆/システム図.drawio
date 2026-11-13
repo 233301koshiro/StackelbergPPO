@@ -107,7 +107,7 @@
         <mxCell id="e_m4_d4" edge="1" parent="1" source="m4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="d4">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="m5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;align=left;" value="M5: モデル生成&lt;br&gt;・リンクをカプセルで近似&lt;br&gt;・子を親の先端に取り付け&lt;br&gt;・関節軸を割り当て（既定: 縦型）" vertex="1">
+        <mxCell id="m5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;align=left;" value="M5: モデル生成&lt;br&gt;・リンクをカプセルで近似&lt;br&gt;・子を親の先端に取り付け&lt;br&gt;・関節軸を割り当て（平面／縦型）" vertex="1">
           <mxGeometry height="90" width="185" x="825" y="172" as="geometry" />
         </mxCell>
         <mxCell id="d5" parent="1" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="XML (MuJoCo互換)&#xa;※Choreonoid が読み込み時に変換" vertex="1">
