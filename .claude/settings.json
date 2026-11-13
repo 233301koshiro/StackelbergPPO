@@ -24,5 +24,19 @@
   },
   "enabledPlugins": {
     "ponytail@ponytail": false
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-/userdir/StackelbergPPO}\" && { find docs scripts figures -user root -exec chown ubuntu:ubuntu {} + ; find . -maxdepth 1 -name '*.md' -user root -exec chown ubuntu:ubuntu {} + ; } 2>/dev/null || true",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
   }
 }
