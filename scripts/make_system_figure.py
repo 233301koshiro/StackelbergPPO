@@ -159,7 +159,11 @@ def relayout(tree):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--export', action='store_true', help='figures/system_overview.pdf も書き出す')
+    ap.add_argument('--force', action='store_true', help='手で直した論文用の .drawio を上書きする（手直しと画像は消える）')
     a = ap.parse_args()
+    if OUT.exists() and not a.force:
+        sys.exit(f'{OUT.name} は 2026-11-13 からユーザーが手で直し、A1 の画像も貼ってある。作り直すと消えるので止めた（上書きするなら --force）。'
+                 '書き出しだけなら draw.io で論文用の .drawio を開いて PDF にする')
     tree = ET.parse(SRC)
     moved = relayout(tree)
     tree.write(OUT, encoding='utf-8', xml_declaration=False)
