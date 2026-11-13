@@ -108,7 +108,7 @@
 | **`verify_run_replay.py`** | 学習済み run を 5 話再生し env の reward を積んで log と比べる（9-66）。既定は全話を使う（`EVAL_DISCARD` 0、9-237）。⭐ 10-22: 学習時の物理の環境変数を `launch_env.json` から読む（9-283） |
 | **`probe_m1_compliance.py`** | M1 の仕様遵守率（マーカー数・比の保存）。マゼンタ検出は `probe_m1_tilt` を import |
 | **`probe_m1_tilt.py`** | M1 画像の傾き。⚠️ **この量は合否を分けない**（9-79）。姿勢の判定は `check_glb_pose.py` |
-| `check_glb_pose.py` | **M2 の後**に関節の Z 広がりで姿勢を判定。閾値 0.25 は実測較正済み |
+| `check_glb_pose.py` | **M2 の後**に関節の Z 広がりで姿勢を判定。閾値 0.25 は実測較正済み。`run_tripo_pipeline.sh` の Step 0 が呼び、通らなければ M3 へ進まない（2026-11-13〜。`SKIP_POSE_CHECK=1` で飛ばせる） |
 | `check_stale_claims.py` | 主張の側から全 MD を横断検出 |
 | ⭐⭐ `selfcheck_fk_init.py` | **`_safe_init_angle` の FK を既知の形状で検算**（系譜 9-197）。⭐ **Choreonoid を起動せずに回る。**⭐ 検査 ② が「真上の腕はヨーで動かない」を示し、旧実装が**ヨーにピッチの式を当てていた**誤りを直接突く |
 | ⭐⭐ `check_open_gaps.py` | **「まだ埋まっていない」の印（❌ 🔧 / ⏳ 未確認）を全 MD から並べる。**消し線と「」の中の印は数えない（11-01）。⛔⛔ **埋めた後も残っていないかを人が見る。**`工程別_検証状況.md` が 3 週間腐り、**塞がった穴を未測のまま申告していた**（2026-10-02）。⚠️ **`check_stale_claims.py` は検出できない。**⭐ `--self-check` で**本物の穴を見落とさないか**を確かめられる（5 項目） |
@@ -148,7 +148,7 @@
 | `make_slide8_links_figure.py` | 進捗発表スライド 8「リンクに切り分けて寸法を測った」の図（→ `figures/slide8_links_split.png`） |
 | `make_slide9_m1_variance_figure.py` | 同スライド 9「M1 のばらつき」の図（→ `figures/slide9_m1_variance.png`） |
 | `render_pipeline_stages.py` | M3〜M5 の**処理の途中経過**を図にする（2026-10-07、スライド「システムフロー解説」用。2026-10-21 から修論 図 3.2〜3.5 にも使う。論文用は図の中の題を外した `pipeline_*_paper.png`。M4 の論文用ははみ出しも外す。M1・M2 は A1 の手描き → 整形画像 → GLB の 1 段 `pipeline_m12_paper.png`）。パイプラインの関数そのものを呼んで描く（→ `figures/pipeline_m2_pose.png`（M2 の失敗例 A1 対 A3）・`pipeline_m3.png`・`pipeline_m4.png`・`pipeline_m5.png`）。`--case` で別の手描き |
-| `make_system_figure.py` | **修論 図 3.1（システム図）を作る**（2026-10-20）。原本 `docs/研究応用/執筆/システム図.drawio`（スライド用の横長）を A4 縦に入る 2 段組みに並べ替えて `システム図_論文用.drawio` を出し、`--export` で `figures/system_overview.pdf`（ベクター）に書き出す。⚠️ 図を直すときは原本だけを直してこれを回す（論文用は生成物）。書き出しには draw.io desktop の CLI が要る（`DRAWIO=` で実行ファイルを指定、xvfb-run 経由） |
+| `make_system_figure.py` | **修論 図 3.1（システム図）を作る**（2026-10-20）。原本 `docs/研究応用/執筆/システム図.drawio`（スライド用の横長）を A4 縦に入る 4 段（フェーズごとに 1 段。2026-11-13 に 2 段から変更）に並べ替え、論文用だけのラベル（ファイル名 → 中身の名前）を当てて `システム図_論文用.drawio` を出し、`--export` で `figures/system_overview.pdf`（ベクター）に書き出す。⛔ 2026-11-13 から論文用はユーザーが手で直して画像も貼ったので、論文用があるとスクリプトは止まる（`--force` で上書き）。図は論文用を draw.io で直接直す。書き出しには draw.io desktop の CLI が要る（`DRAWIO=` で実行ファイルを指定、xvfb-run 経由） |
 | ⭐ `queue_postrun_replay.sh` | ⭐ **修論のための学習 45 本を、1 本終わるたびに「学習時の環境で再生 → 図 → 結論前の検査」まで済ませる**（9-236）。学習はしない。出力 `single_run/postrun_summary.log`。済んだ印は `single_run/<run>/trace/.postrun_done`（待つときはこれを見る。ログの見出しは全角の「（」を含み、grep で待つと外れる） |
 | ⭐ `queue_hockey_goal_rate.sh` | ⭐ **ホッケーの取り直し 2 本のゴール率を 20 話（全話）で測る**（9-237）。完走を待って `trace/arm_trace_20.npz` を作る。学習はしない |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
