@@ -46,6 +46,10 @@ RA_ENV = {
     'CNOID_VISUAL_RAW': '見た目だけ: 部品のメッシュを間引かず出す（画面のデモ）',
 }
 REQUIRED_RA_ENV = {'CNOID_JOINT_LIMIT_TORQUE'}
+# 軸6 だけの環境変数を、main の run でも使ってよい cfg（理由つき）。ここに無い main の run が持てば ⛔ のまま。増やすときは境界の md の表にも書く
+MAIN_OK_ENV = {
+    'CNOID_JOINT_LIMIT_TORQUE': ({'quad_walk_ra'}, '四脚は軸6 の部品を近似した物理の起動行を main で使う（系譜 9-342、queue_quad_walk*.sh）。main のコードもこの環境変数を読む'),
+}
 RA_HOOK_WORDS = ('軸6', 'ra15', 'RobotAssembler', 'robot_assembler')
 
 bad, warn = [], []
@@ -84,7 +88,8 @@ def check_run(run, cwd, cfg, le, ra_xml, ra_cfg, ra_keys):
         k = flat_keys(cfg) & ra_keys
         if k:
             probs.append(f'C: 軸6 でない run {run} の config に軸6 だけのキー {sorted(k)}')
-        e = set(le or {}) & set(RA_ENV)
+        e = {v for v in set(le or {}) & set(RA_ENV)
+             if cfg.get('cfg') not in MAIN_OK_ENV.get(v, (set(), ''))[0]}
         if e:
             probs.append(f'C: 軸6 でない run {run} の launch_env に軸6 だけの環境変数 {sorted(e)}')
     return is_ra, probs
@@ -95,12 +100,14 @@ def reproduce():
     X, C, K = {'e2e_a1v_ra15'}, {'pusher_ra15'}, {'capsule_lateral', 'part_mass_file'}
     ra = {'xml_name': 'e2e_a1v_ra15', 'cfg': 'pusher_ra15'}
     mn = {'xml_name': 'e2e_b1_phys_arm171', 'cfg': 'pusher_gearonly_real'}
+    qd = {'xml_name': 'quad_walk_ra235_rab2', 'cfg': 'quad_walk_ra'}
     cases = [
         ('軸6 の run を main で起動した', ('r', MAIN_DIR, ra, {'CNOID_JOINT_LIMIT_TORQUE': '1'})),
         ('軸6 の run の可動域トルクが無い', ('r', RA_DIR, ra, {'CNOID_SELF_COLLISION': '1'})),
         ('main の run を worktree で起動した', ('m', RA_DIR, mn, {})),
         ('main の run に軸6 の cfg キー', ('m', MAIN_DIR, {**mn, 'robot': {'capsule_lateral': True}}, {})),
         ('main の run に軸6 の環境変数', ('m', MAIN_DIR, mn, {'CNOID_JOINT_LIMIT_TORQUE': '1'})),
+        ('四脚の run に許していない軸6 の環境変数', ('m', MAIN_DIR, qd, {'CNOID_JOINT_LIMIT_TORQUE': '1', 'CNOID_ACT_DELAY': '1'})),
     ]
     ok = True
     for name, (run, cwd, cfg, le) in cases:
@@ -108,7 +115,8 @@ def reproduce():
         print(f'  {"✅ 検出" if p else "⛔ 見逃し"}: {name}  {p[:1]}')
         ok &= bool(p)
     for name, (run, cwd, cfg, le) in [('正しい軸6 の run', ('r', RA_DIR, ra, {'CNOID_JOINT_LIMIT_TORQUE': '1'})),
-                                      ('正しい main の run', ('m', MAIN_DIR, mn, {'CNOID_SELF_COLLISION': '1'}))]:
+                                      ('正しい main の run', ('m', MAIN_DIR, mn, {'CNOID_SELF_COLLISION': '1'})),
+                                      ('正しい四脚の run', ('m', MAIN_DIR, qd, {'CNOID_JOINT_LIMIT_TORQUE': '1'}))]:
         _, p = check_run(run, cwd, cfg, le, X, C, K)
         print(f'  {"✅ 通る" if not p else "⛔ 誤検出"}: {name}  {p[:1]}')
         ok &= not p
@@ -169,6 +177,7 @@ def main():
     # ---- B・C. run ---------------------------------------------------------
     print('\n【B・C】run の境界（single_run/*/.hydra）')
     n_ra = n_main = 0
+    allowed = {}
     for h in sorted(glob.glob('single_run/*/.hydra/hydra.yaml')):
         run = h.split('/')[1]
         try:
@@ -183,7 +192,12 @@ def main():
         n_ra += is_ra
         n_main += not is_ra
         bad.extend(probs)
+        for v, (cfgs, _) in MAIN_OK_ENV.items():
+            if not is_ra and v in (le or {}) and cfg.get('cfg') in cfgs:
+                allowed.setdefault(v, []).append(run)
     print(f'  軸6 の run {n_ra} 本（worktree で起動・launch_env に {sorted(REQUIRED_RA_ENV)}）・それ以外 {n_main} 本（main で起動・軸6 のキーと環境変数なし）')
+    for v, runs in allowed.items():
+        print(f'  ℹ️ 許した例外 {v}: main の run {len(runs)} 本（cfg {sorted(MAIN_OK_ENV[v][0])}。{MAIN_OK_ENV[v][1]}）{runs}')
 
     # ---- D. 共用コードの取り込み ---------------------------------------------
     print('\n【D】ブランチが main の共用コードを取り込んでいるか')

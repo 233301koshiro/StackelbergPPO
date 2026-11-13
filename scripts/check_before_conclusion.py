@@ -272,21 +272,51 @@ def ck_entered_exec(r):
     ⚠️⚠️ **他の 6 項目はどれもこれを検出できない。**完走するし、再生もでき、
       軌跡ファイルも作られる（中身が空でも）。⭐ **「厳密に 0.00 が続く」が署名である。**
 
-    ⚠️ 0.00 が 1〜2 epoch なら偶然もありうるので、**5 epoch 以上続いたら赤**にする。
+    ⚠️ 赤にするのは **全 epoch が厳密に 0（5 epoch 以上の run）**のときだけ。
+      「0 が 5 epoch 続いたら赤」にすると、制御コストを 0 にしたホッケー（`hockey_bank9*`、系譜 9-229）の
+      「パックに触れない話の報酬は本当に 0」を拾って誤報になる（2026-11-13 に試して 4 本で出た）。
+      そのため ep0 だけ値があり後が 0 の `_aborted_hockey_bank7_s2_slowblock` は拾えない。
+
+    ⭐ 丸めない値で見る（2026-11-13、系譜 9-346・Bug 104）。ログの `exec_R_eps` は 2 桁に丸めてあり、
+      execution に入っていても行動がごく小さい方策（`ra15_tp_rate_beta_ext400`、−2×10⁻⁴〜−1×10⁻⁶）は
+      200 epoch すべて 0.00 / −0.00 と出て ⛔⛔ の誤報になった。tensorboard の `exec_R_eps_avg` は丸めていない。
+      読めないときだけログの 2 桁で見る（そのときは誤報がありうると出す）。
     """
     log = run_dir(r) / 'log' / 'log_train.txt'
     if not log.exists():
         return False, '学習ログが無い'
-    import re as _re
-    vals = _re.findall(r'exec_R_eps\s+(-?[\d.]+)', log.read_text(encoding='utf-8', errors='ignore'))
+    vals, src = _exec_eps_unrounded(r), 'tensorboard の exec_R_eps_avg（丸めない値）'
+    if not vals:
+        import re as _re
+        vals = [float(v) for v in _re.findall(r'exec_R_eps\s+(-?[\d.]+)', log.read_text(encoding='utf-8', errors='ignore'))]
+        src = 'ログの exec_R_eps（2 桁に丸めた値。行動がごく小さい方策は 0.00 に丸まり誤報になりうる）'
     if not vals:
         return None, '⚠️ exec_R_eps が読めない（古い形式？）'
-    zeros = sum(1 for v in vals if abs(float(v)) == 0.0)
+    zeros = sum(1 for v in vals if v == 0.0)
     if zeros == len(vals) and len(vals) >= 5:
-        return False, (f'⛔⛔ **exec_R_eps が {len(vals)} epoch すべて厳密に 0.00。**'
+        return False, (f'⛔⛔ **exec_R_eps が {len(vals)} epoch すべて厳密に 0**（{src}）。'
                        f'1 エピソードも execution へ入っていない疑い（9-211）。'
                        f'⭐ stdout を `grep arm_safe_init` し、`transit_execution` の例外を見ること')
-    return True, f'exec_R_eps が非ゼロの epoch {len(vals)-zeros}/{len(vals)}'
+    return True, f'exec_R_eps が非ゼロの epoch {len(vals)-zeros}/{len(vals)}（{src}）'
+
+
+def _exec_eps_unrounded(r):
+    """tensorboard の `exec_R_eps_avg` を epoch 順に返す。読めなければ空。"""
+    try:
+        from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+    except Exception:
+        return []
+    by_step = {}
+    for f in sorted((run_dir(r) / 'tb').glob('events.out.tfevents.*')):
+        try:
+            ea = EventAccumulator(str(f), size_guidance={'scalars': 0})
+            ea.Reload()
+            if 'exec_R_eps_avg' in ea.Tags().get('scalars', []):
+                for e in ea.Scalars('exec_R_eps_avg'):
+                    by_step[e.step] = e.value
+        except Exception:
+            continue
+    return [by_step[k] for k in sorted(by_step)]
 
 
 def ck_ep_len(r):
@@ -727,6 +757,11 @@ def reproduce():
         # ⭐ Bug 82（10-27）: 柱に食い込んで NaN で切れる D-5 は ⛔、柱なしの到達は ✅
         ('話が NaN で切れて短くなった D-5（Bug 82）を ⛔', ck_ep_len('e2e_a1v_obspen_reach_phys')[0] is False),
         ('柱なしの到達は話の長さ ✅', ck_ep_len('e2e_a1v_reach_phys')[0] is True),
+        # ⭐ Bug 104（11-13）: 丸めない値で見る。9-211 の execution へ入らない run は ⛔、行動がごく小さいだけの run は ✅
+        ('execution へ入らない hockey_bank7（9-211、21 epoch すべて 0）を ⛔', ck_entered_exec('_aborted_hockey_bank7_slowblock')[0] is False),
+        ('制御コスト 0.001 で 2 桁では 0.00 の hockey_bank5_s2 は ✅', ck_entered_exec('hockey_bank5_s2')[0] is True),
+        ('制御コスト 0 で報酬が本当に 0 の epoch が続くホッケー（hockey_bank9）は ✅', ck_entered_exec('hockey_bank9')[0] is True),
+        ('行動がごく小さく 2 桁では 0.00 の ra15_tp_rate_beta_ext400 は ✅', ck_entered_exec('ra15_tp_rate_beta_ext400')[0] is True),
         ('R1 の旧い組は効いた値が同じ（=比べる変数が無い）',
          _overrides('tripo_pjp_mid_frozen_phys')['robot_param_scale'] == _overrides('tripo_pjp_mid_phys')['robot_param_scale']),
     ]
