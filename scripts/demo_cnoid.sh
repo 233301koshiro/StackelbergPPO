@@ -20,7 +20,7 @@
 # ⚠️ 学習と同時に走らせると重い（7/31 に GUI が落ちた記録がある）。発表の前に学習は止めておく。
 set -eu
 TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey}
-EPS=${2:-1}   # ⭐ 既定は 1 話（録画用。2026-10-05。複数回は第 2 引数で）
+EPS=${2:-1}
 # ⛔ 訂正（2026-10-09、系譜 9-237）: 「読み込み直後の 1〜2 話は当てにならない」は誤り。どの話も初期状態のくじ（関節と箱に ±0.1）で、
 #   くじの種が run の seed で固定されているので毎回同じ順に出るだけ。頭を飛ばす理由は無いので WARMUP の既定は 0（話を飛ばすときだけ指定）
 # ⭐ 9-236 以降の run は、物理の環境変数を run の launch_env.json から自動で読む（EXTRA は古い run 用）
@@ -29,12 +29,12 @@ VMESH=data/test/A1/meshes; VGLB=data/test/A1/3D/A1.glb; EXTRA=
 # HIDE: 見えなくする物体（物理には残す）／MARK: 目標の印を出すか
 # CAM: 最初のカメラ（視点x,y,z,注視点x,y,z）。発表中はマウスで自由に動かせる
 case "$TASK" in
-  reach)          RUN=e2e_a1v_reach;              HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 形を伸ばしてタスクに合わせた（co-design の狙いどおり）。台座 1.1° で立っている
-  pusher)         RUN=e2e_a1v_gearonly_pusher_s2; HIDE=;     MARK=0; CAM=1.6,-2.8,1.4,0.6,0,0.4 ;;   # 台座が立ったまま・描いた形のまま。目標は無い
+  reach)          RUN=e2e_a1v_reach_phys_s2_ws;   HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 発表用の結果が良い run
+  pusher)         RUN=e2e_a1v_pusher_phys_s2;     HIDE=;     MARK=0; CAM=1.6,-2.8,1.4,0.6,0,0.4 ;;   # 発表用の結果が良い run
   target_pusher)  RUN=e2e_a1v_actuator_tp;        HIDE=;     MARK=1; CAM=1.7,-3.4,1.7,1.0,0,0.35 ;;
-  obstacle_avoid) RUN=e2e_a1v_obspen_reach;       HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 柱を避ける（目標の 210 mm 手前で止まる）
-  obstacle_reach) RUN=e2e_a1v_obspen_reach_s2;    HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 目標に届く（柱の中を通る）
-  hockey)         RUN=hockey_bank9;               HIDE=;     MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2      # 星＝ゴール口の中心（1.55, 0）
+  obstacle_avoid) RUN=e2e_a1v_obspen_reach_phys;  HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 回避側の発表用 run
+  obstacle_reach) RUN=e2e_a1v_obspen_reach_phys_sub5_s2; HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 到達側の発表用 run
+  hockey)         RUN=hockey_bank9_phys_g10_blk3d_fs_ax; HIDE=; MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2      # 星＝ゴール口の中心（1.55, 0）
                   VMESH=data/test/hockey/meshes; VGLB=data/test/hockey/3D/hockey.glb
                   EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"; EPS=${2:-3} ;;
   # ⚠️ 2026-10-09（Bug 58・系譜 9-235）: hockey_bank9 は台座が 53° 倒れたまま学習した run。取り直し（hockey_bank9_scgc、台座固定）がそろったら差し替える。
