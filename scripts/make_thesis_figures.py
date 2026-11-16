@@ -29,6 +29,10 @@ OUT = os.path.join(ROOT, 'figures')
 _CJK = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
 if os.path.exists(_CJK):
     matplotlib.font_manager.fontManager.addfont(_CJK)
+    # 2026-11-17: 太字の .ttc も登録する（登録しないと fontweight='bold' が効かず、図 4.2 の順位が細字になる）
+    _CJK_B = _CJK.replace('-Regular', '-Bold')
+    if os.path.exists(_CJK_B):
+        matplotlib.font_manager.fontManager.addfont(_CJK_B)
     plt.rcParams['font.family'] = 'Noto Sans CJK JP'
 else:                                    # フォントが無い環境でも図だけは出す
     plt.rcParams['font.family'] = 'DejaVu Sans'
@@ -90,23 +94,28 @@ def fig_matrix_reversal():
         ypos = np.arange(3)[::-1]                       # 短腕を上に置く
         ax.barh(ypos, vals, color=cols, height=0.58, zorder=3)
         ax.set_yticks(ypos)
-        ax.set_yticklabels(labels, fontsize=11.5)
+        # 2026-11-17: 形態の名前は左のパネルだけに書く（中央にも書くと左のパネルの目盛りと重なる）
+        ax.set_yticklabels(labels if k == 0 else [''] * 3, fontsize=11.5)
         ax.set_xscale('symlog', linthresh=1)
         ax.axvline(0, color='#555', lw=0.9, zorder=2)
         ax.set_title(title, fontsize=13, pad=8)
-        ax.set_xlabel('最良エピソード報酬', fontsize=11.5)
-        lo = min(min(vals) * 8.0, -1.5)   # 値ラベルが軸ラベルと重ならない余白
-        hi = max(max(vals) * 5.0, 1.5)
+        ax.set_xlabel('最良エピソード報酬（右ほど良い）', fontsize=11.5)
+        # 2026-11-17: 値と順位の文字が枠線をまたいでいた（図と表の指摘_20261117.md）。対数に近い軸なので余白は倍率で取る
+        lo = min(min(vals) * 8.0, -1.5)
+        hi = max(max(vals) * 40.0, 1.5)
         ax.set_xlim(lo, hi)
         ax.grid(axis='y', alpha=0)
         for i, v in enumerate(vals):
             side = 1 if v >= 0 else -1
+            inside = v < -50          # 左へ長く伸びた棒は、文字を棒の中に白で書く（枠の外へ出さない）
+            if inside:
+                side = 1
             ax.annotate(f'{v:.2f}', (v, ypos[i]), textcoords='offset points',
                         xytext=(7 * side, 8), ha='left' if side > 0 else 'right',
-                        fontsize=11, color='#333')
+                        fontsize=11, color='white' if inside else '#333', zorder=5)
             ax.annotate(f'{rank[i]} 位', (v, ypos[i]), textcoords='offset points',
                         xytext=(7 * side, -13), ha='left' if side > 0 else 'right',
-                        fontsize=12, fontweight='bold', color=cols[i])
+                        fontsize=12, fontweight='bold', color='white' if inside else cols[i], zorder=5)
 
     ax = fig.add_subplot(gs[2])
     rr = {i: r + 1 for r, i in enumerate(np.argsort(best_r)[::-1])}
@@ -362,7 +371,7 @@ def fig_arm_forms():
     """修論 4.1.1 の図: 検証に用いた水平 3 関節アーム（2026-10-22、ユーザー指摘「肝心のロボットの画像の一つもない」）。
 
     (a) M2 が生成したメッシュ（`data/tripo_arm_colorful2`、系譜 第5段の v2c の元）を横から。
-    (b) 比較に用いた 7 形態を上から。リンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
+    (b) 基本形と、比較に用いた 8 形態を上から。リンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
     """
     import xml.etree.ElementTree as ET
     sys.path.insert(0, os.path.join(ROOT, 'scripts'))
@@ -374,9 +383,9 @@ def fig_arm_forms():
 
     # 基本形（1.0 倍）は学習に使っていないので XML が無い。短腕（0.5 倍）の長さを 2 倍して描く
     # （太さは倍率で変えない。どの形も 0.045 / 0.0326 / 0.032。2026-11-13 ユーザーの指摘「図 4.1 に基本形を載せる」）。
-    forms = [('基本形（1.0 倍）', 'base'), ('短腕（0.5 倍）', 'short'), ('中間（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
+    forms = [('基本形（1.0 倍、比較には不使用）', 'base'), ('短腕（0.5 倍）', 'short'), ('中間（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
              ('根元重（配分）', 'prox'), ('先端重（配分）', 'dist'),
-             ('助言の 1.99 倍', 'rec199'), ('助言の 2.11 倍', 'rec211'), ('助言の 2.36 倍', 'rec236')]
+             ('助言の 1.99 倍（到達）', 'rec199'), ('助言の 2.11 倍（押し）', 'rec211'), ('助言の 2.36 倍（押し）', 'rec236')]
     col = ['#888888', '#d94040', '#3070d0', '#30a050']        # 台座・1・2・3 本目
 
     def links(n):
@@ -413,7 +422,7 @@ def fig_arm_forms():
         a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5)
     a.set_xlim(-1.0, 1.85); a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.42); a.set_aspect('equal')
     a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
-    a.set_title('(b) 比較に用いた形態（上から）', fontsize=11)
+    a.set_title('(b) 基本形と比較に用いた形態（上から）', fontsize=11)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, 'arm_forms.png'))
     plt.close(fig)
@@ -546,7 +555,7 @@ def fig_target_star():
         ax.add_patch(Rectangle((c0[0] - half, c0[1] - half), 2 * half, 2 * half, fill=False, ec='#888888', ls='--', lw=1.2))
         for i in range(len(cube)):
             ax.plot(cube[i, :, 0], cube[i, :, 1], color=blue, lw=0.6, alpha=0.25)
-        ax.plot(cube[:, -1, 0], cube[:, -1, 1], 'o', ms=3, color=blue, alpha=0.7)
+        ax.plot(cube[:, -1, 0], cube[:, -1, 1], 'o', ms=3, color=blue, alpha=0.7, zorder=6)
         # 腕（当てる直前）と手先の軌跡
         for j in range(1, xp.shape[2]):
             p0 = xp[e, k, j] + xm[e, k, j] @ cap[e, j, :3]; p1 = xp[e, k, j] + xm[e, k, j] @ cap[e, j, 3:]
@@ -558,13 +567,14 @@ def fig_target_star():
         ax.plot(tip[:, 0], tip[:, 1], color=red, lw=1.2)
         ax.plot(0, 0, 'k+', ms=9, mew=1.5)
         # 目標（星）と 0.03 m の範囲
-        ax.add_patch(plt.Circle(tgt[:2], 0.03, fill=False, ec=gold, ls=':', lw=1.2))
-        ax.plot(tgt[0], tgt[1], marker='*', ms=24, mfc=gold, mec='#8a6d00', mew=1.0, zorder=5)
+        ax.add_patch(plt.Circle(tgt[:2], 0.03, fill=False, ec='#8a6d00', ls=':', lw=1.2, zorder=5))
+        # 2026-11-17: 星（ms=24 ≒ 0.068 m）が 0.03 m の円と最終位置の点を隠していた。円より小さくし、点を星の上に描く
+        ax.plot(tgt[0], tgt[1], marker='*', ms=11, mfc=gold, mec='#8a6d00', mew=0.8, zorder=5)
         ax.set_title(lab, fontsize=11)
         ax.set_aspect('equal'); ax.set_xlim(-0.12, 0.48); ax.set_ylim(-0.36, 0.20)
         ax.set_xlabel('x [m]')
     axes[0].set_ylabel('y [m]')
-    hs = [plt.Line2D([], [], ls='', marker='*', ms=13, mfc=gold, mec='#8a6d00', label='目標位置'),
+    hs = [plt.Line2D([], [], ls='', marker='*', ms=11, mfc=gold, mec='#8a6d00', label='目標位置（点線の円は 0.03 m 以内）'),
           Rectangle((0, 0), 1, 1, fill=False, ec='#888888', ls='--', label='キューブの初期位置'),
           plt.Line2D([], [], color=blue, lw=1, marker='o', ms=3, label='キューブの軌跡と最終位置（50 試行）'),
           plt.Line2D([], [], color=red, lw=1.2, label='手先の軌跡（代表の 1 試行）'),
