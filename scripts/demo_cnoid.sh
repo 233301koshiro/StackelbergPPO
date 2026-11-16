@@ -1,12 +1,12 @@
 #!/bin/bash
 # ⭐ Choreonoid の画面でデモを再生する（大きな発表用。2026-10-05）
 #
-#   bash scripts/demo_cnoid.sh <タスク> [エピソード数]
+#   bash scripts/demo_cnoid.sh <run> [エピソード数]
 #   ⭐ 録画用: 立ち上がってから START_DELAY 秒（既定 10）カウントダウンしてから再生する。
-#      形態が変わるたびに DESIGN_PAUSE 秒（既定 1）止める。例: START_DELAY=20 bash scripts/demo_cnoid.sh reach
+#      形態が変わるたびに DESIGN_PAUSE 秒（既定 1）止める。例: START_DELAY=20 bash scripts/demo_cnoid.sh e2e_a1v_reach_phys_s2_ws
 #   ⭐ ターミナルと Choreonoid のメッセージ欄に「第 N 話／形態変化 k 回目（リンク長）／実行に移ります
 #      （描いた形 → 学習後）／実行中（先端と目標の距離・箱の移動）」を出す
-#   タスク: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey
+#   run名からタスクと表示設定を自動判定する
 #   ⭐ hockey（2026-10-09）: 制御コスト 0 の `hockey_bank9`（seed0、評価の動きで 3 話中 2 話ゴール（⚠️ 固定された 3 本のくじでの結果で、ゴール率ではない。系譜 9-237）。系譜 9-229）。
 #     学習と同じ壁の反射・腕ブロックを有効にする。頭の話は当てにならない（Bug 47）ので既定で 3 話流す。ゴールした話を使うこと
 #
@@ -19,7 +19,7 @@
 #   打っていないと `Authorization required` → Qt が core dump する。下で先に確かめて案内を出す。
 # ⚠️ 学習と同時に走らせると重い（7/31 に GUI が落ちた記録がある）。発表の前に学習は止めておく。
 set -eu
-TASK=${1:?タスクを指定: reach | pusher | target_pusher | obstacle_avoid | obstacle_reach | hockey}
+RUN=${1:?run名を指定: e2e_a1v_reach_phys_s2_ws など}
 EPS=${2:-1}
 # ⛔ 訂正（2026-10-09、系譜 9-237）: 「読み込み直後の 1〜2 話は当てにならない」は誤り。どの話も初期状態のくじ（関節と箱に ±0.1）で、
 #   くじの種が run の seed で固定されているので毎回同じ順に出るだけ。頭を飛ばす理由は無いので WARMUP の既定は 0（話を飛ばすときだけ指定）
@@ -28,18 +28,20 @@ EPS=${2:-1}
 VMESH=data/test/A1/meshes; VGLB=data/test/A1/3D/A1.glb; EXTRA=
 # HIDE: 見えなくする物体（物理には残す）／MARK: 目標の印を出すか
 # CAM: 最初のカメラ（視点x,y,z,注視点x,y,z）。発表中はマウスで自由に動かせる
-case "$TASK" in
-  reach)          RUN=e2e_a1v_reach_phys_s2_ws;   HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 発表用の結果が良い run
-  pusher)         RUN=e2e_a1v_pusher_phys_s2;     HIDE=;     MARK=0; CAM=1.6,-2.8,1.4,0.6,0,0.4 ;;   # 発表用の結果が良い run
-  target_pusher)  RUN=e2e_a1v_actuator_tp;        HIDE=;     MARK=1; CAM=1.7,-3.4,1.7,1.0,0,0.35 ;;
-  obstacle_avoid) RUN=e2e_a1v_obspen_reach_phys;  HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 回避側の発表用 run
-  obstacle_reach) RUN=e2e_a1v_obspen_reach_phys_sub5_s2; HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;   # 到達側の発表用 run
-  hockey)         RUN=hockey_bank9_phys_g10_blk3d_fs_ax; HIDE=; MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2      # 星＝ゴール口の中心（1.55, 0）
+case "$RUN" in
+  *hockey*)       HIDE=; MARK=1; CAM=0.9,-2.0,2.2,0.9,0,0.2
                   VMESH=data/test/hockey/meshes; VGLB=data/test/hockey/3D/hockey.glb
-                  EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"; EPS=${2:-3} ;;
+                  EXTRA="HOCKEY_WALL_RESTITUTION=0.75 HOCKEY_ARM_BLOCK=1"
+                  [ -n "${2:-}" ] || EPS=3 ;;
+  *obspen_reach*|*obs_reach*)
+                  HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;
+  *reach*)        HIDE=cube; MARK=1; CAM=1.5,-2.2,1.3,0.45,0,0.45 ;;
+  *actuator_tp*|*target_pusher*|*tp*)
+                  HIDE=; MARK=1; CAM=1.7,-3.4,1.7,1.0,0,0.35 ;;
+  *pusher*)       HIDE=; MARK=0; CAM=1.6,-2.8,1.4,0.6,0,0.4 ;;
   # ⚠️ 2026-10-09（Bug 58・系譜 9-235）: hockey_bank9 は台座が 53° 倒れたまま学習した run。取り直し（hockey_bank9_scgc、台座固定）がそろったら差し替える。
   #   他の縦型デモの台座: reach 1.1°・target_pusher 4.2°・obstacle_avoid 8.8°・obstacle_reach 4.0°（pusher は gearonly で 0°）
-  *) echo "知らないタスク: $TASK"; exit 1 ;;
+  *) echo "対応していないrun名: $RUN"; exit 1 ;;
 esac
 cd "$(dirname "$0")/.."
 # ⭐ 画面につながるかを先に確かめる（2026-10-05。つながらないと Qt が core dump して分かりにくい）
