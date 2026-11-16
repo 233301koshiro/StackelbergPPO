@@ -38,7 +38,8 @@ PHYSICS_ENV = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_CTRL_CLIP',
                'CNOID_JOINT_LIMIT_TORQUE', 'CNOID_JOINT_LIMIT_SLACK',   # ⭐ 10-29 Bug 85（系譜 9-329）: 可動域の掛け方も物理（無いと軸6 の run を書き戻しで再生する）
                'CNOID_ACT_DELAY', 'CNOID_JOINT_FRICTION', 'CNOID_JOINT_FRICTION_VS',   # ⭐ 11-02 系譜 9-332: 軸6 の指令の遅れと関節の摩擦も物理（ブランチの口。無いと遅れ・摩擦なしで再生する）
                'CNOID_FLOOR_BODY',   # ⭐ 11-08 Bug 100: 床の大きさも物理（無いと広い床で学習した四脚を 10 m 四方の床で再生する）
-               'CNOID_TORQUE_SPEED')   # ⭐ 11-08 系譜 9-342: モータのトルクと速さの特性も物理
+               'CNOID_TORQUE_SPEED',   # ⭐ 11-08 系譜 9-342: モータのトルクと速さの特性も物理
+               'CNOID_JOINT_MAX_VEL_PRETICK', 'CNOID_CAPSULE_INERTIA_ROT')   # ⭐ 11-16 Bug 106・107（系譜 9-350）: 速度の上限の掛け方とカプセルの慣性の向き
 _rd = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('hydra.run.dir=')), None)
 if _rd:
     import json
