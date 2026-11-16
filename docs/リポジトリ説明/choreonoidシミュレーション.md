@@ -346,12 +346,17 @@ train.py: for epoch in range(max_epoch):
    ↓ reload_sim_model()
 既存 BodyItem を detach（ツリーから除去）
    ↓
-新しい XML → URDF 変換 → BodyItem ロード → シミュレーション再起動
+新しい XML → .body 形式へ変換（mujoco_xml_to_body）→ BodyItem ロード → シミュレーション再起動
    ↓
 新しい形態でシミュレーション続行
 ```
 
-設計フェーズは 6 回（skeleton×5 + attribute×1）この再ロードが走るため、Choreonoid のロードログが一気に流れる。
+設計フェーズは 1 話に 6 step あり、読み直しの回数は骨格を固定するかで変わる。Choreonoid のロードログが一気に流れるのはこのため。
+
+- **`fix_skeleton=true`（本研究の run はすべてこちら）**: 骨格の段は 1 step で素通りして読み直さず、属性の段の 5 回で読み直す（`pusher.py` の `step()`）
+- `fix_skeleton=false`（元の論文の設定）: 骨格の段の 5 回（`apply_skel_action`）と属性の段の 1 回で、計 6 回
+
+> 2026-11-16 訂正: 当初は「6 回（skeleton×5 + attribute×1）」とだけ書き、変換も「URDF 変換」と書いていた。前者は `fix_skeleton=false` のときの回数で、後者は上の「ロボットモデルの読み込み」の節とコード（`.body` 形式へ変換）に合わない。
 
 ---
 
