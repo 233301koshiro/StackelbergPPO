@@ -32,7 +32,7 @@ IMPER = re.compile(r'にする|しない|を見込む|必ず|すること|使わ
 
 
 def targets():
-    fs = [ROOT / 'CLAUDE.md', ROOT / 'docs/リポジトリ説明/新しいチャットの始め方.md']
+    fs = [ROOT / 'CLAUDE.md', ROOT / 'docs/リポジトリ説明/01_開始と運用/新しいチャットの始め方.md']
     fs += sorted((ROOT / '.claude/commands').glob('*.md'))
     fs += sorted(p for p in MEMORY.glob('*.md') if p.name != 'MEMORY.md')
     return [f for f in fs if f.exists()]

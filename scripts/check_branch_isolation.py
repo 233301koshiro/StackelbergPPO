@@ -4,7 +4,7 @@
     python3 scripts/check_branch_isolation.py          # ⛔ が 1 つでもあれば終了コード 1
     python3 scripts/check_branch_isolation.py --reproduce   # 既知の混ざり方を人工的に作り、全部 ⛔ になるかを確かめる
 
-混ざってはいけない 3 つの層（境界の説明・共用のファイルの一覧・チェックリストは docs/リポジトリ説明/mainと軸6ブランチの境界.md）:
+混ざってはいけない 3 つの層（境界の説明・共用のファイルの一覧・チェックリストは docs/リポジトリ説明/03_環境と外部連携/mainと軸6ブランチの境界.md）:
   ① RobotAssembler の設定（部品・スケール表・部品の質量・組み方）… ブランチだけ
   ② 幾何のリンクの設定（カプセルの骨・太さ・横ずれ。khrylib/robot/xml_robot.py）… 共用。ブランチは cfg の口で足す
   ③ 物理の環境（CNOID_* の環境変数・*_phys の XML）… 共用。軸6 だけの値は環境変数の口で足し、既定では効かない

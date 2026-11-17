@@ -7,17 +7,17 @@
 段の区切りはスライドの「各フロー詳細①〜④」にそろえる（① スケッチ整形 ② 形にする ③ タスクに向くか調べる ④ フィードバック）。
 
     python3 scripts/make_sysflow_slide.py
-    # → docs/研究応用/執筆/システム図_スライド用.drawio（画像を埋め込んだ draw.io。PNG への書き出しは draw.io で行う）
-    # → docs/研究応用/執筆/yobi/sysflow_preview.png（同じ配置を matplotlib で描いた確認用。字の幅は draw.io と少し違う）
+    # → docs/研究応用/執筆/使えそうな画像データ/システム図_スライド用.drawio（画像を埋め込んだ draw.io。PNG への書き出しは draw.io で行う）
+    # → docs/研究応用/執筆/使えそうな画像データ/sysflow_preview.png（同じ配置を matplotlib で描いた確認用。字の幅は draw.io と少し違う）
 
 画像（すべてリポジトリの中。手描き A1 の流れと、到達の短腕 / 1.99 倍の腕）:
   手描き・M1        data/test/A1/sketch/A1_hand.webp・A1_m1.jpeg
-  3D・関節で分ける   docs/研究応用/執筆/slide_flow.png の ③④（make_slide_flow.py が STL から描いたもの）
+  3D・関節で分ける   docs/研究応用/執筆/使えそうな画像データ/slide_flow.png の ③④（make_slide_flow.py が STL から描いたもの）
   長さ・太さ        figures/pipeline_m4_paper.png の上腕（修論 図 3.4）
   モデル            figures/pipeline_m5_paper.png の左（修論 図 3.5）
   学習              slide_flow.png の ⑤（phys_pusher.mp4 のコマ）
   棄却・クリア       slide_flow.png の ⑥ の左右（系譜 9-279 の短腕と 1.99 倍）
-  指摘              docs/研究応用/執筆/yobi/three_layers.png の ②（模式図。make_yobi_figures.py）
+  指摘              docs/研究応用/執筆/使えそうな画像データ/three_layers.png の ②（模式図。make_yobi_figures.py）
 """
 import base64
 import io
@@ -33,10 +33,10 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Polygon, Ellipse, FancyArrowPatch
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-WRITE = ROOT / 'docs' / '研究応用' / '執筆'
+WRITE = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ'   # 2026-11-17 の整理で yobi/ と図をここへ平らに移した
 OUT_DRAWIO = WRITE / 'システム図_スライド用.drawio'
-OUT_PREVIEW = WRITE / 'yobi' / 'sysflow_preview.png'
-OUT_SLIDE = WRITE / 'yobi' / 'sysflow_slide.png'       # スライドに貼る版（3 倍）と、フロー詳細に貼る段の切り抜き sysflow_<段>.png
+OUT_PREVIEW = WRITE / 'sysflow_preview.png'
+OUT_SLIDE = WRITE / 'sysflow_slide.png'       # スライドに貼る版（3 倍）と、フロー詳細に貼る段の切り抜き sysflow_<段>.png
 CROPS = {'p12': (0, 658), 'p1': (0, 216), 'p2': (215, 658), 'p3': (657, 885), 'p4': (884, 1100)}
 
 for _ttc in sorted(pathlib.Path('/usr/share/fonts').rglob('*CJK*')):
@@ -77,7 +77,7 @@ def load_images():
         'm5': Image.open(ROOT / 'figures/pipeline_m5_paper.png').crop((190, 230, 290, 760)),  # XML の模型のカプセルの列（字を除く）
         'm6': sf.crop((2605, 320, 3112, 688)),                       # ⑤ シミュレーションのコマ
         'fail1': sf.crop((293, 1328, 1147, 1685)),                   # ⑥ 左: 短腕（397 mm 届かない）
-        'fail2': (Image.open(WRITE / 'yobi/three_layers.png').crop((1100, 215, 1900, 840))),  # ② ギア比が上限に張り付く
+        'fail2': (Image.open(WRITE / 'three_layers.png').crop((1100, 215, 1900, 840))),  # ② ギア比が上限に張り付く
         'pass': sf.crop((2083, 1328, 2939, 1685)),                   # ⑥ 右: 1.99 倍で届いた
     }
 

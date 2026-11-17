@@ -17,7 +17,7 @@
 - **つながり**: あるノードの本文に別のノードの識別子（`系譜 9-285`・`Bug 76`・`修論 4.4.3.1`・`想定問答 Q14`）が
   出てきたら辺を張る。**手で保守するものは無い**（ドキュメントの構造と監査.md の「① 生成物にする」）。
 
-    python3 scripts/knowledge_graph.py            # docs/リポジトリ説明/知識ネットワーク.html を書く
+    python3 scripts/knowledge_graph.py            # docs/リポジトリ説明/04_文書管理/知識ネットワーク.html を書く
     python3 scripts/knowledge_graph.py --stats    # ノードと辺の数だけ出す
     python3 scripts/knowledge_graph.py --reproduce  # 既知のつながりを拾えるか
 
@@ -37,7 +37,7 @@ QA = DOCS / '研究応用/執筆/想定問答.md'
 SUMMARY = DOCS / '研究応用/執筆/知見総括表.md'
 DRAFT = DOCS / '研究応用/修論ドラフト'
 TEMPLATE = Path(__file__).resolve().parent / 'knowledge_graph_template.html'
-OUT = DOCS / 'リポジトリ説明/知識ネットワーク.html'
+OUT = DOCS / 'リポジトリ説明/04_文書管理/知識ネットワーク.html'
 
 THESIS = ['要旨.md', '第1章_序論.md', '第2章_関連研究.md', '第3章前段_前提.md', '第3章_提案手法.md',
           '第4章_実験および評価.md', '第5章_結論.md', '付録A_プロンプト全文.md', '付録D_再現情報と補足実験.md']

@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / 'docs'
 R1 = ROOT / 'scripts' / 'README.md'
-R2 = DOCS / 'リポジトリ説明' / '評価スクリプト.md'
+R2 = DOCS / 'リポジトリ説明' / '02_コードと実験' / '評価スクリプト.md'
 
 # 索引に載せなくてよいもの（使い捨て・内部）
 SKIP = {'__init__.py'}

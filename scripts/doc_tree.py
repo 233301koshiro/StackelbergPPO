@@ -16,7 +16,7 @@
 それは `doc_refs.py <識別子>` で引く。この木は棚卸しで**刈る候補を探す**ためのもの。
 
     python3 scripts/doc_tree.py              # 根ごとの木・どの根からも辿れない md・遠い md
-    python3 scripts/doc_tree.py --drawio     # docs/リポジトリ説明/md_の木.drawio を書く（生成物）
+    python3 scripts/doc_tree.py --drawio     # docs/リポジトリ説明/04_文書管理/md_の木.drawio を書く（生成物）
     python3 scripts/doc_tree.py --reproduce  # 既知の参照（修論 4.4.3.1 → 第4章、系譜 → 実験系譜）を辿れるか
 """
 import collections
@@ -32,7 +32,7 @@ DRAFT = DOCS / '研究応用/修論ドラフト'
 LEDGER = DOCS / '研究応用/台帳/実験系譜.md'
 DEBUG = DOCS / 'デバッグ戦記.md'
 QA = DOCS / '研究応用/執筆/想定問答.md'
-OUT = DOCS / 'リポジトリ説明/md_の木.drawio'
+OUT = DOCS / 'リポジトリ説明/04_文書管理/md_の木.drawio'
 
 # 索引。全 md へのリンクを持つので、辿るとすべてが根から 2 段に入り、刈る候補が 0 になる（10-23 の初回の実測）。
 # 索引に載っていることは「読まれている」ことを意味しないので、ここからの辺は辿らない（索引自身は木に載る）
@@ -44,7 +44,7 @@ ROOTS = {
         '第4章_実験および評価.md', '第5章_結論.md', '参考文献.md',
         '付録A_プロンプト全文.md', '付録D_再現情報と補足実験.md')],
     '審査': [QA] + sorted((DOCS / '研究応用/執筆/修論_口語版').glob('*.md')),
-    '運用': [ROOT / 'CLAUDE.md', DOCS / 'リポジトリ説明/新しいチャットの始め方.md']
+    '運用': [ROOT / 'CLAUDE.md', DOCS / 'リポジトリ説明/01_開始と運用/新しいチャットの始め方.md']
             + sorted((ROOT / '.claude/commands').glob('*.md')),
 }
 
