@@ -247,6 +247,7 @@
 | `make_sysflow_slide.py` | **予備審査のスライド用のシステムフロー図**（`docs/研究応用/執筆/使えそうな画像データ/システム図_スライド用.drawio`、画像を埋め込んだ draw.io）。工程名だけの箱と、各工程を通った後の実物の画像で流れを描く。確認用のプレビュー `yobi/sysflow_preview.png`、スライドに貼る `yobi/sysflow_slide.png` と段の切り抜き `yobi/sysflow_p*.png` も出す（2026-11-09、ユーザー「drawio をスライドに入れない？」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/02_コードと実験/評価スクリプト.md) |
 | `build_thesis_pdf.py` | **修論 PDF ビルド**（`docs/研究応用/修論ドラフト/` の全 md → xelatex で1冊に）。下記の注意を読んでから使う |
 | `build_kougo_pdf.py` | **修論の口語版の PDF ビルド**（`docs/研究応用/執筆/修論_口語版/` の 6 ファイル → `docs/pdf/修論_口語版_YYYYMMDD.pdf`）。変換は `build_thesis_pdf.py` を借りる（2026-10-20） |
+| `build_yobi_paper_pdf.py` | **予備審査論文の PDF ビルド**（`docs/研究応用/執筆/予備審査論文/予備審査論文.md` → `docs/pdf/予備審査論文_YYYYMMDD.pdf`）。先輩の予備審査論文の体裁（表紙・概要・目次・本文・謝辞・参考文献）。変換は `build_thesis_pdf.py` を借りる（2026-11-17） |
 | `make_thesis_figures.py` | **修論の図を一次データから生成**（`figures/*.png`）。学習曲線は `log/log_train.txt` から読む。図の数値は手で直さず、原本を確認してこれを再実行する |
 | `eval_morphology.py` | 形態評価（docs・コードのどちらからも参照なし。`compare_morphology.py` に役割が吸収されたとみられる） |
 
