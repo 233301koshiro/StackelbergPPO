@@ -51,8 +51,13 @@ _PHYS = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_CTRL_CLIP', 'CNOI
                'CNOID_JOINT_LIMIT_TORQUE', 'CNOID_JOINT_LIMIT_SLACK',   # ⭐ 10-29 Bug 85（系譜 9-329）: 可動域の掛け方も物理（無いと軸6 の run を書き戻しで再生する）
          'CNOID_ACT_DELAY', 'CNOID_JOINT_FRICTION', 'CNOID_JOINT_FRICTION_VS',   # ⭐ 11-02 系譜 9-332: 軸6 の指令の遅れと関節の摩擦も物理（ブランチの口。無いと遅れ・摩擦なしで再生する）
          'CNOID_FLOOR_BODY',   # ⭐ 11-08 Bug 100: 床の大きさも物理
-         'CNOID_TORQUE_SPEED')   # ⭐ 11-08 系譜 9-342: モータのトルクと速さの特性も物理
-REPLAY_ENV = {k: os.environ[k] for k in _PHYS if k in os.environ}
+         'CNOID_TORQUE_SPEED',   # ⭐ 11-08 系譜 9-342: モータのトルクと速さの特性も物理
+         'CNOID_JOINT_MAX_VEL_PRETICK', 'CNOID_CAPSULE_INERTIA_ROT')   # ⭐ 11-16 Bug 106・107（系譜 9-350）
+# ⭐ Bug 109: launch_env.json にあるキーは、上の一覧に無くても記録する。
+#   ⛔ 一覧は choreonoid_train.py の PHYSICS_ENV と 2 箇所に書いてあり、Bug 106・107 の 2 つを足し忘れた。
+#   物理には効いていた（上で全キーを環境へ入れている）が、軌跡に残す「再生の環境」から漏れ、
+#   check_before_conclusion.py の「再生の環境」が ⛔ を出し続けた。
+REPLAY_ENV = {k: os.environ[k] for k in (*_PHYS, *(LAUNCH_ENV or {})) if k in os.environ}
 
 import numpy as np
 import yaml
