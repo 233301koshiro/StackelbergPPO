@@ -26,12 +26,12 @@ SRC = T.ROOT / 'docs' / '研究応用' / '執筆' / '予備審査論文' / '予�
 BUILD = T.BUILD_DIR / 'yobi'            # build_pdf/ は .gitignore 済み
 SYSFLOW_SRC = T.ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'sysflow_slide.png'
 
-# 表紙。学籍番号は分からないので空けてある（ユーザーが埋める）
+# 表紙。学籍番号は 11-18 にユーザーから。専攻は先輩と同じと仮定（未確認）
 TITLE = '手描きスケッチからロボットモデルを生成するシステムの開発'
 YEAR = '2026'
 DEGREE = '修士（工学）'
 MAJOR = '情報・知能工学専攻'
-STUDENT_ID = '（学籍番号）'
+STUDENT_ID = '233301'
 AUTHOR = '秋田 光志朗'
 ADVISOR = '垣内 洋平'
 UNIV = '豊橋技術科学大学'
