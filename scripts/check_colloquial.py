@@ -29,6 +29,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DRAFT = ROOT / 'docs' / '研究応用' / '修論ドラフト'
 FILES = sorted(DRAFT.glob('第*.md')) + sorted(DRAFT.glob('付録*.md')) + [DRAFT / '要旨.md']
+# 予備審査論文も正式版の文体（2026-11-19、ユーザー「判定 md の型に当ててないなら今でも当てるべき」。修論から縮めて作った 11-18 から検査の外だった）
+FILES += [ROOT / 'docs' / '研究応用' / '執筆' / '予備審査論文' / '予備審査論文.md']
 
 # (話し言葉, 書き言葉の言い換え)。語の途中に当たらないよう、前後を絞ったものがある
 RULES = [
@@ -81,9 +83,11 @@ EXTRA = [
 ALL_RULES = [('話し言葉', p, a) for p, a in RULES] + EXTRA
 
 def body(path: Path) -> str:
-    t = re.split(r'^## 執筆メモ', path.read_text(encoding='utf-8'), flags=re.M)[0]
+    t = re.split(r'^## 執筆メモ|^# 謝辞', path.read_text(encoding='utf-8'), flags=re.M)[0]  # 謝辞は敬体が定型（予備審査論文）
     # コードブロックは空行に置き換える（行番号を保つ）
     t = re.sub(r'^```.*?^```', lambda m: '\n' * m.group(0).count('\n'), t, flags=re.M | re.S)
+    # 画像・リンクの行き先（「使えそうな画像データ/」の「使え」を拾っていた。2026-11-19）は見ない
+    t = re.sub(r'\]\([^)\n]*\)', '](…)', t)
     return '\n'.join('' if l.startswith('>') else l for l in t.split('\n'))
 
 def scan(text: str):
