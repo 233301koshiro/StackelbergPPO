@@ -61,21 +61,33 @@ def main():
     env.reset_model()
     env.reset_state(False)
 
-    # 箱の x のスライド（cube_slide）は、変換器が作る仮のリンク `cube_virt0` の関節（mujoco_env_choreonoid.py の Multi-joint body）
+    # 箱の x のスライド（cube_slide）は変換器が作る仮のリンク `cube_virt0` の関節、y（cube_slide2）は `cube` の関節
+    #   （mujoco_env_choreonoid.py の Multi-joint body）。ずらす向きはばねの向き（CNOID_CUBE_SPRING_AXIS、既定 x）
+    axis = (os.environ.get('CNOID_CUBE_SPRING_AXIS') or 'x').strip().lower()
+    link = {'x': 'cube_virt0', 'y': 'cube'}[axis]
     bnames = list(env.model.body_names)
-    bid = bnames.index('cube_virt0')
+    bid = bnames.index(link)
     qadr = env.model.jnt_qposadr[env.model.body_jntadr[bid]]
-    print(f'[probe] 箱の x のスライド: リンク cube_virt0 → qpos[{qadr}]', flush=True)
+    print(f'[probe] 箱の {axis} のスライド: リンク {link} → qpos[{qadr}]', flush=True)
     qpos = env.data.qpos.copy()
     qvel = np.zeros_like(env.data.qvel)
     v0 = float(os.environ.get('PROBE_V0', '0'))   # 箱の x の初速 [m/s]。ばね無しで減衰そのものを測るとき（止まるまでの距離 = v0·m/b）
     q0 = float(qpos[qadr])
     qpos[qadr] = q0 + dx
-    xb = float(env.get_body_com('cube')[0])
+    ci = {'x': 0, 'y': 1}[axis]
+    xb = float(env.get_body_com('cube')[ci])
     qvel[qadr] = v0
     env.set_state(qpos, qvel)
-    xa = float(env.get_body_com('cube')[0])
-    print(f'[probe] ずらす前後の箱の x: {xb:+.4f} → {xa:+.4f}（差 {xa - xb:+.4f}、期待 {dx:+.4f}）', flush=True)
+    xa = float(env.get_body_com('cube')[ci])
+    print(f'[probe] ずらす前後の箱の {axis}: {xb:+.4f} → {xa:+.4f}（差 {xa - xb:+.4f}、期待 {dx:+.4f}）', flush=True)
+    W0 = env.model._env._world
+    if W0._cube_spring:
+        # ⭐ 自然長は set_state のたびに「その時の位置」へ取り直す（各話の初期位置）。ずらした位置が自然長に
+        #   なっていること（＝取り直しが効いていること）を確かめてから、ずらす前の位置へ戻してばねを効かせる
+        rest = W0._cube_spring[0][2]
+        print(f'[probe] set_state 後の自然長 {rest:+.4f}（期待: ずらした位置 {q0 + dx:+.4f}）'
+              + (' ✅ 各話の初期位置で取り直している' if abs(rest - (q0 + dx)) < 1e-6 else ' ❌ 取り直されていない'), flush=True)
+        W0._cube_spring[0][2] = q0
     dt = float(env.dt)
     print(f'[probe] {restore_dir}  k={k} N/m  ずらし {dx} m（関節 {q0:+.4f} → {q0 + dx:+.4f}）  env の dt={dt}  {nstep} step', flush=True)
 
@@ -86,13 +98,13 @@ def main():
         xs.append(float(env.data.qpos[qadr]))
     xs = np.array(xs)
     W = env.model._env._world
-    b = float(W._joint_damping.get(('extra_0', 'cube_slide'), 0.0))   # XML の減衰（横型 10.0・縦型 2.0 など、XML ごとに違う）
+    b = float(W._joint_damping.get(('extra_0', {'x': 'cube_slide', 'y': 'cube_slide2'}[axis]), 0.0))   # XML の減衰（横型 10.0・縦型 2.0 など、XML ごとに違う）
     eb = next(sb.body() for sb, _ in W._sim_body_entries[1:]
               if 'cube_slide' in [sb.body().joint(i).jointName for i in range(sb.body().numJoints)])
     m = sum(eb.link(i).m for i in range(eb.numLinks))   # 減衰・ばねの処理と同じ m（箱の body の総質量）
     print(f'[probe] 箱: m={m:.4f} kg・XML の減衰 b={b} N·s/m → 減衰の速さ b/m={b / m:.4f} /s', flush=True)
     t = dt * (np.arange(nstep) + 1)
-    print(f'[probe] 箱の関節 q（関節 0 ＝ ばねの自然長）: 最初 {xs[0]:+.4f}  最小 {xs.min():+.4f}  最大 {xs.max():+.4f}  最後 {xs[-1]:+.4f}', flush=True)
+    print(f'[probe] 箱の関節 q（ずらす前 ＝ ばねの自然長）: 最初 {xs[0]:+.4f}  最小 {xs.min():+.4f}  最大 {xs.max():+.4f}  最後 {xs[-1]:+.4f}', flush=True)
     for i in range(0, nstep, max(1, nstep // 20)):
         print(f'   t={t[i]:6.3f} s  q={xs[i]:+.5f}', flush=True)
 
@@ -108,6 +120,7 @@ def main():
         print('✅ ばね無しでは止まったまま' if moved < 1e-3 else '⚠️ ばね無しでも動いた（腕に触れている・重力など。値を見る）', flush=True)
         return
 
+    xs = xs - q0   # 自然長（ずらす前の位置）からのずれ
     cross = [t[i] - (t[i] - t[i - 1]) * xs[i] / (xs[i] - xs[i - 1])
              for i in range(1, nstep) if xs[i - 1] * xs[i] < 0]
     print(f'[probe] ゼロを横切った時刻: {[round(c, 3) for c in cross[:8]]}', flush=True)
