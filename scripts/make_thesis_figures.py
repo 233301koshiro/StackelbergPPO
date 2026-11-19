@@ -379,6 +379,14 @@ def fig_arm_forms():
     以前は (a) メッシュと (b) 形態を横に並べており、(a) の題「（横から）」が (b) の上まではみ出していた（2026-11-19 ユーザー指摘）。
     """
     import io
+    # 紙面の文字を約 8〜9 pt にする倍率（11-19、ユーザー「またここの文字が小さいよ」。チェックリスト 8 の基準:
+    # 紙面の pt ＝ 図中の pt × 6.3 ÷ 図の幅〔インチ〕。倍率 1 では (a)(b) を足して横に長くなり、約 5.2 pt だった）
+    # 枠（図の大きさ）は変えず文字だけを大きくする。枠も大きくすると図の幅が伸び、紙面では同じだけ縮むので効かない（11-19 に倍率 1.0〜1.4 で測った）。
+    # 2.0 では (d) の行の間が足りず形態名と腕が重なった。1.6 で紙面の題 7.7 pt・形態名 7.0 pt（目安の 8〜9 pt には届かない。
+    # 4 枚を横 1 列にして (a)(b) を (c) と同じ高さにする、という条件の下ではここが上限に近い）
+    FS = 1.6
+    fs0 = plt.rcParams['font.size']
+    plt.rcParams['font.size'] = 11 * FS
     import xml.etree.ElementTree as ET
     from PIL import Image
     sys.path.insert(0, os.path.join(ROOT, 'scripts'))
@@ -426,18 +434,18 @@ def fig_arm_forms():
                 a.add_patch(plt.Circle((q, y), r, color=col[j], alpha=0.8, lw=0))
             a.plot(x, y, 'k.', ms=4)
             x += L; j += 1
-        a.text(-0.14, y, lab, ha='right', va='center', fontsize=10)
-        a.text(x + 0.06, y, f'{x:.3f} m', va='center', fontsize=9)
+        a.text(-0.14, y, lab, ha='right', va='center', fontsize=10 * FS)
+        a.text(x + 0.06, y, f'{x:.3f} m', va='center', fontsize=9 * FS)
     for xv, lab in ((0.80, '到達の目標\n0.80 m'), (0.85, '押す箱の、腕に\n面した側面 0.85 m')):
         a.axvline(xv, color='k', ls='--' if xv == 0.80 else ':', lw=1)
-        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5)
-    a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.42); a.set_aspect('equal')
+        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.26, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5 * FS)
+    a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.60); a.set_aspect('equal')   # 上は目標と箱の注記の 2 行ぶん（文字を大きくしたので 0.42 では題に重なった）
     a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
-    a.set_title('(d) 基本形と比較に用いた形態（上から）', fontsize=11)
+    a.set_title('(d) 基本形と比較に用いた形態（上から）', fontsize=11 * FS)
     # 枠の左端は形態名の実際の幅から決める（11-19、ユーザー「説明が図の線からはみ出ている…文字を包み込める範囲の枠線の長さに」）。
     # 以前は −1.0 の決め打ちで、長い名前（基本形・修正指針の N 倍）が枠の外へ出ていた。
     # 縦横比を固定しているので、x の幅を広げた分だけ図の幅も広げ、腕と文字の大きさを保つ。
-    x_right = 1.85
+    x_right = 2.22   # 長腕の「1.451 m」が枠に収まる右端（文字を大きくしたので 1.85 では出た）
     a.set_xlim(-1.0, x_right)
     fig.tight_layout()
     labels = [t for t in a.texts if t.get_ha() == 'right' and t.get_position()[0] == -0.14]
@@ -463,17 +471,17 @@ def fig_arm_forms():
     m1 = m1.crop((max(xs.min() - pad, 0), max(ys.min() - pad, 0), min(xs.max() + pad, m1.width), min(ys.max() + pad, m1.height)))
     zr = (V[:, 2].min() - 0.03, V[:, 2].max() + 0.03); xr = (-0.13, 0.13)
     # (a)(b) を (c) と同じ高さにする幅（11-19、ユーザー「cd と同じサイズにまで拡大したら」）。(c) の枠は目盛りと題の幅だけ見込む。
-    # 6.4 インチでは (a)(b) が (c) の 2/3 の高さだった。8.2 にすると図全体が横に長くなり、紙面の文字は 1 割強小さくなる（幅 1.0 で 11 pt → 約 5.2 pt）
+    # 6.4 インチでは (a)(b) が (c) の 2/3 の高さだった。7.4 で (c) の枠とほぼ同じ高さ（6.8 では短くなる）
     ratios = [sketch.width / sketch.height, m1.width / m1.height, 0.40]
-    fig, ax = plt.subplots(1, 3, figsize=(8.2, right.height / 200), gridspec_kw={'width_ratios': ratios})
+    fig, ax = plt.subplots(1, 3, figsize=(7.4, right.height / 200), gridspec_kw={'width_ratios': ratios})
     # 題は枠の幅に収まる長さで折る（11-19、ユーザー「（横から）という文字が (b) まで伸びている」）
     for a, im, t in ((ax[0], sketch, '(a) 手描きスケッチ'), (ax[1], m1, '(b) M1 の出力\n（Gemini）')):
-        a.imshow(im); a.set_axis_off(); a.set_title(t, fontsize=11)
+        a.imshow(im); a.set_axis_off(); a.set_title(t, fontsize=11 * FS)
     a = ax[2]
     a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.25)
     a.set_xlim(*xr); a.set_ylim(*zr); a.set_aspect('equal')
     a.set_xticks([-0.1, 0.1]); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]')
-    a.set_title('(c) 生成メッシュ\n（横から）', fontsize=11)
+    a.set_title('(c) 生成メッシュ\n（横から）', fontsize=11 * FS)
     for a in ax:
         a.set_anchor('N')                                     # 題の高さをそろえる
     fig.tight_layout(w_pad=2.0)
@@ -484,6 +492,9 @@ def fig_arm_forms():
     out.paste(left, (0, 0))
     out.paste(right, (left.width + gap, 0))
     out.save(os.path.join(OUT, 'arm_forms.png'), dpi=(200, 200))
+    plt.rcParams['font.size'] = fs0
+    k_paper = 6.3 / (out.width / 200)                         # 本文の幅 1.0 で貼ったときの縮み
+    print(f'  arm_forms: 幅 {out.width / 200:.1f} インチ → 紙面の文字 題 {11 * FS * k_paper:.1f} pt・形態名 {10 * FS * k_paper:.1f} pt・最小 {8.5 * FS * k_paper:.1f} pt')
     return 'arm_forms.png'
 
 
