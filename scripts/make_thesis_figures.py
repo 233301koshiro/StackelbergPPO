@@ -382,9 +382,10 @@ def fig_arm_forms():
     # 紙面の文字を約 8〜9 pt にする倍率（11-19、ユーザー「またここの文字が小さいよ」。チェックリスト 8 の基準:
     # 紙面の pt ＝ 図中の pt × 6.3 ÷ 図の幅〔インチ〕。倍率 1 では (a)(b) を足して横に長くなり、約 5.2 pt だった）
     # 枠（図の大きさ）は変えず文字だけを大きくする。枠も大きくすると図の幅が伸び、紙面では同じだけ縮むので効かない（11-19 に倍率 1.0〜1.4 で測った）。
-    # 2.0 では (d) の行の間が足りず形態名と腕が重なった。1.6 で紙面の題 7.7 pt・形態名 7.0 pt（目安の 8〜9 pt には届かない。
-    # 4 枚を横 1 列にして (a)(b) を (c) と同じ高さにする、という条件の下ではここが上限に近い）
-    FS = 1.6
+    # 2.0 では (d) の行の間が足りず形態名と腕が重なった。11-19 は 1.6 で紙面の題 7.7 pt・形態名 7.0 pt だった。
+    # 11-20（ユーザー「図 3 の文字を 8〜9 pt にする」）: (d) の形態名を短くし（図の幅が縮む）、長さの値を 1 列にそろえ、
+    # 注記を 1 行にして、1.8 で題 8.9 pt・形態名と注記 8.1 pt
+    FS = 1.8
     fs0 = plt.rcParams['font.size']
     plt.rcParams['font.size'] = 11 * FS
     import xml.etree.ElementTree as ET
@@ -399,9 +400,12 @@ def fig_arm_forms():
 
     # 基本形（1.0 倍）は学習に使っていないので XML が無い。短腕（0.5 倍）の長さを 2 倍して描く
     # （太さは倍率で変えない。どの形も 0.045 / 0.0326 / 0.032。2026-11-13 ユーザーの指摘「図 4.1 に基本形を載せる」）。
-    forms = [('基本形（1.0 倍、比較には不使用）', 'base'), ('短腕（0.5 倍）', 'short'), ('中腕（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
+    # 名前は短くする（11-20、ユーザー「図 3 の文字を 8〜9 pt にする」。名前の幅がそのまま (d) の幅になり、紙面で縮む）。
+    # 「比較には不使用」と、修正指針の倍率をどのタスクに使ったか（1.99 倍は到達、2.11・2.36 倍は押し）は本文で言う（予 4.1・修論 4.1.1・4.1.2）。
+    # 名前は修論と予備審査論文の表と同じ「修正指針の N 倍」（同じ形を 2 つの名前で呼ばない。判定 md の型 54）
+    forms = [('基本形（1.0 倍）', 'base'), ('短腕（0.5 倍）', 'short'), ('中腕（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
              ('根元重（配分）', 'prox'), ('先端重（配分）', 'dist'),
-             ('修正指針の 1.99 倍（到達）', 'rec199'), ('修正指針の 2.11 倍（押し）', 'rec211'), ('修正指針の 2.36 倍（押し）', 'rec236')]
+             ('修正指針の 1.99 倍', 'rec199'), ('修正指針の 2.11 倍', 'rec211'), ('修正指針の 2.36 倍', 'rec236')]
     col = ['#888888', '#d94040', '#3070d0', '#30a050']        # 台座・1・2・3 本目
 
     def links(n):
@@ -423,6 +427,7 @@ def fig_arm_forms():
         return Image.open(buf).convert('RGB')
 
     # ── (d) 形態 ──
+    X_VAL = 1.52   # 長さの値の列（長腕の先 1.451 m とカプセルの半径の右）
     fig, a = plt.subplots(figsize=(8.0, 5.6))
     for row, (lab, n) in enumerate(forms):
         y = -row * 0.3
@@ -435,17 +440,17 @@ def fig_arm_forms():
             a.plot(x, y, 'k.', ms=4)
             x += L; j += 1
         a.text(-0.14, y, lab, ha='right', va='center', fontsize=10 * FS)
-        a.text(x + 0.06, y, f'{x:.3f} m', va='center', fontsize=9 * FS)
-    for xv, lab in ((0.80, '到達の目標\n0.80 m'), (0.85, '押す箱の、腕に\n面した側面 0.85 m')):
+        a.text(X_VAL, y, f'{x:.3f} m', va='center', fontsize=10 * FS)   # 値は 1 列にそろえる（腕の先に置くと 0.80・0.85 の破線と交差した）
+    for xv, lab in ((0.80, '目標 0.80 m'), (0.85, '箱 0.85 m')):   # 箱は腕に面した側面の位置（本文で言う）
         a.axvline(xv, color='k', ls='--' if xv == 0.80 else ':', lw=1)
-        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.26, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5 * FS)
-    a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.60); a.set_aspect('equal')   # 上は目標と箱の注記の 2 行ぶん（文字を大きくしたので 0.42 では題に重なった）
+        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', va='center', fontsize=10 * FS)
+    a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.38); a.set_aspect('equal')   # 上は目標と箱の注記の 1 行ぶん
     a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
     a.set_title('(d) 基本形と比較に用いた形態（上から）', fontsize=11 * FS)
     # 枠の左端は形態名の実際の幅から決める（11-19、ユーザー「説明が図の線からはみ出ている…文字を包み込める範囲の枠線の長さに」）。
     # 以前は −1.0 の決め打ちで、長い名前（基本形・修正指針の N 倍）が枠の外へ出ていた。
     # 縦横比を固定しているので、x の幅を広げた分だけ図の幅も広げ、腕と文字の大きさを保つ。
-    x_right = 2.22   # 長腕の「1.451 m」が枠に収まる右端（文字を大きくしたので 1.85 では出た）
+    x_right = 2.27   # 値の列「1.451 m」が枠に収まる右端（値の幅は約 0.66 m 分。2.20 では枠の線に触れた）
     a.set_xlim(-1.0, x_right)
     fig.tight_layout()
     labels = [t for t in a.texts if t.get_ha() == 'right' and t.get_position()[0] == -0.14]
@@ -494,7 +499,7 @@ def fig_arm_forms():
     out.save(os.path.join(OUT, 'arm_forms.png'), dpi=(200, 200))
     plt.rcParams['font.size'] = fs0
     k_paper = 6.3 / (out.width / 200)                         # 本文の幅 1.0 で貼ったときの縮み
-    print(f'  arm_forms: 幅 {out.width / 200:.1f} インチ → 紙面の文字 題 {11 * FS * k_paper:.1f} pt・形態名 {10 * FS * k_paper:.1f} pt・最小 {8.5 * FS * k_paper:.1f} pt')
+    print(f'  arm_forms: 幅 {out.width / 200:.1f} インチ → 紙面の文字 題 {11 * FS * k_paper:.1f} pt・形態名 {10 * FS * k_paper:.1f} pt・最小 {10 * FS * k_paper:.1f} pt')
     return 'arm_forms.png'
 
 
