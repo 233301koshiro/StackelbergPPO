@@ -3,7 +3,7 @@
 
 字の箇条書き・表を図に置き換える。値はすべて修論の本文にあるもの（スライドで新しい値を作らない）。
 
-    python3 scripts/make_yobi_figures.py      # → docs/研究応用/執筆/使えそうな画像データ/*.png
+    python3 scripts/make_yobi_figures.py      # → docs/研究応用/執筆/使えそうな画像データ/スライド用/*.png
 
 作るもの:
   切り抜き（既存の図から）
@@ -30,8 +30,8 @@ import datetime as dt
 import matplotlib.dates as mdates
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ'   # 2026-11-17 の整理で yobi/ をここへ平らに移した
-FIG = ROOT / 'figures'
+OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'スライド用'   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした
+FIG = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / '修論'
 
 # 既定のフォントは日本語を持たない。Noto CJK を明示登録する（make_slide_flow.py と同じ）
 for _ttc in sorted(pathlib.Path('/usr/share/fonts').rglob('*CJK*')):

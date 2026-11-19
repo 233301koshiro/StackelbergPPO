@@ -4,7 +4,7 @@
 
 使い方（部分完走中でも途中まで出力可）:
   python3 scripts/plot_pj_comparison.py
-  python3 scripts/plot_pj_comparison.py --window 5 --out figures/pj_learning_curve.png
+  python3 scripts/plot_pj_comparison.py --window 5 --out docs/研究応用/執筆/使えそうな画像データ/修論/pj_learning_curve.png
 
 出力:
   - 図1: PJ_short vs PJ_long の学習曲線（exec_R_eps）
@@ -22,7 +22,7 @@ import matplotlib.ticker as ticker
 # ─── 引数 ────────────────────────────────────────────────────────────────────
 p = argparse.ArgumentParser()
 p.add_argument('--window', type=int, default=5, help='移動平均ウィンドウ幅（デフォルト: 5ep）')
-p.add_argument('--out', default='figures/pj_learning_curve.png', help='出力先')
+p.add_argument('--out', default='docs/研究応用/執筆/使えそうな画像データ/修論/pj_learning_curve.png', help='出力先')
 p.add_argument('--base', default='.', help='single_run/ の親ディレクトリ')
 args = p.parse_args()
 

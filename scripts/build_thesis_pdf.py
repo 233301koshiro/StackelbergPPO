@@ -11,7 +11,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DRAFT_DIR = ROOT / 'docs' / '研究応用' / '修論ドラフト'
-FIGURES_DIR = ROOT / 'figures'
+# 図は docs/研究応用/執筆/使えそうな画像データ/ の下に用途別に置く（2026-11-19 にルートの figures/ から移した。修論/・予備審査/・勉強/・過去/）
+IMG_DIR = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ'
+FIGURES_DIR = IMG_DIR / '修論'
 BUILD_DIR = ROOT / 'build_pdf'
 
 
@@ -21,7 +23,7 @@ def _tex_safe_figure(path):
     ⛔ 2026-11-13: draw.io（デスクトップ版）が書き出した PDF は、図の全体を URL エンコードして
     メタデータ（Subject）に埋め込む。図 3.1 に画像を貼ったら 1 MB を超え、xdvipdfmx がその PDF を
     取り込むところで Segmentation fault になった（PDF のビルドが止まる）。pdftocairo で描き直した写しは通る。
-    元のファイル（ユーザーが書き出した figures/*.pdf）は書き換えず、build_pdf/fig_safe/ に写しを置く。
+    元のファイル（ユーザーが書き出した 使えそうな画像データ/修論/*.pdf）は書き換えず、build_pdf/fig_safe/ に写しを置く。
     """
     if path.suffix.lower() != '.pdf':
         return path
@@ -177,9 +179,10 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             i += 1
             continue
 
-        # 図: `![キャプション](figures/xxx.png)` を figure 環境にする。
+        # 図: `![キャプション](docs/研究応用/執筆/使えそうな画像データ/修論/xxx.png)` を figure 環境にする。
+        # 場所はリポジトリの根から書く（2026-11-19 までは figures/ で始まる行だけを図とみなしていた）。
         # 幅は `{width=0.7}` を alt 末尾に付けて指定できる（既定 0.92）。
-        img = re.match(r'^!\[(.*?)\]\((figures/[^)]+)\)\s*(\{width=[\d.]+\})?\s*$',
+        img = re.match(r'^!\[(.*?)\]\(([^)\s]+\.(?:png|pdf|jpe?g))\)\s*(\{width=[\d.]+\})?\s*$',
                        line.strip())
         if not img and line.strip().startswith('!['):
             # 図の行に見えるのにパースできないものを**黙って捨てない**。
@@ -355,7 +358,7 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
 
 # ── 図の挿入処理 ─────────────────────────────────────────────────────────────
 
-# 図の挿入は md 側の `![キャプション](figures/xxx.png)` で行う（2026-08-07）。
+# 図の挿入は md 側の `![キャプション](docs/研究応用/執筆/使えそうな画像データ/修論/xxx.png)` で行う（2026-08-07。場所は 2026-11-19 に移した）。
 # 以前は 4.3.3.1 の PJ 学習曲線だけを LaTeX 本文へ後付けする関数があったが、
 # 図を増やすたびに関数を書き足す方式では追随できないため廃止した。
 

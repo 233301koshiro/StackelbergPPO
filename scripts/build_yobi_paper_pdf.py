@@ -24,7 +24,6 @@ import build_thesis_pdf as T  # noqa: E402
 
 SRC = T.ROOT / 'docs' / '研究応用' / '執筆' / '予備審査論文' / '予備審査論文.md'
 BUILD = T.BUILD_DIR / 'yobi'            # build_pdf/ は .gitignore 済み
-SYSFLOW_SRC = T.ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'sysflow_slide.png'
 
 # 表紙。学籍番号は 11-18 にユーザーから。専攻も 11-18 にユーザーが確認
 TITLE = '手描きスケッチからロボットモデルを生成するシステムの開発'
@@ -128,8 +127,8 @@ def main():
     p.add_argument('--out', default=str(T.ROOT / 'docs' / 'pdf' / f'予備審査論文_{today}.pdf'))
     args = p.parse_args()
 
-    # 図 1 はスライド用に作ったフロー図。figures/ は .gitignore 済み（生成物）なので、ビルドのたびに写す
-    shutil.copy(SYSFLOW_SRC, T.FIGURES_DIR / 'yobi_sysflow.png')
+    # 図 1 はスライド用に作ったフロー図（使えそうな画像データ/スライド用/sysflow_slide.png）。md から直接指す。
+    # 2026-11-19 まではビルドのたびに figures/yobi_sysflow.png へ写していた（figures/ で始まる行しか図にならなかったため）
 
     tex_body = []
     for head, body in split_parts(SRC.read_text()):

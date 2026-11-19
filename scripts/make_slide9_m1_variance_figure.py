@@ -6,7 +6,7 @@
 「スケッチが斜めでも必ず立て直すこと」を明示してある（9-35）。
 **言葉で説明するより 4 枚並べた方が速い。**
 
-出力: figures/slide9_m1_variance.png
+出力: docs/研究応用/執筆/使えそうな画像データ/過去/slide9_m1_variance.png
 """
 import numpy as np, matplotlib
 matplotlib.use('Agg')
@@ -46,8 +46,8 @@ def main():
     fig.suptitle('同じ手描き写真・同じプロンプトで 4 回生成した結果',
                  fontsize=17, y=0.99)
     plt.tight_layout(rect=(0, 0, 1, 0.95))
-    plt.savefig('figures/slide9_m1_variance.png', dpi=150)
-    print('figures/slide9_m1_variance.png')
+    plt.savefig('docs/研究応用/執筆/使えそうな画像データ/過去/slide9_m1_variance.png', dpi=150)
+    print('docs/研究応用/執筆/使えそうな画像データ/過去/slide9_m1_variance.png')
 
 
 if __name__ == '__main__':
