@@ -4,7 +4,9 @@
 文字だけのフローにせず、各工程の実物の画像を並べる（ユーザー指摘 11-02）。
 システム図.drawio は工程が細かすぎるので使わない。
 
-    python3 scripts/make_slide_flow.py            # → docs/研究応用/執筆/使えそうな画像データ/スライド用/slide_flow.png（3200×1800）
+    python3 scripts/make_slide_flow.py            # → docs/研究応用/執筆/使えそうな画像データ/過去/slide_flow.png（3200×1800）
+    ⛔ 2026-11-19: スライドに貼る図としては sysflow_slide.png（make_sysflow_slide.py、draw.io）に置き換えた（ユーザー「完成度の高い sysflow_slide の方を残す」）。
+       この図は make_sysflow_slide.py が工程の画像（立体・部品・学習・短腕）を切り抜く素材としてだけ使う
 
 使う材料（すべてリポジトリの中）:
   ① 手描き          data/test/A1/sketch/A1_hand.webp
@@ -30,7 +32,7 @@ from matplotlib.patches import FancyBboxPatch, Polygon, Circle, FancyArrowPatch
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'スライド用' / 'slide_flow.png'   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした
+OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / '過去' / 'slide_flow.png'   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした
 
 # 既定のフォントは日本語を持たない。Noto CJK を明示登録する（render_arm_video.py と同じ）
 for _ttc in sorted(pathlib.Path('/usr/share/fonts').rglob('*CJK*')):
