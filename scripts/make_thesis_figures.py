@@ -462,8 +462,10 @@ def fig_arm_forms():
     ys, xs = np.where(g); pad = 8
     m1 = m1.crop((max(xs.min() - pad, 0), max(ys.min() - pad, 0), min(xs.max() + pad, m1.width), min(ys.max() + pad, m1.height)))
     zr = (V[:, 2].min() - 0.03, V[:, 2].max() + 0.03); xr = (-0.13, 0.13)
-    ratios = [sketch.width / sketch.height, m1.width / m1.height, 0.62]   # (c) は目盛りと題の幅を見込んで広めに
-    fig, ax = plt.subplots(1, 3, figsize=(6.4, right.height / 200), gridspec_kw={'width_ratios': ratios})
+    # (a)(b) を (c) と同じ高さにする幅（11-19、ユーザー「cd と同じサイズにまで拡大したら」）。(c) の枠は目盛りと題の幅だけ見込む。
+    # 6.4 インチでは (a)(b) が (c) の 2/3 の高さだった。8.2 にすると図全体が横に長くなり、紙面の文字は 1 割強小さくなる（幅 1.0 で 11 pt → 約 5.2 pt）
+    ratios = [sketch.width / sketch.height, m1.width / m1.height, 0.40]
+    fig, ax = plt.subplots(1, 3, figsize=(8.2, right.height / 200), gridspec_kw={'width_ratios': ratios})
     # 題は枠の幅に収まる長さで折る（11-19、ユーザー「（横から）という文字が (b) まで伸びている」）
     for a, im, t in ((ax[0], sketch, '(a) 手描きスケッチ'), (ax[1], m1, '(b) M1 の出力\n（Gemini）')):
         a.imshow(im); a.set_axis_off(); a.set_title(t, fontsize=11)
