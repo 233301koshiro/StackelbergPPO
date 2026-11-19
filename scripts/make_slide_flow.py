@@ -4,7 +4,7 @@
 文字だけのフローにせず、各工程の実物の画像を並べる（ユーザー指摘 11-02）。
 システム図.drawio は工程が細かすぎるので使わない。
 
-    python3 scripts/make_slide_flow.py            # → docs/研究応用/執筆/slide_flow.png（3200×1800）
+    python3 scripts/make_slide_flow.py            # → docs/研究応用/執筆/使えそうな画像データ/slide_flow.png（3200×1800）
 
 使う材料（すべてリポジトリの中）:
   ① 手描き          data/test/A1/sketch/A1_hand.webp
@@ -30,7 +30,7 @@ from matplotlib.patches import FancyBboxPatch, Polygon, Circle, FancyArrowPatch
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT = ROOT / 'docs' / '研究応用' / '執筆' / 'slide_flow.png'
+OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'slide_flow.png'
 
 # 既定のフォントは日本語を持たない。Noto CJK を明示登録する（render_arm_video.py と同じ）
 for _ttc in sorted(pathlib.Path('/usr/share/fonts').rglob('*CJK*')):

@@ -39,7 +39,7 @@ cd StackelbergPPO
 
 > ⚠️ **`requirements.txt` は使わないこと（2026-09-08）。** 記載が実環境と食い違っており、
 > そのまま入れると **torch が 2.0.1 に落ちて GPU（sm_120）が動かなくなる**。
-> 実環境の版は [docs/リポジトリ説明/環境の再現.md](docs/リポジトリ説明/環境の再現.md) を参照。
+> 実環境の版は [docs/リポジトリ説明/03_環境と外部連携/環境の再現.md](docs/リポジトリ説明/03_環境と外部連携/環境の再現.md) を参照。
 
 ---
 
@@ -109,7 +109,7 @@ nohup env USE_CHOREONOID=1 OMP_NUM_THREADS=1 /choreonoid_ws/install/bin/choreono
 
 ## 評価
 
-コマンド・環境変数・出力ディレクトリ構成の詳細は [`docs/リポジトリ説明/評価スクリプト.md`](docs/リポジトリ説明/評価スクリプト.md) を参照。
+コマンド・環境変数・出力ディレクトリ構成の詳細は [`docs/リポジトリ説明/02_コードと実験/評価スクリプト.md`](docs/リポジトリ説明/02_コードと実験/評価スクリプト.md) を参照。
 
 ```bash
 # 数値評価（成功率・報酬を数値で確認）
@@ -186,8 +186,8 @@ choreonoid --no-window --python scripts/choreonoid_train.py \
 
 | ファイル | 内容 |
 |---------|------|
-| `docs/リポジトリ説明/システム概要.md` | Stackelberg PPO の仕組み・学習指標の説明 |
-| `docs/移行記録/choreonoid移行.md` | Choreonoid 移行の詳細（バグ修正・アーキテクチャ変遷）|
+| `docs/リポジトリ説明/02_コードと実験/システム概要.md` | Stackelberg PPO の仕組み・学習指標の説明 |
+| ~~`docs/移行記録/choreonoid移行.md`~~ | Choreonoid 移行の詳細（バグ修正・アーキテクチャ変遷）。⛔ 後に `docs/archive/choreonoid移行.md` へ移し、2026-11-18 に削除（git 履歴 `4a0bb8f9` にある）|
 | `docs/研究応用/設計/トポロジー固定最適化.md` | 初期形状の指定方法・トポロジー固定で属性値のみ最適化する方法 |
 | `docs/研究応用/設計/メッシュXMLパイプライン.md` | 3D メッシュ → MuJoCo XML 変換パイプライン設計（爆発問題の対策）|
 | `docs/研究応用/設計/メッシュ分割.md` | メッシュ分割手法の比較（スケルトン抽出・凹面・VLM 等）|

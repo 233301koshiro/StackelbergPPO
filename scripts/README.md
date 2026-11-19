@@ -45,7 +45,7 @@
 | `audit_runs.sh` | 全 run の一次データ表。**md より先にこれを見る** |
 | `check_docs_consistency.py` | **docs とログの突き合わせ。** 古い状態語・数値の食い違い・記録漏れを検出。値を更新したら必ず走らせる |
 | `check_citations.py` | **本文の引用と参考文献リストを双方向で照合**。リスト起点で本文を探す方向（確実）と、本文から抽出してリストに無いものを探す方向（取りこぼし検出）の2つ。不一致で終了コード 1 |
-| ⭐ **`check_branch_isolation.py`** | **main と軸6 のブランチが混ざっていないか**（2026-11-02）: A 中身が違うファイルが既知の一覧の外に増えていないか・B 軸6 の run は worktree、それ以外は main で起動したか（hydra の cwd）・C 軸6 だけの cfg キーと環境変数が軸6 以外の run に無いか（四脚 `quad_walk_ra` の `CNOID_JOINT_LIMIT_TORQUE` だけ例外、`MAIN_OK_ENV`）、軸6 の run に `CNOID_JOINT_LIMIT_TORQUE` があるか・D ブランチが main の共用コードを取り込んだか。`--reproduce` で既知の混ざり方 5 つを拾えるか。一覧とチェックリストは [mainと軸6ブランチの境界.md](../docs/リポジトリ説明/mainと軸6ブランチの境界.md) |
+| ⭐ **`check_branch_isolation.py`** | **main と軸6 のブランチが混ざっていないか**（2026-11-02）: A 中身が違うファイルが既知の一覧の外に増えていないか・B 軸6 の run は worktree、それ以外は main で起動したか（hydra の cwd）・C 軸6 だけの cfg キーと環境変数が軸6 以外の run に無いか（四脚 `quad_walk_ra` の `CNOID_JOINT_LIMIT_TORQUE` だけ例外、`MAIN_OK_ENV`）、軸6 の run に `CNOID_JOINT_LIMIT_TORQUE` があるか・D ブランチが main の共用コードを取り込んだか。`--reproduce` で既知の混ざり方 5 つを拾えるか。一覧とチェックリストは [mainと軸6ブランチの境界.md](../docs/リポジトリ説明/03_環境と外部連携/mainと軸6ブランチの境界.md) |
 | `compare_morphology.py` | 複数 run の収束形態を並べて比較 |
 | `boundary_compare.py` | 境界張り付きの条件間比較（matched epoch） |
 | ⭐ **`joint_fix_watch.py`** | **指摘13の自動化。**関節使用率を監視し、安定したら固定版を並行起動、完走後に判定する（9-95） |
@@ -71,7 +71,7 @@
 | `make_floor_tiles.py` | 床を 0.5 m 角の箱に分けた .body を書く（Bug 103、2026-11-10）。既定は四脚用（x −1.25〜25.25・y −2〜2 m、424 個、外は上面 −0.05 m の 200 m 四方）→ `assets/choreonoid/bodies/floor_tiles/floor_tiles_quad.body`。⚠️ 腕の run には使わない（継ぎ目で軌跡が変わる）。⚠️ 四脚でも継ぎ目で止まる話が出る（Bug 103 の追記） |
 | ⭐ **`play_quad_ra_trace.py`** | 四脚の再生の軌跡（`record_arm_trace.py`）を、部品のメッシュ付きの `.body`（`export_quad_ra_body.py` が書いた `quad_walk_ra235_rab2`）に当てて Choreonoid の画面でコマ送りする（2026-11-08、ユーザー「choreonoidで結果をみたい」「部品付きで」）。物理は回さず、軌跡の各リンクの位置と回転から胴の姿勢と 8 関節の角度を逆算して順運動学で描く（**記録した動きを見せるだけで、物理の再現ではない**）。既定の床は 200 m 四方の `floor_wide.body`、カメラは胴を追う。`QUAD_CHECK_ONLY=1`（画面なし）で順運動学と軌跡の差を出す。`quad_walk_ra_s0` の広い床の軌跡（`trace/arm_trace_wide_floor.npz`）で位置の差は最大 0.196 mm、⚠️ 関節軸以外の回転の残りが話 0・3 の全 step で 0.01 rad を超え最大 0.027 rad（話 3 の `12`）。原因は調べていない（見た目は部品の向きが最大約 1.5° ずれる程度）。⚠️ `eval_cnoid_viewer.py` は腕の run 専用で、四脚は実行の最初の step で箱（cube）を読んで落ちる（だからこれを作った）。`QUAD_TRACE=single_run/quad_walk_ra_s0/trace/arm_trace_wide_floor.npz DISPLAY=:1 choreonoid --python scripts/play_quad_ra_trace.py`  | 系譜 9-342 |
 | ⭐ **`queue_ra15_l4.sh`** （⚠️ ブランチ `feat/layer4-robotassembler` にあり、main には存在しない） | 軸6 L-4 の押し（β・α × 2 seed、9-329）。worktree から起動し、main のキューの後に 2 本ずつ。見張りと自動再生はブランチのコピーを `PROJ_DIR`・`RUN_FILTER` で起こす |
-| ⭐ **`sync_branch_md.sh`** | main の md と docs/ を軸6 のブランチ（worktree）へ取り込む（9-329）。ブランチに既にあるそれ以外のファイル（コード・スクリプト。このスクリプトと `hooks/` は除く）を変える変更が main にあれば取り込まない（L-4 の bash が worktree で動いているため）。⭐ 10-30 から main のコミットの後に `hooks/post-commit` が自動で回す（フックが入っていなければ手で回す） |
+| ⭐ **`sync_branch_md.sh`** | main の md と docs/ を軸6 のブランチ（worktree）へ取り込む（9-329）。ブランチに既にあるそれ以外のファイル（コード・スクリプト。このスクリプトと `hooks/` は除く）を変える変更が main にあれば取り込まず、worktree から動いているプロセスを実物で数えて出す（動いていなければ「merge はユーザーの判断」と出す。11-19 まで「L-4 の bash が止まってから」と固定の文だった）。⭐ 10-30 から main のコミットの後に `hooks/post-commit` が自動で回す（フックが入っていなければ手で回す） |
 | ⭐ **`hooks/post-commit`** | git の post-commit フックの本体（2026-10-30、ユーザー「自動にする」）。main の作業ツリーで main にコミットしたときだけ `sync_branch_md.sh` を回す。入れ方: `ln -s ../../scripts/hooks/post-commit .git/hooks/post-commit` |
 | **`make_obstacle_reach_xml.py`** | 障害物のある Reach の XML を作る（9-104）。⚠️ **障害物は `<body>` に入れる**（9-98）。⭐ `--src` で元の XML を選べる（既定は旧い物理の `e2e_a1v.xml`。実在の物理の腕は `--src assets/mujoco_envs/e2e_a1v_phys_arm171.xml`、9-275） |
 | **`gemini_api.py`** | M1 を Gemini API で回す骨組み（9-123）。⚠️ **未着手・キー待ち** |
@@ -130,6 +130,7 @@
 | ⭐ `probe_contact_log.py` | **再生しながら AIST の接触点（リンク・位置・法線・めり込み・力）を tick ごとに出し、NaN になったら直前の接触を書き出す**（2026-10-20、Bug 72）。`record_arm_trace.py` を中で回す。`CNOID_CONTACT_LOG=1`（自動で付く）でリンクに `LinkContactState` を付ける。`CONTACT_LOG_OFF=1` で印なしの対照。`CONTACT_DUMP_XML` で最後に読み込んだ形の XML を書き出す。接触のある tick は関節角も出す。⚠️ `TRACE_OUT` 必須（run の軌跡を上書きしないため）。⚠️ リンクが台座に食い込んだ形（Bug 72）では再開直後に malloc で落ちることがある（落ちる前の行は使える） |
 | ⭐⭐⭐ `probe_arm_block_scripted.py` | **腕を台本で壁へ突っ込ませてブロックを検証する**（系譜 9-205）。⭐ **方策を使わない** — ⛔ **再生では 5 run すべてで腕が壁に届かず検証できなかった**（9-204）。⭐ FK で壁のすぐ内側に置き、ヨー速度を**毎 step 与え直す**（ダンピングで 1 step で死ぬため）。⚠️ **`HOCKEY_WALL_RESTITUTION` も必ず指定**（無いと壁の箱が作られない） ⭐ 10-19: `PROBE_TIP_Z=wall` で壁の高さに置き、壁の高さの点だけ数える＋xy の中の点の z を出す（Bug 71、9-263 ⑨） |
 | ⭐ `probe_floor_press.py` | **腕を台本で床へ押し付けて、止まる深さを測る**（方策は使わない。姿勢を 1 回だけ置き、1 つの関節に一定の入力）。`PROBE_CLEAR` で置く高さ（負なら床に入れて置く） | 2026-10-22（系譜 9-288）。床の接触は効いている（押しても最深 6.8 mm、30 mm 入れても押し戻す）ことを確かめた
+| `probes_fable_20261117/probe_sgrad.py`・`summ.py` | **Stackelberg 勾配の直接の項と間接の項を、保存したチェックポイントで測る**（Fable 5.1 が ⑤-6 で書いたプローブの写し、2026-11-17。学習と同じ `ppo_loss_stackelberg`・`bilevel_leader_grad_correct` を呼ぶ。CPU、Choreonoid で 52 話ずつ集める。使い方は冒頭の docstring。結果は系譜 9-352） |
 | ⭐ `probe_quad_feasibility.py` | **四脚（脚 4 本 × 各脚 2 関節、`quad_4x2.xml`）を Choreonoid の経路に通し、床に立つか・台本の速歩で進むかを見る**（学習しない・GPU を使わない。cfg `quad_gearonly`。`PROBE_AMP`・`PROBE_FREQ`・`PROBE_STEPS`・`PROBE_XML`・`PROBE_CFG`。2026-11-06、系譜 9-342） |
 | ⭐ `segment_quad_mesh.py` | **四脚の立体（Tripo の GLB）を、マゼンタの関節球（この研究の型）と、くびれ＝断面積の谷（Text2Robot の型）の 2 通りで胴・腿・脛に分けて比べる**（ボクセルで埋め、直線の区間ごとに断面積を測る。`--glb`・`--out`。2026-11-06、系譜 9-342） ⛔ Bug 96（11-06 夜）: 球をリンクが貫いて割れた塊は、中心が 0.12 以内なら 1 つにまとめる（まとめた数を出す） |
 | ⭐ `quad_mesh_to_xml.py` | **`segment_quad_mesh.py` の骨格（関節の位置・足先・リンクの太さ・胴の外形）から MuJoCo の XML を作る**（胴は箱、脚ごとに関節の無い取り付け → 腿 → 脛。`--seg`・`--out`、既定 `assets/mujoco_envs/quad_tripo.xml`。2026-11-06、系譜 9-342） `--image` で XML の注記に書く参照画を、モデル名は `--out` のファイル名から（11-06 夜） |
@@ -148,13 +149,13 @@
 | `make_slide8_links_figure.py` | 進捗発表スライド 8「リンクに切り分けて寸法を測った」の図（→ `figures/slide8_links_split.png`） |
 | `make_slide9_m1_variance_figure.py` | 同スライド 9「M1 のばらつき」の図（→ `figures/slide9_m1_variance.png`） |
 | `render_pipeline_stages.py` | M3〜M5 の**処理の途中経過**を図にする（2026-10-07、スライド「システムフロー解説」用。2026-10-21 から修論 図 3.2〜3.5 にも使う。論文用は図の中の題を外した `pipeline_*_paper.png`。M4 の論文用ははみ出しも外す。M1・M2 は A1 の手描き → 整形画像 → GLB の 1 段 `pipeline_m12_paper.png`）。パイプラインの関数そのものを呼んで描く（→ `figures/pipeline_m2_pose.png`（M2 の失敗例 A1 対 A3）・`pipeline_m3.png`・`pipeline_m4.png`・`pipeline_m5.png`）。`--case` で別の手描き |
-| `make_system_figure.py` | **修論 図 3.1（システム図）を作る**（2026-10-20）。原本 `docs/研究応用/執筆/システム図.drawio`（スライド用の横長）を A4 縦に入る 4 段（フェーズごとに 1 段。2026-11-13 に 2 段から変更）に並べ替え、論文用だけのラベル（ファイル名 → 中身の名前）を当てて `システム図_論文用.drawio` を出し、`--export` で `figures/system_overview.pdf`（ベクター）に書き出す。⛔ 2026-11-13 から論文用はユーザーが手で直して画像も貼ったので、論文用があるとスクリプトは止まる（`--force` で上書き）。図は論文用を draw.io で直接直す。書き出しには draw.io desktop の CLI が要る（`DRAWIO=` で実行ファイルを指定、xvfb-run 経由） |
+| `make_system_figure.py` | **修論 図 3.1（システム図）を作る**（2026-10-20）。原本 `docs/研究応用/執筆/使えそうな画像データ/システム図.drawio`（スライド用の横長）を A4 縦に入る 4 段（フェーズごとに 1 段。2026-11-13 に 2 段から変更）に並べ替え、論文用だけのラベル（ファイル名 → 中身の名前）を当てて `システム図_論文用.drawio` を出し、`--export` で `figures/system_overview.pdf`（ベクター）に書き出す。⛔ 2026-11-13 から論文用はユーザーが手で直して画像も貼ったので、論文用があるとスクリプトは止まる（`--force` で上書き）。図は論文用を draw.io で直接直す。書き出しには draw.io desktop の CLI が要る（`DRAWIO=` で実行ファイルを指定、xvfb-run 経由） |
 | ⭐ `queue_postrun_replay.sh` | ⭐ **修論のための学習 45 本を、1 本終わるたびに「学習時の環境で再生 → 図 → 結論前の検査」まで済ませる**（9-236）。学習はしない。出力 `single_run/postrun_summary.log`。済んだ印は `single_run/<run>/trace/.postrun_done`（待つときはこれを見る。ログの見出しは全角の「（」を含み、grep で待つと外れる） |
 | ⭐ `queue_hockey_goal_rate.sh` | ⭐ **ホッケーの取り直し 2 本のゴール率を 20 話（全話）で測る**（9-237）。完走を待って `trace/arm_trace_20.npz` を作る。学習はしない |
 | `queue_damping.sh` | ⭐ **ダンピング感度**（9-171。b=0.1/1/10 × Pusher × 2 seed）。助教の指摘3 の残り |
 | ⭐ **`doc_refs.py`** | **識別子の逆引き。「ここを変えたらどこも変わる」を出す。** `--hubs` で影響の広い識別子、`--undefined` で壊れ参照 |
-| `knowledge_graph.py` | **研究の知識地図**（2026-10-23、ユーザー提案）。知見・取り下げ（知見総括表）・修論の節・想定問答の Q・系譜の段・Bug をノードに、本文中の識別子でつないだ HTML のグラフ（`docs/リポジトリ説明/知識ネットワーク.html`、生成物。表示は `knowledge_graph_template.html`）。全体像を眺める用。`--stats`・`--reproduce` |
-| `doc_tree.py` | **md の木**（2026-10-23）。提出・審査・運用の 3 つの根から参照（リンク・ファイル名・`系譜`・`修論`・`Bug`・`想定問答 Q`）を辿り、**どの根からも辿れない md と遠い md**を出す。棚卸しで刈る候補を探す用。`--drawio` で `docs/リポジトリ説明/md_の木.drawio`、`--reproduce` で既知の参照を辿れるか。⚠️ 波及の確認は `doc_refs.py`（木は親を 1 つしか持たない） |
+| `knowledge_graph.py` | **研究の知識地図**（2026-10-23、ユーザー提案）。知見・取り下げ（知見総括表）・修論の節・想定問答の Q・系譜の段・Bug をノードに、本文中の識別子でつないだ HTML のグラフ（`docs/リポジトリ説明/04_文書管理/知識ネットワーク.html`、生成物。表示は `knowledge_graph_template.html`）。全体像を眺める用。`--stats`・`--reproduce` |
+| `doc_tree.py` | **md の木**（2026-10-23）。提出・審査・運用の 3 つの根から参照（リンク・ファイル名・`系譜`・`修論`・`Bug`・`想定問答 Q`）を辿り、**どの根からも辿れない md と遠い md**を出す。棚卸しで刈る候補を探す用。`--drawio` で `docs/リポジトリ説明/04_文書管理/md_の木.drawio`、`--reproduce` で既知の参照を辿れるか。⚠️ 波及の確認は `doc_refs.py`（木は親を 1 つしか持たない） |
 | `dump_thesis_outline.py` | 修論の見出しを書き出す。`--write` で 構成.md の一覧を再生成、`--check` で食い違い検査 |
 | `eval_cnoid_numerical.py` | 数値で成功率・報酬を確認 |
 | `eval_cnoid_visual.py` | 動画（mp4）で記録 |
@@ -164,10 +165,10 @@
 | `visualize_morph_changes.py` | 形態変化の可視化 |
 | `generate_comparison_report.py` | 学習曲線 + eval を Markdown/PNG レポート化 |
 
-使い方は [docs/リポジトリ説明/評価スクリプト.md](../docs/リポジトリ説明/評価スクリプト.md)。
+使い方は [docs/リポジトリ説明/02_コードと実験/評価スクリプト.md](../docs/リポジトリ説明/02_コードと実験/評価スクリプト.md)。
 
 | `record_arm_trace.py` | 学習済み方策を1エピソード実行し、各リンクのワールド変換・**最適化後の** `bone_offset`・cube・目標を npz に落とす。デモ動画の前半 ⚠️⚠️ **2026-09-20: 既定を 400 → 1200 step に変更**（旧既定はエピソードの 27〜65 % しか記録せず、打ち切りを黙って通していた。Bug 46 / 9-137） |
-| `render_arm_video.py` | その npz と**実物メッシュ**（STL）から mp4 を書き出す。近似の円柱ではない。⭐ `--glb <元の GLB>` で**元のモデルの色**（関節のマゼンタ球も）で描く（2026-10-05。GLB を Y-up→Z-up に回して `frame_origins` を引くと STL の頂点と 1e-9 m で一致）。⭐ `--collision` で当たり判定のカプセルを不透明に、メッシュを半透明に重ねる（2026-10-30。メッシュは当たり判定より太く、障害物のそばで食い込んで見えるため）。使い方と踏んだ罠は [評価スクリプト.md](../docs/リポジトリ説明/評価スクリプト.md) |
+| `render_arm_video.py` | その npz と**実物メッシュ**（STL）から mp4 を書き出す。近似の円柱ではない。⭐ `--glb <元の GLB>` で**元のモデルの色**（関節のマゼンタ球も）で描く（2026-10-05。GLB を Y-up→Z-up に回して `frame_origins` を引くと STL の頂点と 1e-9 m で一致）。⭐ `--collision` で当たり判定のカプセルを不透明に、メッシュを半透明に重ねる（2026-10-30。メッシュは当たり判定より太く、障害物のそばで食い込んで見えるため）。使い方と踏んだ罠は [評価スクリプト.md](../docs/リポジトリ説明/02_コードと実験/評価スクリプト.md) |
 | `extract_gear.py` | 指定 run の checkpoint から、収束した gear・リンク長を取り出す |
 | `check_stale_claims.py` | docs 全体から「事実と食い違う主張」を横断検出。**限界・未達の状態が変わったら必ず** |
 | `validate_diagnosis.sh` | 診断 M7 の三層すべてを既知の run に当てて回帰確認（第3章 3.12） |
@@ -241,11 +242,12 @@
 | `cnoid_transfer.py` | 転用まわりの補助 |
 | `monitor_training.py` | 学習監視（現在は使っていない） |
 | `plot_pj_comparison.py` | PJ実験の比較図 |
-| `make_slide_flow.py` | **発表スライド用の「提案システムの中身」の図**（`docs/研究応用/執筆/slide_flow.png`、3200×1800）。手描き → M1 → 3D → 関節で分ける → シミュレーション → 判定と助言（短腕と 1.99 倍の腕を実測の姿勢で真上から）を、実物の画像で並べる（2026-11-02 の進捗発表。ユーザー「文字のみのフローではなく画像を入れる」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/評価スクリプト.md) |
-| `make_yobi_figures.py` | **予備審査のスライドの図**（`docs/研究応用/執筆/yobi/*.png`）。字の表・箇条書きを置き換える切り抜き 3 枚と新しい図 5 枚（結果② 配分の組・評価の問い・3 層の診断・閉ループの欠陥・今後の予定のガント図）。値は修論の本文の書き写し（2026-11-09、ユーザー「もっとスライドから字を減らしたい」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/評価スクリプト.md) |
-| `make_sysflow_slide.py` | **予備審査のスライド用のシステムフロー図**（`docs/研究応用/執筆/システム図_スライド用.drawio`、画像を埋め込んだ draw.io）。工程名だけの箱と、各工程を通った後の実物の画像で流れを描く。確認用のプレビュー `yobi/sysflow_preview.png`、スライドに貼る `yobi/sysflow_slide.png` と段の切り抜き `yobi/sysflow_p*.png` も出す（2026-11-09、ユーザー「drawio をスライドに入れない？」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/評価スクリプト.md) |
+| `make_slide_flow.py` | **発表スライド用の「提案システムの中身」の図**（`docs/研究応用/執筆/使えそうな画像データ/slide_flow.png`、3200×1800）。手描き → M1 → 3D → 関節で分ける → シミュレーション → 判定と助言（短腕と 1.99 倍の腕を実測の姿勢で真上から）を、実物の画像で並べる（2026-11-02 の進捗発表。ユーザー「文字のみのフローではなく画像を入れる」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/02_コードと実験/評価スクリプト.md) |
+| `make_yobi_figures.py` | **予備審査のスライドの図**（`docs/研究応用/執筆/使えそうな画像データ/*.png`）。字の表・箇条書きを置き換える切り抜き 3 枚と新しい図 5 枚（結果② 配分の組・評価の問い・3 層の診断・閉ループの欠陥・今後の予定のガント図）。値は修論の本文の書き写し（2026-11-09、ユーザー「もっとスライドから字を減らしたい」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/02_コードと実験/評価スクリプト.md) |
+| `make_sysflow_slide.py` | **予備審査のスライド用のシステムフロー図**（`docs/研究応用/執筆/使えそうな画像データ/システム図_スライド用.drawio`、画像を埋め込んだ draw.io）。工程名だけの箱と、各工程を通った後の実物の画像で流れを描く。確認用のプレビュー `yobi/sysflow_preview.png`、スライドに貼る `yobi/sysflow_slide.png` と段の切り抜き `yobi/sysflow_p*.png` も出す（2026-11-09、ユーザー「drawio をスライドに入れない？」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/02_コードと実験/評価スクリプト.md) |
 | `build_thesis_pdf.py` | **修論 PDF ビルド**（`docs/研究応用/修論ドラフト/` の全 md → xelatex で1冊に）。下記の注意を読んでから使う |
 | `build_kougo_pdf.py` | **修論の口語版の PDF ビルド**（`docs/研究応用/執筆/修論_口語版/` の 6 ファイル → `docs/pdf/修論_口語版_YYYYMMDD.pdf`）。変換は `build_thesis_pdf.py` を借りる（2026-10-20） |
+| `build_yobi_paper_pdf.py` | **予備審査論文の PDF ビルド**（`docs/研究応用/執筆/予備審査論文/予備審査論文.md` → `docs/pdf/予備審査論文_YYYYMMDD.pdf`）。先輩の予備審査論文の体裁（表紙・概要・目次・本文・謝辞・参考文献）。変換は `build_thesis_pdf.py` を借りる（2026-11-17） |
 | `make_thesis_figures.py` | **修論の図を一次データから生成**（`figures/*.png`）。学習曲線は `log/log_train.txt` から読む。図の数値は手で直さず、原本を確認してこれを再実行する |
 | `eval_morphology.py` | 形態評価（docs・コードのどちらからも参照なし。`compare_morphology.py` に役割が吸収されたとみられる） |
 
@@ -291,7 +293,7 @@ pdftotext -f 1 -l 5 docs/pdf/修論ドラフト_YYYYMMDD.pdf - | grep -E "^\s*3\
 
 1. **先頭に日付と目的を書く。** 「何を確かめたくて作ったか」が分かれば、後から再利用可否を判断できる
 2. **一度きりなら §5 に、再利用するなら §3 に追記する**
-   ⚠️ **`docs/リポジトリ説明/評価スクリプト.md` にも書く。2 箇所ある**
+   ⚠️ **`docs/リポジトリ説明/02_コードと実験/評価スクリプト.md` にも書く。2 箇所ある**
    （2026-09-13 に 3 本が両方から漏れていた。CLAUDE.md §4-2 の「2 箇所に同じことを書く構造」）
 3. 学習を起動するなら**二重起動ガード**を入れる（`experiment_queue.sh` の各段が参考）
 4. ログ解析なら **`log/log_train.txt` を読む**。`stdout.log` は再開で先頭が消える（Bug 18）

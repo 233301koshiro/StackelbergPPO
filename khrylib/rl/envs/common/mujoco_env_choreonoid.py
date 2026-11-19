@@ -439,6 +439,14 @@ def mujoco_xml_to_body(xml_str: str):
         t = shape['type']
         if t == 'capsule':
             Ip, Ia = shape['Iperp'], shape['Iaxial']
+            if _CAPSULE_INERTIA_ROT and shape.get('p1') is not None:
+                # Bug 107: 軸対称なので I = Ip·E + (Ia − Ip)·u uᵀ（u はカプセルの軸の単位ベクトル）
+                u = np.asarray(shape['p1'], float) - np.asarray(shape['center'], float)
+                n = float(np.linalg.norm(u))
+                if n > 1e-12:
+                    u = u / n
+                    I = Ip * np.eye(3) + (Ia - Ip) * np.outer(u, u)
+                    return [float(x) for x in I.flatten()]
             return [Ip,0,0, 0,Ia,0, 0,0,Ip]   # Y-axis capsule
         if t == 'sphere':
             I = shape['I']
@@ -948,6 +956,14 @@ _JOINT_MAX_VEL = float(os.environ.get('CNOID_JOINT_MAX_VEL') or 0)   # 9-245
 # ⭐ Bug 65: 速度だけ切ると、その tick の位置は切る前の速度で進んでいる（半陰的オイラー）。実効の最高速度が
 #   上限 ＋ トルク÷慣性×Δt になり、ギア比と慣性（＝形）で変わる。STRICT では位置も上限の速さで進め直す（既定は旧動作）
 _JOINT_MAX_VEL_STRICT = bool(os.environ.get('CNOID_JOINT_MAX_VEL_STRICT'))
+# ⭐ 2026-11-16 Bug 106（系譜 9-350）: 速度の上限は tick の後で切るので、その tick の接触は上限を超えた腕の速さで解かれ、
+#   対象は切る前の速さで押される（押しの打つ瞬間はほぼ必ず上限超え）。`CNOID_JOINT_MAX_VEL_PRETICK=1` のときだけ、
+#   tick の前にモータのトルクを、そのトルクだけでは上限を超えない大きさ（回転子の慣性 J で見積もる）まで絞る。
+#   後で切る処理は安全弁として残す（重力・関節の連動・接触で超える分）。既定は従来どおり
+_JOINT_MAX_VEL_PRETICK = bool(os.environ.get('CNOID_JOINT_MAX_VEL_PRETICK'))
+# ⭐ 2026-11-16 Bug 107（系譜 9-350）: 変換器はカプセルの慣性を常にローカル Y 向きとして書いていた（形は回していた）。
+#   `CNOID_CAPSULE_INERTIA_ROT=1` のときだけ、カプセルの軸の向きに合わせて回す。既定は従来どおり
+_CAPSULE_INERTIA_ROT = bool(os.environ.get('CNOID_CAPSULE_INERTIA_ROT'))
 _VCAP_SAID = False
 if _CTRL_CLIP:
     print('[choreonoid] ⭐ 制御入力を ctrlrange で切る（CNOID_CTRL_CLIP、Bug 60）', flush=True)
@@ -1701,6 +1717,32 @@ class ChoreonoidSimWorld:
             return {'qpos': [], 'qvel': [], 'body_xpos': {}, 'body_xmat': {}}
         return _get_state_dict(self._sim_body_entries)
 
+    def _pretick_cap(self):
+        """Bug 106: tick の前に、そのトルクだけでは速度の上限を超えない大きさまでモータのトルクを絞る。
+        加速を回転子の慣性 J だけで見積もる（実際の実効慣性は J 以上なので、モータ由来の超えは防げる側）。
+        上限に達している向きへの加速は 0 にし、止める向きのトルクはそのまま通す。J が 0 の関節（対象のスライド）は触らない。"""
+        dt = self._timestep
+        arm = self._joint_armatures
+        st = getattr(self, '_pretick_stats', None)
+        if st is None:
+            st = self._pretick_stats = [0, 0]
+            used = [(j.jointName, round(v, 3), round(float(arm.get(j.jointName, 0.0)), 3))
+                    for _, j, v in self._joint_vel_limits_compiled if arm.get(j.jointName, 0.0) > 0]
+            print(f'[choreonoid] ⭐ tick の前にトルクを絞って速度の上限を守る: {len(used)} 関節 {used}'
+                  f'（名前, 上限 [rad/s], 回転子の慣性 J）・刻み {dt}（CNOID_JOINT_MAX_VEL_PRETICK、Bug 106）', flush=True)
+        for _, j, vmax in self._joint_vel_limits_compiled:
+            J = float(arm.get(j.jointName, 0.0))
+            if J <= 0.0:
+                continue
+            dq, u = j.dq, j.u
+            hi = (vmax - dq) * J / dt
+            lo = (-vmax - dq) * J / dt
+            st[0] += 1
+            if u > hi:
+                j.u = min(u, max(hi, 0.0)); st[1] += 1
+            elif u < lo:
+                j.u = max(u, min(lo, 0.0)); st[1] += 1
+
     def step(self, ctrl: list, n_frames: int) -> dict:
         if not self._sim_body_entries:
             return {'qpos': [], 'qvel': [], 'body_xpos': {}, 'body_xmat': {}}
@@ -1774,6 +1816,8 @@ class ChoreonoidSimWorld:
                           f'{len(getattr(self, "_hinge_damp", ()))} 関節（CNOID_JOINT_FRICTION、系譜 9-332）', flush=True)
                 for j, _b in getattr(self, '_hinge_damp', ()):
                     j.u -= _JOINT_FRICTION * max(-1.0, min(1.0, j.dq / _JOINT_FRICTION_VS))
+            if _JOINT_MAX_VEL_PRETICK and self._joint_vel_limits_compiled:
+                self._pretick_cap()
             _pre = self._puck_pre_tick()
             _apre = self._arm_pre_tick() if getattr(self, '_arm_block', False) else None
             _vq = {id(j): j.q for j in self._vcap_strict} if getattr(self, '_vcap_strict', None) else None

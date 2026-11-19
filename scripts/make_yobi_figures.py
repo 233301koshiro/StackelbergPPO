@@ -3,7 +3,7 @@
 
 字の箇条書き・表を図に置き換える。値はすべて修論の本文にあるもの（スライドで新しい値を作らない）。
 
-    python3 scripts/make_yobi_figures.py      # → docs/研究応用/執筆/yobi/*.png
+    python3 scripts/make_yobi_figures.py      # → docs/研究応用/執筆/使えそうな画像データ/*.png
 
 作るもの:
   切り抜き（既存の図から）
@@ -30,7 +30,7 @@ import datetime as dt
 import matplotlib.dates as mdates
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT = ROOT / 'docs' / '研究応用' / '執筆' / 'yobi'
+OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ'   # 2026-11-17 の整理で yobi/ をここへ平らに移した
 FIG = ROOT / 'figures'
 
 # 既定のフォントは日本語を持たない。Noto CJK を明示登録する（make_slide_flow.py と同じ）
@@ -93,7 +93,7 @@ def crops():
     im = Image.open(FIG / 'arm_forms.png')                 # 1457×888。(b) は x ≥ 590
     im.crop((590, 0, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
     print(f'→ {OUT / "crop_arm_forms.png"}')
-    im = Image.open(ROOT / 'docs' / '研究応用' / '執筆' / 'slide_flow.png')   # 3200×1800。⑥ は y ≥ 1070
+    im = Image.open(OUT / 'slide_flow.png')   # 3200×1800。⑥ は y ≥ 1070
     im.crop((40, 1070, im.width - 40, im.height - 20)).save(OUT / 'crop_flow_advice.png')
     print(f'→ {OUT / "crop_flow_advice.png"}')
 
