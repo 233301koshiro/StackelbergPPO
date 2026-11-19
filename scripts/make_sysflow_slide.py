@@ -8,6 +8,9 @@
 
     python3 scripts/make_sysflow_slide.py
     # → docs/研究応用/執筆/使えそうな画像データ/システム図_スライド用.drawio（画像を埋め込んだ draw.io。PNG への書き出しは draw.io で行う）
+    #   draw.io で「ファイル → エクスポート → PNG」、ズーム 300 %・余白 0 で スライド用/sysflow_slide.png に書き出す
+    python3 scripts/make_sysflow_slide.py --crop
+    # → スライド用/sysflow_stages1-2.png（① ②）・sysflow_stage2.png（②）。書き出しの解像度に合わせて切る
     # → docs/研究応用/執筆/使えそうな画像データ/スライド用/sysflow_preview.png（同じ配置を matplotlib で描いた確認用。字の幅は draw.io と少し違う）
 
 画像（すべてリポジトリの中。手描き A1 の流れと、到達の短腕 / 1.99 倍の腕）:
@@ -36,8 +39,12 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 WRITE = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ'   # 2026-11-17 の整理で yobi/ と図をここへ平らに移した
 OUT_DRAWIO = WRITE / 'システム図_スライド用.drawio'
 OUT_PREVIEW = WRITE / 'スライド用' / 'sysflow_preview.png'   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした（drawio は直下のまま）
-OUT_SLIDE = WRITE / 'スライド用' / 'sysflow_slide.png'       # スライドに貼る版（3 倍）と、フロー詳細に貼る段の切り抜き sysflow_<段>.png
-CROPS = {'p12': (0, 658), 'p1': (0, 216), 'p2': (215, 658), 'p3': (657, 885), 'p4': (884, 1100)}
+OUT_SLIDE = WRITE / 'スライド用' / 'sysflow_slide.png'       # ユーザーが draw.io から書き出した版（スライド・予備審査論文 図 1）。スクリプトは上書きしない
+# フロー詳細の枚に貼る段の切り抜き（x は draw.io の座標。書き出しの解像度に合わせて倍率を掛ける）。
+# 名前は段（①〜④）で付ける。⛔ 11-19 まで sysflow_p12 / p2 と呼んでいたが、p がページ番号に読め、
+# デッキの枚の番号（11・30 枚目）とずれて見えた（ユーザー「ページ数を表す名前がずれている」）。使っている 2 枚だけ作る。
+CROPS = {'stages1-2': (0, 658),   # ① スケッチ整形・② 形にする → デッキ「フロー詳細 ① ②」
+         'stage2': (215, 658)}    # ② 形にする → デッキ「付録 フロー詳細 ② 形にする」
 
 for _ttc in sorted(pathlib.Path('/usr/share/fonts').rglob('*CJK*')):
     try:
@@ -289,14 +296,47 @@ def build_preview(imgs, s=2.0, out=OUT_PREVIEW):
     print(f'→ {out}')
 
 
+def crop_stages():
+    """draw.io から書き出した sysflow_slide.png（解像度は問わない）から段を切り抜く。
+
+    段の区切りは画像の中の「段の枠と枠の間の白い縦の隙間」から求める（11-19 夕方）。
+    draw.io は余白 0 で書き出すと絵の左端（x ≈ 5）から切るので、CROPS の座標に倍率を掛けるだけでは
+    数 px ずれ、300 % の書き出しではずれも 3 倍になる。隙間が 3 つ見つからないときだけ CROPS に戻る。
+    """
+    big = Image.open(OUT_SLIDE).convert('RGB')
+    k = big.size[0] / W
+    if big.size[0] < 2 * W:
+        print(f'⚠️ {OUT_SLIDE.name} は幅 {big.size[0]} px（draw.io の {k:.1f} 倍）。スライドでは粗く見える。'
+              'draw.io の書き出しで「ズーム」を 300 % にする（11-19、ユーザー「解像度が悪い」）')
+    a = np.asarray(big).astype(int)
+    white = (a.min(axis=2) > 245).mean(axis=0) > 0.9    # ほぼ白い列（段から段への矢印が横切るので「全部白」にはならない）
+    gaps, s0 = [], None
+    for x, w in enumerate(white):
+        if w and s0 is None:
+            s0 = x
+        if not w and s0 is not None:
+            if s0 > 0:
+                gaps.append((s0, x))
+            s0 = None
+    if len(gaps) == 3:                                   # ①|②|③|④ の間
+        mid = [round((g0 + g1) / 2) for g0, g1 in gaps]
+        boxes = {'stages1-2': (0, mid[1]), 'stage2': (mid[0], mid[1])}
+        print(f'段の隙間（px）: {gaps}')
+    else:
+        print(f'⚠️ 段の隙間が {len(gaps)} 個（3 個のはず）。CROPS の座標に倍率を掛けて切る')
+        boxes = {n: (round(x0 * k), round(x1 * k)) for n, (x0, x1) in CROPS.items()}
+    for name, (x0, x1) in boxes.items():
+        out = OUT_SLIDE.with_name(f'sysflow_{name}.png')
+        im = big.crop((x0, 0, x1, big.size[1]))   # 高さは書き出しのまま（draw.io は余白 0 で絵の高さに切る）
+        im.save(out)
+        print(f'→ {out}  {im.size}')
+
+
 if __name__ == '__main__':
+    import sys
+    if '--crop' in sys.argv:          # draw.io で書き出した後に回す
+        crop_stages()
+        sys.exit()
     imgs = load_images()
     build_drawio(imgs)
-    build_preview(imgs)
-    build_preview(imgs, s=3.0, out=OUT_SLIDE)
-    big = Image.open(OUT_SLIDE)
-    k = big.size[0] / W
-    for name, (x0, x1) in CROPS.items():
-        out = OUT_SLIDE.with_name(f'sysflow_{name}.png')
-        big.crop((round(x0 * k), 0, round(x1 * k), round(380 * k))).save(out)
-        print(f'→ {out}')
+    build_preview(imgs)               # 確認用（matplotlib。字の幅は draw.io と少し違う）。sysflow_slide.png は上書きしない

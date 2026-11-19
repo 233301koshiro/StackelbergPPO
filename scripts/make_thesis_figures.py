@@ -420,10 +420,31 @@ def fig_arm_forms():
     for xv, lab in ((0.80, '到達の目標\n0.80 m'), (0.85, '押す箱の、腕に\n面した側面 0.85 m')):
         a.axvline(xv, color='k', ls='--' if xv == 0.80 else ':', lw=1)
         a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5)
-    a.set_xlim(-1.0, 1.85); a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.42); a.set_aspect('equal')
+    a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.42); a.set_aspect('equal')
     a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
     a.set_title('(b) 基本形と比較に用いた形態（上から）', fontsize=11)
+    # 枠の左端は形態名の実際の幅から決める（11-19、ユーザー「説明が図の線からはみ出ている…文字を包み込める範囲の枠線の長さに」）。
+    # 以前は −1.0 の決め打ちで、長い名前（基本形・修正指針の N 倍）が枠の外へ出ていた。
+    # 縦横比を固定しているので、x の幅を広げた分だけ図の幅も広げ、腕と文字の大きさを保つ。
+    x_right = 1.85
+    a.set_xlim(-1.0, x_right)
+    a.set_anchor('W')   # 縦横比の固定で余った幅は右に寄せ、savefig.bbox='tight' で切る（中央に置くと (a) との間が空く）
     fig.tight_layout()
+    labels = [t for t in a.texts if t.get_ha() == 'right' and t.get_position()[0] == -0.14]
+    for _ in range(4):
+        fig.canvas.draw()
+        inv = a.transData.inverted()
+        x_min = min(inv.transform((t.get_window_extent().x0, 0))[0] for t in labels)
+        left = x_min - 0.06
+        if abs(left - a.get_xlim()[0]) < 0.01:
+            break
+        grow = (x_right - left) / (x_right - a.get_xlim()[0])
+        w, h = fig.get_size_inches()
+        wr = ax[1].get_gridspec().get_width_ratios()
+        ax[1].get_gridspec().set_width_ratios([wr[0], wr[1] * grow])
+        fig.set_size_inches(w + (wr[1] * grow - wr[1]) / sum(wr) * w, h)
+        a.set_xlim(left, x_right)
+        fig.tight_layout()
     fig.savefig(os.path.join(OUT, 'arm_forms.png'))
     plt.close(fig)
     return 'arm_forms.png'
