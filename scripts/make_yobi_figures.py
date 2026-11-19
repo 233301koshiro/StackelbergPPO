@@ -9,7 +9,7 @@
   切り抜き（既存の図から）
     crop_matrix_rank.png   matrix_reversal.png の右（順位の入れ替わり）→ 結果①
     crop_arm_forms.png     arm_forms.png の (b)（比較に用いた形態）→ 評価の設定
-    crop_flow_advice.png   slide_flow.png の下の段 ⑥（判定と修正指針）→ 結果③
+    crop_flow_advice.png   slide_flow.png の下の段 ⑥（判定と修正指針）→ 結果③（11-19 に退役。過去/ へ）
   新しい図
     alloc_pair.png         結果② 配分だけが違う形の組と、判定の方法ごとの区別（修論 4.4.3.2・表 4.7）
     eval_questions.png     評価の問い R1〜R4・診断・部品で組めるか（修論 4.7）を、システムのどこが壊れるかで置く（修論 4.2.1）
@@ -93,9 +93,11 @@ def crops():
     im = Image.open(FIG / 'arm_forms.png')                 # 1457×888。(b) は x ≥ 590
     im.crop((590, 0, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
     print(f'→ {OUT / "crop_arm_forms.png"}')
-    im = Image.open(OUT / 'slide_flow.png')   # 3200×1800。⑥ は y ≥ 1070
-    im.crop((40, 1070, im.width - 40, im.height - 20)).save(OUT / 'crop_flow_advice.png')
-    print(f'→ {OUT / "crop_flow_advice.png"}')
+    # ⛔ 11-19: slide_flow.png はスライドの図としては退役した（sysflow_slide.png に置き換え）。その ⑥ の切り抜きも 過去/ に置く
+    PAST = OUT.parent / '過去'
+    im = Image.open(PAST / 'slide_flow.png')   # 3200×1800。⑥ は y ≥ 1070
+    im.crop((40, 1070, im.width - 40, im.height - 20)).save(PAST / 'crop_flow_advice.png')
+    print(f'→ {PAST / "crop_flow_advice.png"}')
 
 
 # ---------------------------------------------------------------- 結果② 配分の組

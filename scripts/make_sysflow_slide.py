@@ -12,7 +12,7 @@
 
 画像（すべてリポジトリの中。手描き A1 の流れと、到達の短腕 / 1.99 倍の腕）:
   手描き・M1        data/test/A1/sketch/A1_hand.webp・A1_m1.jpeg
-  3D・関節で分ける   docs/研究応用/執筆/使えそうな画像データ/スライド用/slide_flow.png の ③④（make_slide_flow.py が STL から描いたもの）
+  3D・関節で分ける   docs/研究応用/執筆/使えそうな画像データ/過去/slide_flow.png の ③④（make_slide_flow.py が STL から描いたもの）
   長さ・太さ        使えそうな画像データ/修論/pipeline_m4_paper.png の上腕（修論 図 3.4）
   モデル            使えそうな画像データ/修論/pipeline_m5_paper.png の左（修論 図 3.5）
   学習              slide_flow.png の ⑤（phys_pusher.mp4 のコマ）
@@ -67,7 +67,7 @@ def autocrop(im, pad=8, thresh=240):
 
 
 def load_images():
-    sf = Image.open(WRITE / 'スライド用' / 'slide_flow.png')                       # 3200×1800
+    sf = Image.open(WRITE / '過去' / 'slide_flow.png')   # 11-19 にスライドの図としては退役し、素材としてだけ残した                       # 3200×1800
     return {
         'sketch': Image.open(ROOT / 'data/test/A1/sketch/A1_hand.webp'),
         'm1': autocrop(Image.open(ROOT / 'data/test/A1/sketch/A1_m1.jpeg')),
