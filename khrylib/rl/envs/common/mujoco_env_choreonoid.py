@@ -1003,13 +1003,14 @@ _TORQUE_SPEED = float(os.environ.get('CNOID_TORQUE_SPEED') or 0.0)
 _TS_SAID = False
 # ⭐ 2026-11-19（系譜 9-354、第2層に正解を持たせる課題）: `CNOID_CUBE_SPRING_K=k` [N/m] で、押しの箱のスライド 1 本に、
 #   自然長へ引き戻すばね −k·(q − q0) を掛ける。⚠️ 既定（指定なし）では従来どおり（ばね無し）。
-#   向きは `CNOID_CUBE_SPRING_AXIS`（x＝`cube_slide`〔既定〕、y＝`cube_slide2`）。自然長 q0 は**各話の初期位置**
+#   向きは `CNOID_CUBE_SPRING_AXIS`（y＝`cube_slide2`〔既定〕、x＝`cube_slide`）。既定が y なのは、縦型で x のばねは
+#   まっすぐな腕がトルクなしで保てて第2層の正解が置けないため（系譜 9-354、11-19 ユーザー「全部いいよ」）。自然長 q0 は**各話の初期位置**
 #   （`set_state`＝話の頭の `reset_state` のたびに取り直す。初期位置のくじ ±0.1 でばねが最初から効かないように。11-19 ユーザー）。
 #   変換器は XML の `stiffness` を読まず、Choreonoid（AIST）は受動の関節の力を無視するので（減衰と同じ。`_joint_decay`）、
 #   減衰と同じく tick の後に速度へ入れる: q̇ ← q̇ − (k/m)·(q − q0)·Δt（m は箱の body の総質量。減衰の b/m と同じ m）。
 #   1 tick で安定する条件は √(k/m)·Δt < 2
 _CUBE_SPRING_K = float(os.environ.get('CNOID_CUBE_SPRING_K') or 0.0)
-_CUBE_SPRING_JOINT = {'x': 'cube_slide', 'y': 'cube_slide2'}[(os.environ.get('CNOID_CUBE_SPRING_AXIS') or 'x').strip().lower()]
+_CUBE_SPRING_JOINT = {'x': 'cube_slide', 'y': 'cube_slide2'}[(os.environ.get('CNOID_CUBE_SPRING_AXIS') or 'y').strip().lower()]
 _SPRING_SAID = False
 
 class ChoreonoidSimWorld:

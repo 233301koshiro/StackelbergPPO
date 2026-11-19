@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """箱のばね（`CNOID_CUBE_SPRING_K`、系譜 9-354）が実際の Choreonoid で効いているかを確かめる。学習はしない。
 
-箱を前（+x）へ `PROBE_DX` [m] ずらして静かに離し、腕への指令 0 のまま動かして、箱の x の時系列を取る。
+箱をばねの向き（既定 y、`CNOID_CUBE_SPRING_AXIS=x` で前）へ `PROBE_DX` [m] ずらして静かに離し、腕への指令 0 のまま動かして、箱の x の時系列を取る。
 - ばねあり: 減衰つきの振動 x'' = −(k/m)x − (b/m)x' になるはず。ゼロを横切る間隔から測った周期を、
   理論の周期 2π/ω_d（ω_d = √(k/m − (b/2m)²)）と並べる。b は XML の箱の減衰（⚠️ 横型 10.0・縦型 2.0 と XML ごとに違う。
   11-19 に 2.0 と思い込んで「減衰が 5 倍」と読み違えた）、m は箱の body の総質量（減衰・ばねの処理と同じ）。
@@ -62,8 +62,8 @@ def main():
     env.reset_state(False)
 
     # 箱の x のスライド（cube_slide）は変換器が作る仮のリンク `cube_virt0` の関節、y（cube_slide2）は `cube` の関節
-    #   （mujoco_env_choreonoid.py の Multi-joint body）。ずらす向きはばねの向き（CNOID_CUBE_SPRING_AXIS、既定 x）
-    axis = (os.environ.get('CNOID_CUBE_SPRING_AXIS') or 'x').strip().lower()
+    #   （mujoco_env_choreonoid.py の Multi-joint body）。ずらす向きはばねの向き（CNOID_CUBE_SPRING_AXIS、既定 y。env と同じ）
+    axis = (os.environ.get('CNOID_CUBE_SPRING_AXIS') or 'y').strip().lower()
     link = {'x': 'cube_virt0', 'y': 'cube'}[axis]
     bnames = list(env.model.body_names)
     bid = bnames.index(link)
