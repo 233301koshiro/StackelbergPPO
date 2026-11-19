@@ -37,6 +37,10 @@ def prepare(fname: str) -> str:
     if fname.startswith('00_'):
         t = '# 要旨\n' + t.split('\n## 要旨\n', 1)[1]
     t = re.sub(r'\n(?:> .*\n|>\n)+', '\n', t, count=1)   # 冒頭の案内の blockquote（最初の 1 つ）だけ落とす
+    # 本文中の「> 📝 **執筆メモ…**」も落とす（正式版の build_thesis_pdf.py と同じ式）。
+    # 2026-11-19、第4章の 2 つ（run 名の対応・星の図の出し方）が PDF に出ていた。
+    # 「> ⚠️ **（口語版の注）**」は読者向けなので残す（正式版のように > を全部は落とさない）。
+    t = re.sub(r'^> 📝 \*\*執筆メモ.*?(?=\n(?!>)|\Z)', '', t, flags=re.DOTALL | re.M)
     t = t.replace('（口語版）', '')
     seen = False
     lines = []

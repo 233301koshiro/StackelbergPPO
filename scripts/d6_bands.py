@@ -29,10 +29,10 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from check_before_conclusion import _worker_seeds  # noqa: E402
 
 # 組: (節, 名前, 種類, [(形の名前, seed0, 元の seed1, 新しい seed1[, seed2])])。新しい seed1 が元と同じなら同じ名前を書く
-#   seed2 は 9-318 で足した形だけ（㉘ の到達・押しの中間と長腕、㉙ の A1v）
+#   seed2 は 9-318 で足した形だけ（㉘ の到達・押しの中腕と長腕、㉙ の A1v）
 #   ⭐ A1 の押しと R1 の凍結は、Bug 76 を直した後に起動したので元の seed 1 がすでに新しい種
 GROUPS = [
-    ('4.4.1', 'R1 形の凍結（押し、中間）', 'push', [
+    ('4.4.1', 'R1 形の凍結（押し、中腕）', 'push', [
         ('凍結', 'tripo_pjp_mid_frozen_phys_fx', 'tripo_pjp_mid_frozen_phys_fx_s2', 'tripo_pjp_mid_frozen_phys_fx_s2', 'tripo_pjp_mid_frozen_phys_fx_s3'),
         ('最適化', 'tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2', 'tripo_pjp_mid_phys_s2_ws', 'tripo_pjp_mid_phys_s3')]),
     ('4.4.2', 'R2 縦型 A1v（到達 対 押し）', 'design', [
@@ -40,11 +40,11 @@ GROUPS = [
         ('押し', 'e2e_a1v_pusher_phys', 'e2e_a1v_pusher_phys_s2', 'e2e_a1v_pusher_phys_s2_ws', 'e2e_a1v_pusher_phys_s3')]),
     ('4.4.3.1・4.4.3.2', 'R3 マトリクス 到達', 'reach', [
         ('短腕', 'tripo_pj_short_phys_cg', None, None),
-        ('中間', 'tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'),
+        ('中腕', 'tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'),
         ('長腕', 'tripo_pj_long_phys', 'tripo_pj_long_phys_s2', 'tripo_pj_long_phys_s2_ws', 'tripo_pj_long_phys_s3')]),
     ('4.4.3.2', 'R3 マトリクス 押し', 'push', [
         ('短腕', 'tripo_pjp_short_phys_cg', None, None),
-        ('中間', 'tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2', 'tripo_pjp_mid_phys_s2_ws', 'tripo_pjp_mid_phys_s3'),
+        ('中腕', 'tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2', 'tripo_pjp_mid_phys_s2_ws', 'tripo_pjp_mid_phys_s3'),
         ('長腕', 'tripo_pjp_long_phys', 'tripo_pjp_long_phys_s2', 'tripo_pjp_long_phys_s2_ws', 'tripo_pjp_long_phys_s3')]),
     ('4.4.3.3', 'R3 配分 到達', 'reach', [
         ('根元重', 'tripo_pjd_prox_phys', 'tripo_pjd_prox_phys_s2', 'tripo_pjd_prox_phys_s2_ws', 'tripo_pjd_prox_phys_s3'),
@@ -66,7 +66,7 @@ GROUPS = [
     ('4.5.5', '閉ループ 関節固定 押し（A1）', 'push', [
         ('可動', 'e2e_a1_pusher_phys', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s3'),
         ('固定', 'e2e_a1_fix3_pusher_phys', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s3')]),
-    ('4.5.5', '第3層の提案 関節 1 固定 到達（中間）', 'reach', [
+    ('4.5.5', '第3層の提案 関節 1 固定 到達（中腕）', 'reach', [
         # 関節 1 固定の seed 1 は新しい種でしか回していない（queue_1029_fix1_seed2.sh が `_s2_ws` と比べた）ので、可動も元・新とも `_s2_ws`
         ('可動', 'tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'),
         ('固定', 'tripo_pj_mid_phys_fix1', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s3')]),
@@ -244,7 +244,7 @@ def self_check():
         band(run_info('tripo_pjp_long_phys'), run_info('tripo_pjp_long_phys_s2')) == (22.68, 24.92))
     chk('配分 押し dist の古い帯 [5.38, 7.04]（9-279）',
         band(run_info('tripo_pjdp_dist_phys_cg'), run_info('tripo_pjdp_dist_phys_s2')) == (5.38, 7.04))
-    chk('マトリクス 到達 中間 対 長腕は古い帯で「上」（9-268）',
+    chk('マトリクス 到達 中腕 対 長腕は古い帯で「上」（9-268）',
         relation(band(run_info('tripo_pj_mid_phys'), run_info('tripo_pj_mid_phys_s2')),
                  band(run_info('tripo_pj_long_phys'), run_info('tripo_pj_long_phys_s2'))) == '上')
     a = run_info('e2e_a1v_reach_phys')
@@ -254,7 +254,7 @@ def self_check():
                                   'tripo_pjp_mid_phys', 'tripo_pjp_mid_phys_s2_ws', 'tripo_pjp_mid_phys_s3',
                                   'tripo_pjp_long_phys', 'tripo_pjp_long_phys_s2_ws', 'tripo_pjp_long_phys_s3')}
     b3 = lambda f: band(m[f], m[f + '_s2_ws'], m[f + '_s3'])  # noqa: E731
-    chk('㉘ 3 seed の帯: 到達 中間 [−1.85, −1.64]・長腕 [−9.68, −7.71]、押し 長腕 [20.71, 24.92]・中間 [9.37, 10.44]（9-318）',
+    chk('㉘ 3 seed の帯: 到達 中腕 [−1.85, −1.64]・長腕 [−9.68, −7.71]、押し 長腕 [20.71, 24.92]・中腕 [9.37, 10.44]（9-318）',
         b3('tripo_pj_mid_phys') == (-1.85, -1.64) and b3('tripo_pj_long_phys') == (-9.68, -7.71)
         and b3('tripo_pjp_long_phys') == (20.71, 24.92) and b3('tripo_pjp_mid_phys') == (9.37, 10.44))
     R = [run_info(k) for k in ('e2e_a1v_reach_phys', 'e2e_a1v_reach_phys_s2_ws', 'e2e_a1v_reach_phys_s3')]

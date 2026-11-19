@@ -8,6 +8,7 @@
   使えそうな画像データ/修論/pipeline_m3.png   GLB の頂点 → マゼンタの頂点と関節（重心）→ 関節の高さで切ったリンク
   使えそうな画像データ/修論/pipeline_m4.png   リンクごとのメッシュとカプセル（長さ・太さ・はみ出し）
   使えそうな画像データ/修論/pipeline_*_paper.png  修論 図 3.2〜3.5 用（2026-10-21）。図の中の題を外す（キャプションと重なる）。
+      m3 : 予備審査論文の図 2 にも使う。紙面（約 15 cm）で読めるよう、図を小さく・文字を大きく・題を短くした（2026-11-19。旧版は紙面で約 4 pt）
       m12: A1 の手描き → M1 の整形画像 → M2 の GLB（失敗例の図の上の段だけ）
       m4 : はみ出しの割合と黒い点も外す（はみ出しは測った結果なので 4.3.2 で言う）
   使えそうな画像データ/修論/pipeline_m5.png   XML のカプセル模型（初期姿勢）と、関節軸の割り当て
@@ -28,6 +29,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.ticker  # noqa: E402,F401
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import glb_to_links as G       # noqa: E402
@@ -76,7 +78,8 @@ def m2_pose(out):
 def m12(case, out):
     """論文用: 手描き → M1 の整形画像 → M2 の GLB を 1 段に並べる（m2_pose の上の段と同じ入力）。"""
     from PIL import Image
-    fig, ax = plt.subplots(1, 3, figsize=(13, 4.6))
+    # ⭐ 紙面（約 16 cm）で文字が約 9 pt になるよう、図を小さく・文字を大きく（2026-11-19。旧版は 13 インチに 12 pt で約 6 pt）
+    fig, ax = plt.subplots(1, 3, figsize=(10, 3.7))
     ax[0].imshow(Image.open(f'data/test/{case}/sketch/{case}_hand.webp')); ax[0].axis('off')
     ax[1].imshow(Image.open(f'data/test/{case}/sketch/{case}_m1.jpeg')); ax[1].axis('off')
     mesh = G._apply_yup_zup(G._load_concat(f'data/test/{case}/3D/{case}.glb'))
@@ -85,9 +88,10 @@ def m12(case, out):
     k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
     a = ax[2]
     a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.5)
-    a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('横 [m]'); a.set_ylabel('高さ z [m]')
-    ax[0].set_title('① 手描きスケッチ'); ax[1].set_title('② M1 の整形画像')
-    a.set_title(f'③ M2 の三次元メッシュ（横から）\n最長辺 {np.ptp(V, axis=0).max():.2f} m')
+    a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('横 [m]', fontsize=12); a.set_ylabel('高さ z [m]', fontsize=12)
+    a.tick_params(labelsize=11)
+    ax[0].set_title('① 手描きスケッチ', fontsize=14); ax[1].set_title('② M1 の整形画像', fontsize=14)
+    a.set_title(f'③ M2 の三次元メッシュ（横から）\n最長辺 {np.ptp(V, axis=0).max():.2f} m', fontsize=14)
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
     print(f'[M1・M2] → {out}')
 
@@ -109,33 +113,51 @@ def m3(case, names, out, paper=False):
 
     V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
     rng = np.random.default_rng(0); idx = rng.choice(len(V), min(40000, len(V)), replace=False)
-    fig, ax = plt.subplots(1, 3, figsize=(15, 6.2))
+    # ⭐ 論文用は紙面の幅（約 15 cm）に縮むので、図を小さく・文字を大きくする（11-19、ユーザー「文章で言われても全然わからない」。
+    #   旧版は 15 インチ幅に 10 pt で、紙面では約 4 pt になり読めなかった）。段の説明は本文が言うので、題は短くする
+    fs = dict(title=17, tick=13, label=14, ann=15) if paper else dict(title=None, tick=None, label=None, ann=11)
+    fig, ax = plt.subplots(1, 3, figsize=(11.5, 5.4) if paper else (15, 6.2))
+    box = dict(boxstyle='round,pad=0.15', fc='white', ec='none', alpha=0.85)
     ax[0].scatter(V[idx, 0], V[idx, 2], c=C[idx], s=0.6)
-    ax[0].set_title('① 3D モデル（glb）の頂点\nテクスチャの色を頂点に移したもの')
+    ax[0].set_title('① 頂点の色' if paper else '① 3D モデル（glb）の頂点\nテクスチャの色を頂点に移したもの',
+                    fontsize=fs['title'])
     ax[1].scatter(V[idx, 0], V[idx, 2], c='#dddddd', s=0.4)
     ax[1].scatter(V[mask, 0], V[mask, 2], c='#ff00ff', s=1.2)
     for k, p in enumerate(joints):
         ax[1].plot(p[0], p[2], 'kx', ms=12, mew=2.5)
-        ax[1].annotate(f'関節{k+1}', (p[0], p[2]), xytext=(10, -4), textcoords='offset points', fontsize=11)
+        ax[1].annotate(f'関節{k+1}', (p[0], p[2]), xytext=(12, -5), textcoords='offset points', fontsize=fs['ann'],
+                       bbox=box if paper else None)
         for a in ax[1:]:
             a.axhline(p[2], color='k', ls='--', lw=0.8)
-    ax[1].set_title(f'② マゼンタの頂点（色 {color}・許容幅 {tol}）\n'
-                    '3 次元で塊に分け、重心＝関節（×）。小さい塊（全体の 2 % 未満）は捨てる')
+    ax[1].set_title('② マゼンタの頂点と関節（×）' if paper else
+                    f'② マゼンタの頂点（色 {color}・許容幅 {tol}）\n'
+                    '3 次元で塊に分け、重心＝関節（×）。小さい塊（全体の 2 % 未満）は捨てる', fontsize=fs['title'])
     for k, s in enumerate(segs):
         sv = np.asarray(s.vertices)
         ax[2].scatter(sv[:, 0], sv[:, 2], c=COL[k % len(COL)], s=0.6)
         c = sv.mean(axis=0)
-        ax[2].annotate(JA.get(names[k], names[k]), (c[0], c[2]), xytext=(25, 0), textcoords='offset points',
-                       fontsize=12, color=COL[k % len(COL)], weight='bold')
-    ax[2].set_title('③ 関節の高さ（破線）でメッシュを切る\n→ リンクごとの STL')
+        if paper:   # ⭐ 名前はリンクの右の外に置く（旧版は重心の右 25 pt で、隣のリンクに重なって読めなかった）
+            ax[2].annotate(JA.get(names[k], names[k]), (sv[:, 0].max() + 0.02, c[2]), va='center', fontsize=fs['ann'],
+                           color=COL[k % len(COL)], weight='bold', bbox=box)
+        else:
+            ax[2].annotate(JA.get(names[k], names[k]), (c[0], c[2]), xytext=(25, 0), textcoords='offset points',
+                           fontsize=12, color=COL[k % len(COL)], weight='bold')
+    ax[2].set_title('③ 関節の高さ（破線）で分割' if paper else '③ 関節の高さ（破線）でメッシュを切る\n→ リンクごとの STL',
+                    fontsize=fs['title'])
     if not paper:
         fig.text(0.99, 0.01, f'関節位置: 実行時の joints.json との差 最大 {err*1000:.1f} mm', ha='right', fontsize=8, color='gray')
     for a in ax:
-        a.set_aspect('equal'); a.set_xlabel('x [m]'); a.grid(alpha=0.3)
-    ax[0].set_ylabel('z（高さ）[m]')
+        a.set_aspect('equal'); a.set_xlabel('x [m]', fontsize=fs['label']); a.grid(alpha=0.3)
+        if paper:
+            a.tick_params(labelsize=fs['tick']); a.set_xticks([-0.2, 0, 0.2])
+    if paper:   # ③ の名前の分だけ右を空け、3 枚とも同じ範囲にして大きさをそろえる
+        xs = np.asarray(mesh.vertices)[:, 0]
+        for a in ax:
+            a.set_xlim(xs.min() - 0.03, xs.max() + 0.2)
+    ax[0].set_ylabel('z（高さ）[m]', fontsize=fs['label'])
     if not paper:
         fig.suptitle('M3 関節検出とリンク分割（手描き A1）', fontsize=15)
-    fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out, dpi=200 if paper else 130); plt.close(fig)
     print(f'[M3] → {out}')
 
 
@@ -147,7 +169,9 @@ def m4(case, names, out, paper=False):
     mdir = f'data/test/{case}/meshes'
     fo = json.load(open(f'{mdir}/joints.json'))['frame_origins']
     lengths = json.load(open(f'{mdir}/joints.json')).get('link_lengths', {})
-    fig, ax = plt.subplots(1, len(names), figsize=(4 * len(names), 5.6))
+    # ⭐ 論文用は紙面で文字が約 8〜9 pt になるよう、図を小さく・文字を大きく（2026-11-19。旧版は 16 インチに 10〜12 pt で約 4〜5 pt）
+    fig, ax = plt.subplots(1, len(names), figsize=(10.5, 5.0) if paper else (4 * len(names), 5.6))
+    fsz = dict(title=14, tick=11, label=12) if paper else dict(title=None, tick=None, label=None)
     for i, n in enumerate(names):
         mesh = MP.load_mesh(f'{mdir}/{n}.stl')
         u = MP.bone_axis(names, i, fo, mesh); u = u / np.linalg.norm(u)
@@ -174,11 +198,17 @@ def m4(case, names, out, paper=False):
         a.plot(cap[:, 0], cap[:, 1], 'k-', lw=1.5)
         a.plot([0, 0], [0, L], 'k--', lw=1)
         a.plot(0, 0, 'm^', ms=10)
-        a.set_title(f'{JA.get(n, n)}\n長さ {L:.3f} m・太さ（半径）{r:.3f} m'
-                    + ('' if paper else f'\nはみ出し {over:.1f} %（黒い点）'))
-        a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('骨からの距離 [m]')
+        a.set_title(f'{JA.get(n, n)}\n長さ {L:.3f} m\n半径 {r:.3f} m' if paper else
+                    f'{JA.get(n, n)}\n長さ {L:.3f} m・太さ（半径）{r:.3f} m\nはみ出し {over:.1f} %（黒い点）',
+                    fontsize=fsz['title'])
+        a.set_aspect('equal'); a.grid(alpha=0.3); a.set_xlabel('骨からの距離 [m]', fontsize=fsz['label'])
+        if paper:
+            # 細いリンクは目盛の数字がくっつくので、刻みを半径から決め、末尾の 0 を省く
+            step = 0.1 if r > 0.07 else 0.05
+            a.set_xticks([-step, 0, step]); a.xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%g'))
+            a.tick_params(labelsize=fsz['tick'])
     # 論文用は ▲ の説明を軸の名前に入れない（文字の ▲ は黒く、図の ▲ はマゼンタで食い違う。意味は本文に書く。2026-11-13 ユーザーの指摘）
-    ax[0].set_ylabel('骨の軸に沿った距離 [m]' + ('' if paper else '（▲＝自分の関節）'))
+    ax[0].set_ylabel('骨の軸に沿った距離 [m]' + ('' if paper else '（▲＝自分の関節）'), fontsize=fsz['label'])
     if not paper:
         fig.suptitle('M4 長さと太さの抽出 — 長さ＝関節と関節の距離、太さ＝骨に垂直な断面の幅（黒線がカプセル）', fontsize=13)
     fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
@@ -243,6 +273,8 @@ def m5_paper(xml_path, names, out):
     root = ET.parse(xml_path).getroot()
     body0 = root.find('worldbody/body')
     gears = {m.get('joint'): m.get('gear') for m in root.iter('motor')}
+    # ⚠️ 文字の枠（bbox の pad）は bbox_inches='tight' の外形に入らず、右端が切れる（2026-11-19、ユーザー「XML が入りきってない」）。
+    #   savefig の pad_inches で枠の分の余白を取る（右の欄を広げると空白が増えて文字が小さくなる）
     fig, ax = plt.subplots(1, 2, figsize=(10.5, 5.6), gridspec_kw={'width_ratios': [1, 1.25]})
     a = ax[0]
     p, k, b = np.array(list(map(float, body0.get('pos').split()))), 0, body0.find('body')
@@ -260,14 +292,15 @@ def m5_paper(xml_path, names, out):
         kind = 'ヨー軸' if ax_v[2] else 'ピッチ軸'
         a.plot(p[0], p[2], 'm^', ms=10)
         a.annotate(f'{JA.get(names[k], names[k])}（{kind}）', (p[0] + r, (q0[2] + q1[2]) / 2),
-                   xytext=(12, 0), textcoords='offset points', fontsize=11, va='center')
+                   xytext=(12, 0), textcoords='offset points', fontsize=13, va='center')
         rows.append((JA.get(names[k], names[k]), kind, j.get('range').split()[1].lstrip('-'),
                      q1[2] - q0[2], r, float(b.get('pos').split()[2]), gears.get(j.get('name'))))
         k += 1
         b = b.find('body')
     a.set_xlim(-0.3, 0.75); a.set_ylim(-0.12, p[2] + 0.4); a.set_aspect('equal'); a.grid(alpha=0.3)
-    a.set_xlabel('x [m]'); a.set_ylabel('z [m]')
-    a.set_title('初期姿勢（全関節 0°）')
+    # 文字を一回り大きく（2026-11-19。紙面で約 6.5 pt → 約 8 pt）
+    a.set_xlabel('x [m]', fontsize=12); a.set_ylabel('z [m]', fontsize=12); a.tick_params(labelsize=11)
+    a.set_title('初期姿勢（全関節 0°）', fontsize=14)
     lines = ['XML の入れ子（擬似コード）', '']
     for i, (nm, kind, rng, L, r, pos, gear) in enumerate(rows):
         ind = '　　' * i
@@ -278,9 +311,9 @@ def m5_paper(xml_path, names, out):
     g = sorted({f'{float(v):g}' for v in gears.values() if v})
     lines += ['', f'各関節：モーター（ギア比 {"・".join(g)} N·m、入力 −1〜1）']
     ax[1].axis('off')
-    ax[1].text(0.02, 0.5, '\n'.join(lines), fontsize=10.5, va='center', ha='left', transform=ax[1].transAxes,
+    ax[1].text(0.02, 0.5, '\n'.join(lines), fontsize=12.5, va='center', ha='left', transform=ax[1].transAxes,
                linespacing=1.55, bbox=dict(boxstyle='round,pad=0.8', fc='#f7f7f7', ec='0.55'))
-    fig.tight_layout(); fig.savefig(out, dpi=150, bbox_inches='tight'); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out, dpi=150, bbox_inches='tight', pad_inches=0.3); plt.close(fig)
     print(f'[M5 論文用] → {out}')
 
 

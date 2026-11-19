@@ -75,7 +75,7 @@ def running_best(y):
 
 # ── 図1: マトリクス判定の順位反転（4.4.3.2） ──────────────────────────────────
 def fig_matrix_reversal():
-    labels = ['短腕 0.403 m', '中間 0.887 m', '長腕 1.451 m']
+    labels = ['短腕 0.403 m', '中腕 0.887 m', '長腕 1.451 m']
     cols = [C_SHORT, C_MID, C_LONG]
     # 実在の物理のシード 0（系譜 9-246）。短腕は Bug 72 の門を直した取り直し（9-271）
     runs_r = ['tripo_pj_short_phys_cg', 'tripo_pj_mid_phys', 'tripo_pj_long_phys']
@@ -120,7 +120,7 @@ def fig_matrix_reversal():
     ax = fig.add_subplot(gs[2])
     rr = {i: r + 1 for r, i in enumerate(np.argsort(best_r)[::-1])}
     rp = {i: r + 1 for r, i in enumerate(np.argsort(best_p)[::-1])}
-    for i, lab in enumerate(['短腕', '中間', '長腕']):
+    for i, lab in enumerate(['短腕', '中腕', '長腕']):
         ax.plot([0, 1], [rr[i], rp[i]], '-o', color=cols[i], lw=3.0, ms=10, zorder=3)
         # ラベルは右側だけに置く。左にも置くと y 軸の「1 位」等と重なる
         ax.annotate(lab, (1, rp[i]), xytext=(11, 0), textcoords='offset points',
@@ -174,10 +174,10 @@ def fig_diagnosis_validation():
     # 順位・値はシード 0 の best exec_R_eps（log_train.txt）。2 シードの帯は修論 表 4.6（d6_bands.py 4.4.3.2）
     rows = [
         ('Reach / 短腕',  'bad',  '届かない\n1.99 倍推奨', 'ok',   '範囲の内側\n（誤）',   'bad',  '397 mm 離れ',      '達成不可', '3 位', '−397.20'),
-        ('Reach / 中間',  'ok',   '余裕 10%',              'ok',   '下限\n（到達では正常）', 'ok',   '誤差 0.5 mm\n16 step', '障害なし', '1 位', '−1.85'),
+        ('Reach / 中腕',  'ok',   '余裕 10%',              'ok',   '下限\n（到達では正常）', 'ok',   '誤差 0.5 mm\n16 step', '障害なし', '1 位', '−1.85'),
         ('Reach / 長腕',  'warn', '余裕 45%\n長すぎ',      'ok',   '下限\n（到達では正常）', 'ok',   '誤差 0.5 mm\n38 step', '障害なし', '2 位', '−9.68'),
         ('Pusher / 短腕', 'bad',  '触れない\n2.11 倍推奨', 'ok',   '範囲の内側\n（誤）',   'warn', '対象が\n動かない',   '達成不可', '3 位', '−0.00'),
-        ('Pusher / 中間', 'ok',   '届く',                  'warn', '上限の警告\n（出力不足）', 'ok', '0.47 m 移動',      '障害なし', '2 位', '10.42'),
+        ('Pusher / 中腕', 'ok',   '届く',                  'warn', '上限の警告\n（出力不足）', 'ok', '0.47 m 移動',      '障害なし', '2 位', '10.42'),
         ('Pusher / 長腕', 'warn', 'めり込み警告',           'ok',   '範囲の内側',           'ok',   '1.09 m 移動',      '障害なし', '1 位', '24.92'),
     ]
     FC = {'ok': '#d5f0dc', 'warn': '#fdf0d0', 'bad': '#f8d7da'}
@@ -383,7 +383,7 @@ def fig_arm_forms():
 
     # 基本形（1.0 倍）は学習に使っていないので XML が無い。短腕（0.5 倍）の長さを 2 倍して描く
     # （太さは倍率で変えない。どの形も 0.045 / 0.0326 / 0.032。2026-11-13 ユーザーの指摘「図 4.1 に基本形を載せる」）。
-    forms = [('基本形（1.0 倍、比較には不使用）', 'base'), ('短腕（0.5 倍）', 'short'), ('中間（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
+    forms = [('基本形（1.0 倍、比較には不使用）', 'base'), ('短腕（0.5 倍）', 'short'), ('中腕（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
              ('根元重（配分）', 'prox'), ('先端重（配分）', 'dist'),
              ('修正指針の 1.99 倍（到達）', 'rec199'), ('修正指針の 2.11 倍（押し）', 'rec211'), ('修正指針の 2.36 倍（押し）', 'rec236')]
     col = ['#888888', '#d94040', '#3070d0', '#30a050']        # 台座・1・2・3 本目
@@ -452,9 +452,9 @@ def fig_r4_settle():
         return (a[e] > b[e]) != (a[last] > b[last])
 
     # 形が違う対（コホート B）: (行の名前, seed 0 の対, seed 1 の対, seed 2 の対)
-    B = [('到達: 中間 対 長腕', ('tripo_pj_mid_phys', 'tripo_pj_long_phys'),
+    B = [('到達: 中腕 対 長腕', ('tripo_pj_mid_phys', 'tripo_pj_long_phys'),
           ('tripo_pj_mid_phys_s2', 'tripo_pj_long_phys_s2'), ('tripo_pj_mid_phys_s3', 'tripo_pj_long_phys_s3')),
-         ('押し: 長腕 対 中間', ('tripo_pjp_long_phys', 'tripo_pjp_mid_phys'),
+         ('押し: 長腕 対 中腕', ('tripo_pjp_long_phys', 'tripo_pjp_mid_phys'),
           ('tripo_pjp_long_phys_s2', 'tripo_pjp_mid_phys_s2'), ('tripo_pjp_long_phys_s3', 'tripo_pjp_mid_phys_s3')),
          ('到達: 根元重 対 先端重', ('tripo_pjd_prox_phys', 'tripo_pjd_dist_phys_cg'),
           ('tripo_pjd_prox_phys_s2', 'tripo_pjd_dist_phys_cg_s2'), ('tripo_pjd_prox_phys_s3', 'tripo_pjd_dist_phys_cg_s3')),
