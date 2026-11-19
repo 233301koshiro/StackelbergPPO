@@ -277,7 +277,9 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                     # 全角(CJK等)文字は半角の約2倍の表示幅として概算する
                     return sum(2 if unicodedata.east_asian_width(ch) in 'WF' else 1 for ch in s)
                 max_cell_w = max((_disp_width(c) for r in table_rows for c in r), default=0)
-                if max_cell_w > 22 or ncols >= 5:
+                # セルの中の改行（md の <br>）は p 列の \newline でしか効かないので、固定幅列にする（2026-11-19、表の「第1層<br>（幾何）・判定」）
+                has_br = any('<br>' in c for r in table_rows for c in r)
+                if max_cell_w > 22 or ncols >= 5 or has_br:
                     # 長文セル（比較表等）は折り返し可能な固定幅列にする。
                     # l| のままだと1行に収まらず紙面外へはみ出す（Overfull \hbox）。
                     # 列幅は列の文字量の平方根に比例させる（2026-10-21）。等分だと短い列（「判定」「報告」）が
@@ -287,6 +289,12 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                     wts = [max(t, 1) ** 0.5 for t in tot]
                     fr = [w / sum(wts) for w in wts]
                     fr = [max(x, 0.08) for x in fr]
+                    # <br> で行を指定した列は、その 1 行が折り返さない幅を下限にする（本文幅は全角で約 37 字＝表示幅 75。
+                    #   余白の分を 3 足す）。√文字量の幅では「（収束形態）・報告」の「告」だけが次の行へ出た（2026-11-19）
+                    for j in range(ncols):
+                        segs = [s for r in table_rows if j < len(r) and '<br>' in r[j] for s in r[j].split('<br>')]
+                        if segs:
+                            fr[j] = max(fr[j], (max(_disp_width(s) for s in segs) + 3) / 75)
                     fr = [x / sum(fr) * 0.92 for x in fr]
                     col_spec = '|' + ''.join(f'p{{{x:.3f}\\textwidth}}|' for x in fr)
                 else:
@@ -310,7 +318,7 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 out.append(r'\hline')
                 for row in table_rows:
                     row += [''] * (ncols - len(row))
-                    cells_tex = ' & '.join(md_inline(c) for c in row)
+                    cells_tex = ' & '.join(r'\newline '.join(md_inline(x) for x in c.split('<br>')) for c in row)
                     out.append(cells_tex + r' \\')
                     out.append(r'\hline')
                 out.append(r'\end{tabular}')
