@@ -93,17 +93,17 @@ def crops():
     im.crop((1320, 0, im.width, im.height)).save(OUT / 'crop_matrix_rank.png')
     print(f'→ {OUT / "crop_matrix_rank.png"}')
     im = Image.open(FIG / 'arm_forms.png')
-    # (d) 形態の上端は、上の段（(a) 手描き・(b) M1・(c) メッシュ）との間の余白から求める
-    # （11-19 夕方: 図を 2 段にした。それまでは (a) メッシュ と (b) 形態 が横に並び、間の縦の余白から左端を求めていた）
-    dark = (np.array(im.convert('L')) < 200).any(axis=1)
+    # (d) 形態の左端は、(c) メッシュとの間の白い列から求める。make_thesis_figures.py が (a)〜(c) と (d) の間に白い列を挟む
+    # （11-19 夕方: (a) 手描き・(b) M1 の出力を足して 4 枚を横 1 列にした。(d) の中には全部白い列は無いので、いちばん右の白い列が境）
+    dark = (np.array(im.convert('L')) < 200).any(axis=0)
     gaps, s0 = [], None
-    for y, d in enumerate(dark):
+    for x, d in enumerate(dark):
         if not d and s0 is None:
-            s0 = y
+            s0 = x
         if d and s0 is not None:
-            gaps.append((y - s0, s0, y)); s0 = None
-    top = max(g for g in gaps if g[1] > im.height * 0.15)[2] - 12   # 上の余白を除いた、いちばん広い余白の下端
-    im.crop((0, top, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
+            gaps.append((s0, x)); s0 = None
+    left = gaps[-1][1] - 12
+    im.crop((left, 0, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
     print(f'→ {OUT / "crop_arm_forms.png"}')
     # ⛔ 11-19: slide_flow.png はスライドの図としては退役した（sysflow_slide.png に置き換え）。その ⑥ の切り抜きも 過去/ に置く
     PAST = OUT.parent / '過去'
