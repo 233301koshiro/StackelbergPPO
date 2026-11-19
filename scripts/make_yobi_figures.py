@@ -16,6 +16,8 @@
     three_layers.png       ④ 3 層の診断（幾何・収束した形・動き）を 3 コマで（修論 3.12。模式図）
     closed_loop.png        結果④ 閉ループと、見つかった欠陥 3 つ（修論 4.5.2〜4.5.4・5.2.3）
     schedule.png           今後の予定のガント図（スライド「今後の予定」の表と同じ中身）
+    advice_short.png / advice_199.png  結果③（19 枚目）の左の 3 段の箱の横に置く、短腕と 1.99 倍の腕を真上から見た図（2026-11-19、ユーザー「全体図を小さく乗せても修正指針をやっている状況が読みにくい」）。
+                           実測の姿勢（先端が ★ に最も近づいた瞬間。系譜 9-279 の tripo_pj_short_phys_cg と tripo_pjr199_phys）で、描き方は make_slide_flow.py の top_view をそのまま使う
 """
 import pathlib
 
@@ -330,6 +332,25 @@ def schedule():
     save(fig, 'schedule.png')
 
 
+def advice_panels():
+    """結果③ の短腕（★ まで 397 mm）と 1.99 倍の腕（★ に届いた）を、同じ縮尺で 1 枚ずつ描く。"""
+    import sys as _sys
+    _sys.path.insert(0, str(ROOT / 'scripts'))
+    import make_slide_flow as F
+    for run, name, gap in (('tripo_pj_short_phys_cg', 'advice_short.png', True),
+                           ('tripo_pjr199_phys', 'advice_199.png', False)):
+        fig = plt.figure(figsize=(4.6, 2.0), dpi=300)
+        ax = fig.add_axes([0, 0, 1, 1])
+        tip, tg, d = F.top_view(ax, run)
+        if gap:
+            ax.plot([tip[0], tg[0]], [tip[1], tg[1]], ls=(0, (4, 3)), color=F.NG, lw=2.5)
+            ax.text((tip[0] + tg[0]) / 2, 0.07, f'{int(d * 1000)} mm', color=F.NG, fontsize=15,
+                    fontweight='bold', ha='center')
+        fig.savefig(OUT / name, facecolor='white')
+        plt.close(fig)
+        print(f'→ {OUT / name}  先端と ★ の距離 {d * 1000:.2f} mm')
+
+
 if __name__ == '__main__':
     OUT.mkdir(parents=True, exist_ok=True)
     crops()
@@ -338,3 +359,4 @@ if __name__ == '__main__':
     three_layers()
     closed_loop()
     schedule()
+    advice_panels()
