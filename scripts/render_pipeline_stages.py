@@ -273,6 +273,8 @@ def m5_paper(xml_path, names, out):
     root = ET.parse(xml_path).getroot()
     body0 = root.find('worldbody/body')
     gears = {m.get('joint'): m.get('gear') for m in root.iter('motor')}
+    # ⚠️ 文字の枠（bbox の pad）は bbox_inches='tight' の外形に入らず、右端が切れる（2026-11-19、ユーザー「XML が入りきってない」）。
+    #   savefig の pad_inches で枠の分の余白を取る（右の欄を広げると空白が増えて文字が小さくなる）
     fig, ax = plt.subplots(1, 2, figsize=(10.5, 5.6), gridspec_kw={'width_ratios': [1, 1.25]})
     a = ax[0]
     p, k, b = np.array(list(map(float, body0.get('pos').split()))), 0, body0.find('body')
@@ -311,7 +313,7 @@ def m5_paper(xml_path, names, out):
     ax[1].axis('off')
     ax[1].text(0.02, 0.5, '\n'.join(lines), fontsize=12.5, va='center', ha='left', transform=ax[1].transAxes,
                linespacing=1.55, bbox=dict(boxstyle='round,pad=0.8', fc='#f7f7f7', ec='0.55'))
-    fig.tight_layout(); fig.savefig(out, dpi=150, bbox_inches='tight'); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out, dpi=150, bbox_inches='tight', pad_inches=0.3); plt.close(fig)
     print(f'[M5 論文用] → {out}')
 
 
