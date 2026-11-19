@@ -210,9 +210,13 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             out.append(r'\centering')
             out.append(rf'\includegraphics[width={width}\textwidth]{{{path}}}')
             if cap:
+                # 1 行に収まるキャプションは中央に、折り返すものは両端そろえ（2026-11-19、ユーザー「図のキャプションは中央揃えにして」）。
+                # それまでは常に左寄せで、短い「図 3: 検証に用いた水平 3 関節アーム。」が図の左下に寄っていた。
+                # 折り返すものまで中央にすると各行の端がばらつくので、1 行かどうかを組んだ幅で判定する。
+                c = md_inline(cap)
                 out.append(r'\\[2mm]')
-                out.append(r'\begin{minipage}{0.92\textwidth}{\small '
-                           + md_inline(cap) + r'}\end{minipage}')
+                out.append(r'\begin{minipage}{0.92\textwidth}{\small \sbox0{' + c + r'}'
+                           r'\ifdim\wd0>\linewidth ' + c + r'\else\centering ' + c + r'\par\fi}\end{minipage}')
             out.append(r'\end{figure}')
             i += 1
             continue
