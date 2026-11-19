@@ -315,7 +315,10 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 if caption:
                     out.append('')
                     out.append(r"\par\vspace{8pt}\noindent\begin{minipage}[t]{\textwidth}")
-                    out.append(caption + r'\par\vspace{4pt}\centering')
+                    # 表の題も図のキャプションと同じく、1 行に収まるなら中央に置く（2026-11-20、ユーザー「表が中央揃いになってないよ」）。
+                    # 折り返す題は行ごとの中央にすると端がばらつくので、両端揃えのまま
+                    out.append(r'\sbox0{' + caption + r'}\ifdim\wd0>\linewidth ' + caption
+                               + r'\par\else{\centering ' + caption + r'\par}\fi\vspace{4pt}\centering')
                 else:
                     out.append(r'\begin{center}')
                 out.append(r'\begin{tabular}{' + col_spec + '}')
