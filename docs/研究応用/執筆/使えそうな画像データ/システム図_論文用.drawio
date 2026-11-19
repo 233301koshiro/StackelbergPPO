@@ -146,7 +146,7 @@
         <mxCell id="gate" parent="1" style="rhombus;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" value="M7 第1層&#xa;事前判定&#xa;（学習前・幾何）" vertex="1">
           <mxGeometry height="100" width="120" x="60" y="1234" as="geometry" />
         </mxCell>
-        <mxCell id="fail1" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#f8cecc;strokeColor=#b85450;" value="棄却＋倍率助言&#xa;（腕を N 倍に）" vertex="1">
+        <mxCell id="fail1" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#f8cecc;strokeColor=#b85450;" value="棄却＋修正指針&#xa;（腕を N 倍に）" vertex="1">
           <mxGeometry height="60" width="120" x="60" y="1367" as="geometry" />
         </mxCell>
         <mxCell id="task" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" value="タスク定義 / 環境" vertex="1">
@@ -247,7 +247,7 @@
         <mxCell id="lg_mesh" parent="scnuweBpAybWxMy2U-mT-1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="3D形状データ" vertex="1">
           <mxGeometry height="50" width="110" x="20" y="80" as="geometry" />
         </mxCell>
-        <mxCell id="lg_diag" parent="scnuweBpAybWxMy2U-mT-1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="診断の出力（棄却・助言・指摘）" vertex="1">
+        <mxCell id="lg_diag" parent="scnuweBpAybWxMy2U-mT-1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=10;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" value="診断の出力（棄却・修正指針・指摘）" vertex="1">
           <mxGeometry height="40" width="170" x="150" y="85" as="geometry" />
         </mxCell>
         <mxCell id="lg_end" parent="scnuweBpAybWxMy2U-mT-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="最終出力" vertex="1">

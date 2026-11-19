@@ -121,7 +121,7 @@ STATES = [  # (画像の key, 列, 説明, 枠の色)
     ('m3', 'm3', '関節ごとの部品', None),
     ('m4', 'm4', '長さ・太さ', None),
     ('m5', 'm5', 'モデル（XML）', None),
-    ('fail1', 'gate', '棄却して助言\n「腕を1.99倍に」', NG),
+    ('fail1', 'gate', '棄却して修正指針\n「腕を1.99倍に」', NG),
     ('m6', 'm6', '学習した\n方策と形', None),
     ('fail2', 'm7', '指摘：\nギア比が上限', NG),
     ('pass', 'pass', '1.99 倍で\n届いた', END_EDGE),
@@ -220,7 +220,7 @@ def build_drawio(imgs):
          'exitX=0.5;exitY=1;entryX=0.5;entryY=1;html=1;',
          '', points=[(COL['gate'], LOOP_Y), (COL['m5'], LOOP_Y)])
     # 説明は線のラベルにせず、② の段の中へ右寄せで置く（段の境をまたぐと塗りの違う 2 段に背景が掛かる）
-    vertex('loop_lab', '閉ループ：助言どおりに伸ばして再び判定',
+    vertex('loop_lab', '閉ループ：修正指針どおりに伸ばして再び判定',
            f'text;align=right;verticalAlign=top;fontSize={CAP_FS};fontColor={NG};{text.replace("wrap", "nowrap")}', LOOP_LAB)
     ET.indent(mxfile)
     ET.ElementTree(mxfile).write(OUT_DRAWIO, encoding='utf-8', xml_declaration=False)
@@ -283,7 +283,7 @@ def build_preview(imgs, s=2.0, out=OUT_PREVIEW):
     ax.plot(xs[:3], ys[:3], color=NG, ls='--', lw=1.2)
     arr((xs[2], ys[2]), (xs[3], ys[3]), c=NG, lw=1.2, ls='--')
     lx, ly, lw_, lh = LOOP_LAB
-    ax.text(lx + lw_, ly + 2, '閉ループ：助言どおりに伸ばして再び判定', ha='right', va='top', fontsize=pt(CAP_FS), color=NG)
+    ax.text(lx + lw_, ly + 2, '閉ループ：修正指針どおりに伸ばして再び判定', ha='right', va='top', fontsize=pt(CAP_FS), color=NG)
     fig.savefig(out, facecolor='white')
     plt.close(fig)
     print(f'→ {out}')

@@ -11,7 +11,7 @@
   ② M1 の絵         data/test/A1/sketch/A1_m1.jpeg
   ③④ 3D と分けた形   data/test/A1/meshes/*.stl と joints.json（frame_origins を足すと元の位置）
   ⑤ シミュレーション  demo/phys_pusher.mp4 の 0.6 s のコマ（e2e_a1v_pusher_phys_s2）
-  ⑥ 判定と助言       single_run/tripo_pj_short_phys_cg と tripo_pjr199_phys の arm_trace.npz。
+  ⑥ 判定と修正指針       single_run/tripo_pj_short_phys_cg と tripo_pjr199_phys の arm_trace.npz。
                      先端が目標に最も近づいた step の姿勢を真上から描く（系譜 9-279）
 """
 import pathlib
@@ -196,10 +196,10 @@ def main():
     x5 = left + (n - 1) * (w + gapx) + w / 2
     arrow(x5, y0 - 0.005, x5, 0.405, color=ACCENT, lw=5)
 
-    # ===== 下の段: ⑥ 判定と助言 =====
+    # ===== 下の段: ⑥ 判定と修正指針 =====
     py, ph = 0.03, 0.37
     tile(left, py, right - left, ph, fc='#fbfcfd', ec=ACCENT)
-    fig.text(left + 0.015, py + ph - 0.052, '⑥ 判定と助言', fontsize=20, fontweight='bold', color=INK, va='baseline')
+    fig.text(left + 0.015, py + ph - 0.052, '⑥ 判定と修正指針', fontsize=20, fontweight='bold', color=INK, va='baseline')
     fig.text(left + 0.135, py + ph - 0.052, '例: 腕の先を ★ に届かせる', fontsize=15, color=MUTED, va='baseline')
 
     axL = fig.add_axes([0.06, 0.055, 0.33, 0.215])
@@ -209,10 +209,10 @@ def main():
              ha='center')
     fig.text(0.225, 0.272, '× 短すぎる腕: 届かない', fontsize=18, fontweight='bold', color=NG, ha='center')
 
-    # 助言
+    # 修正指針
     fig.patches.append(FancyBboxPatch((0.415, 0.15), 0.17, 0.11, boxstyle='round,pad=0,rounding_size=0.015',
                                       transform=fig.transFigure, fc='#fff4e5', ec='#ea8a2e', lw=2))
-    fig.text(0.5, 0.217, '助言', fontsize=14, color='#c06a12', ha='center', va='baseline')
+    fig.text(0.5, 0.217, '修正指針', fontsize=14, color='#c06a12', ha='center', va='baseline')
     fig.text(0.5, 0.172, '「腕を 1.99 倍に伸ばせ」', fontsize=17, fontweight='bold', color=INK, ha='center',
              va='baseline')
     arrow(0.40, 0.205, 0.413, 0.205, color='#ea8a2e', lw=3)
