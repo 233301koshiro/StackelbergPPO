@@ -8,6 +8,7 @@
   使えそうな画像データ/修論/pipeline_m3.png   GLB の頂点 → マゼンタの頂点と関節（重心）→ 関節の高さで切ったリンク
   使えそうな画像データ/修論/pipeline_m4.png   リンクごとのメッシュとカプセル（長さ・太さ・はみ出し）
   使えそうな画像データ/修論/pipeline_*_paper.png  修論 図 3.2〜3.5 用（2026-10-21）。図の中の題を外す（キャプションと重なる）。
+      m3 : 予備審査論文の図 2 にも使う。紙面（約 15 cm）で読めるよう、図を小さく・文字を大きく・題を短くした（2026-11-19。旧版は紙面で約 4 pt）
       m12: A1 の手描き → M1 の整形画像 → M2 の GLB（失敗例の図の上の段だけ）
       m4 : はみ出しの割合と黒い点も外す（はみ出しは測った結果なので 4.3.2 で言う）
   使えそうな画像データ/修論/pipeline_m5.png   XML のカプセル模型（初期姿勢）と、関節軸の割り当て
@@ -109,33 +110,51 @@ def m3(case, names, out, paper=False):
 
     V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
     rng = np.random.default_rng(0); idx = rng.choice(len(V), min(40000, len(V)), replace=False)
-    fig, ax = plt.subplots(1, 3, figsize=(15, 6.2))
+    # ⭐ 論文用は紙面の幅（約 15 cm）に縮むので、図を小さく・文字を大きくする（11-19、ユーザー「文章で言われても全然わからない」。
+    #   旧版は 15 インチ幅に 10 pt で、紙面では約 4 pt になり読めなかった）。段の説明は本文が言うので、題は短くする
+    fs = dict(title=17, tick=13, label=14, ann=15) if paper else dict(title=None, tick=None, label=None, ann=11)
+    fig, ax = plt.subplots(1, 3, figsize=(11.5, 5.4) if paper else (15, 6.2))
+    box = dict(boxstyle='round,pad=0.15', fc='white', ec='none', alpha=0.85)
     ax[0].scatter(V[idx, 0], V[idx, 2], c=C[idx], s=0.6)
-    ax[0].set_title('① 3D モデル（glb）の頂点\nテクスチャの色を頂点に移したもの')
+    ax[0].set_title('① 頂点の色' if paper else '① 3D モデル（glb）の頂点\nテクスチャの色を頂点に移したもの',
+                    fontsize=fs['title'])
     ax[1].scatter(V[idx, 0], V[idx, 2], c='#dddddd', s=0.4)
     ax[1].scatter(V[mask, 0], V[mask, 2], c='#ff00ff', s=1.2)
     for k, p in enumerate(joints):
         ax[1].plot(p[0], p[2], 'kx', ms=12, mew=2.5)
-        ax[1].annotate(f'関節{k+1}', (p[0], p[2]), xytext=(10, -4), textcoords='offset points', fontsize=11)
+        ax[1].annotate(f'関節{k+1}', (p[0], p[2]), xytext=(12, -5), textcoords='offset points', fontsize=fs['ann'],
+                       bbox=box if paper else None)
         for a in ax[1:]:
             a.axhline(p[2], color='k', ls='--', lw=0.8)
-    ax[1].set_title(f'② マゼンタの頂点（色 {color}・許容幅 {tol}）\n'
-                    '3 次元で塊に分け、重心＝関節（×）。小さい塊（全体の 2 % 未満）は捨てる')
+    ax[1].set_title('② マゼンタの頂点と関節（×）' if paper else
+                    f'② マゼンタの頂点（色 {color}・許容幅 {tol}）\n'
+                    '3 次元で塊に分け、重心＝関節（×）。小さい塊（全体の 2 % 未満）は捨てる', fontsize=fs['title'])
     for k, s in enumerate(segs):
         sv = np.asarray(s.vertices)
         ax[2].scatter(sv[:, 0], sv[:, 2], c=COL[k % len(COL)], s=0.6)
         c = sv.mean(axis=0)
-        ax[2].annotate(JA.get(names[k], names[k]), (c[0], c[2]), xytext=(25, 0), textcoords='offset points',
-                       fontsize=12, color=COL[k % len(COL)], weight='bold')
-    ax[2].set_title('③ 関節の高さ（破線）でメッシュを切る\n→ リンクごとの STL')
+        if paper:   # ⭐ 名前はリンクの右の外に置く（旧版は重心の右 25 pt で、隣のリンクに重なって読めなかった）
+            ax[2].annotate(JA.get(names[k], names[k]), (sv[:, 0].max() + 0.02, c[2]), va='center', fontsize=fs['ann'],
+                           color=COL[k % len(COL)], weight='bold', bbox=box)
+        else:
+            ax[2].annotate(JA.get(names[k], names[k]), (c[0], c[2]), xytext=(25, 0), textcoords='offset points',
+                           fontsize=12, color=COL[k % len(COL)], weight='bold')
+    ax[2].set_title('③ 関節の高さ（破線）で分割' if paper else '③ 関節の高さ（破線）でメッシュを切る\n→ リンクごとの STL',
+                    fontsize=fs['title'])
     if not paper:
         fig.text(0.99, 0.01, f'関節位置: 実行時の joints.json との差 最大 {err*1000:.1f} mm', ha='right', fontsize=8, color='gray')
     for a in ax:
-        a.set_aspect('equal'); a.set_xlabel('x [m]'); a.grid(alpha=0.3)
-    ax[0].set_ylabel('z（高さ）[m]')
+        a.set_aspect('equal'); a.set_xlabel('x [m]', fontsize=fs['label']); a.grid(alpha=0.3)
+        if paper:
+            a.tick_params(labelsize=fs['tick']); a.set_xticks([-0.2, 0, 0.2])
+    if paper:   # ③ の名前の分だけ右を空け、3 枚とも同じ範囲にして大きさをそろえる
+        xs = np.asarray(mesh.vertices)[:, 0]
+        for a in ax:
+            a.set_xlim(xs.min() - 0.03, xs.max() + 0.2)
+    ax[0].set_ylabel('z（高さ）[m]', fontsize=fs['label'])
     if not paper:
         fig.suptitle('M3 関節検出とリンク分割（手描き A1）', fontsize=15)
-    fig.tight_layout(); fig.savefig(out, dpi=130); plt.close(fig)
+    fig.tight_layout(); fig.savefig(out, dpi=200 if paper else 130); plt.close(fig)
     print(f'[M3] → {out}')
 
 
