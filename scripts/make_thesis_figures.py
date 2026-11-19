@@ -368,24 +368,44 @@ def fig_margin_ladder():
 
 
 def fig_arm_forms():
-    """修論 4.1.1 の図: 検証に用いた水平 3 関節アーム（2026-10-22、ユーザー指摘「肝心のロボットの画像の一つもない」）。
+    """修論 4.1.1 の図 4.1 ＝ 予備審査論文の図 3: 検証に用いた水平 3 関節アーム（2026-10-22、ユーザー指摘「肝心のロボットの画像の一つもない」）。
 
-    (a) M2 が生成したメッシュ（`data/tripo_arm_colorful2`、系譜 第5段の v2c の元）を横から。
-    (b) 基本形と、比較に用いた 8 形態を上から。リンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
+    左から (a) 手描きスケッチ（`data/tripo_arm_colorful2/tripo_arm_v2.png`）、(b) M1（Gemini）の出力（同 `tripo_arm_v2.jpg`）、
+    (c) M2 が生成したメッシュ（同 GLB、系譜 第5段の v2c の元）を横から、(d) 基本形と比較に用いた 8 形態を上から。
+    (a)(b) は 2026-11-19 にユーザー「手描きと gemini の画像を横並びで」で足した（最初に 2 段に積んだら「横並びになってないよ」）。
+    (d) のリンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
+    (a)〜(c) と (d) は別の図に描いて横に継ぐ（(d) は形態名の幅に合わせて図の幅を変えるので、同じ gridspec に置くと (a)〜(c) まで伸び縮みする）。
+    間に白い列を挟む（make_yobi_figures.py の crop_arm_forms は、いちばん右の白い列から右を (d) として切る）。
+    以前は (a) メッシュと (b) 形態を横に並べており、(a) の題「（横から）」が (b) の上まではみ出していた（2026-11-19 ユーザー指摘）。
     """
+    import io
+    # 紙面の文字を約 8〜9 pt にする倍率（11-19、ユーザー「またここの文字が小さいよ」。チェックリスト 8 の基準:
+    # 紙面の pt ＝ 図中の pt × 6.3 ÷ 図の幅〔インチ〕。倍率 1 では (a)(b) を足して横に長くなり、約 5.2 pt だった）
+    # 枠（図の大きさ）は変えず文字だけを大きくする。枠も大きくすると図の幅が伸び、紙面では同じだけ縮むので効かない（11-19 に倍率 1.0〜1.4 で測った）。
+    # 2.0 では (d) の行の間が足りず形態名と腕が重なった。11-19 は 1.6 で紙面の題 7.7 pt・形態名 7.0 pt だった。
+    # 11-20（ユーザー「図 3 の文字を 8〜9 pt にする」）: (d) の形態名を短くし（図の幅が縮む）、長さの値を 1 列にそろえ、
+    # 注記を 1 行にして、1.8 で題 8.9 pt・形態名と注記 8.1 pt
+    FS = 1.8
+    fs0 = plt.rcParams['font.size']
+    plt.rcParams['font.size'] = 11 * FS
     import xml.etree.ElementTree as ET
+    from PIL import Image
     sys.path.insert(0, os.path.join(ROOT, 'scripts'))
     import glb_to_links as G
-    mesh = G._apply_yup_zup(G._load_concat(os.path.join(ROOT, 'data/tripo_arm_colorful2/colorful stacking rod 3d model.glb')))
+    D = os.path.join(ROOT, 'data/tripo_arm_colorful2')
+    mesh = G._apply_yup_zup(G._load_concat(os.path.join(D, 'colorful stacking rod 3d model.glb')))
     V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
     idx = np.random.default_rng(0).choice(len(V), min(30000, len(V)), replace=False)
     k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
 
     # 基本形（1.0 倍）は学習に使っていないので XML が無い。短腕（0.5 倍）の長さを 2 倍して描く
     # （太さは倍率で変えない。どの形も 0.045 / 0.0326 / 0.032。2026-11-13 ユーザーの指摘「図 4.1 に基本形を載せる」）。
-    forms = [('基本形（1.0 倍、比較には不使用）', 'base'), ('短腕（0.5 倍）', 'short'), ('中腕（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
+    # 名前は短くする（11-20、ユーザー「図 3 の文字を 8〜9 pt にする」。名前の幅がそのまま (d) の幅になり、紙面で縮む）。
+    # 「比較には不使用」と、修正指針の倍率をどのタスクに使ったか（1.99 倍は到達、2.11・2.36 倍は押し）は本文で言う（予 4.1・修論 4.1.1・4.1.2）。
+    # 名前は修論と予備審査論文の表と同じ「修正指針の N 倍」（同じ形を 2 つの名前で呼ばない。判定 md の型 54）
+    forms = [('基本形（1.0 倍）', 'base'), ('短腕（0.5 倍）', 'short'), ('中腕（1.1 倍）', 'mid'), ('長腕（1.8 倍）', 'long'),
              ('根元重（配分）', 'prox'), ('先端重（配分）', 'dist'),
-             ('修正指針の 1.99 倍（到達）', 'rec199'), ('修正指針の 2.11 倍（押し）', 'rec211'), ('修正指針の 2.36 倍（押し）', 'rec236')]
+             ('修正指針の 1.99 倍', 'rec199'), ('修正指針の 2.11 倍', 'rec211'), ('修正指針の 2.36 倍', 'rec236')]
     col = ['#888888', '#d94040', '#3070d0', '#30a050']        # 台座・1・2・3 本目
 
     def links(n):
@@ -399,12 +419,16 @@ def fig_arm_forms():
             out.append((k * float(np.linalg.norm(np.subtract(ft[3:], ft[:3]))), float(g.get('size'))))
         return out
 
-    fig, ax = plt.subplots(1, 2, figsize=(9.2, 5.6), gridspec_kw={'width_ratios': [0.42, 2.6]})
-    a = ax[0]
-    a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.4)
-    a.set_aspect('equal'); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]')
-    a.set_title('(a) 生成したメッシュ（横から）', fontsize=11)
-    a = ax[1]
+    def render(fig):
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', facecolor='white')
+        plt.close(fig)
+        buf.seek(0)
+        return Image.open(buf).convert('RGB')
+
+    # ── (d) 形態 ──
+    X_VAL = 1.52   # 長さの値の列（長腕の先 1.451 m とカプセルの半径の右）
+    fig, a = plt.subplots(figsize=(8.0, 5.6))
     for row, (lab, n) in enumerate(forms):
         y = -row * 0.3
         a.add_patch(plt.Circle((0, y), 0.1, color=col[0], alpha=0.6))
@@ -415,20 +439,19 @@ def fig_arm_forms():
                 a.add_patch(plt.Circle((q, y), r, color=col[j], alpha=0.8, lw=0))
             a.plot(x, y, 'k.', ms=4)
             x += L; j += 1
-        a.text(-0.14, y, lab, ha='right', va='center', fontsize=10)
-        a.text(x + 0.06, y, f'{x:.3f} m', va='center', fontsize=9)
-    for xv, lab in ((0.80, '到達の目標\n0.80 m'), (0.85, '押す箱の、腕に\n面した側面 0.85 m')):
+        a.text(-0.14, y, lab, ha='right', va='center', fontsize=10 * FS)
+        a.text(X_VAL, y, f'{x:.3f} m', va='center', fontsize=10 * FS)   # 値は 1 列にそろえる（腕の先に置くと 0.80・0.85 の破線と交差した）
+    for xv, lab in ((0.80, '目標 0.80 m'), (0.85, '箱 0.85 m')):   # 箱は腕に面した側面の位置（本文で言う）
         a.axvline(xv, color='k', ls='--' if xv == 0.80 else ':', lw=1)
-        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5)
-    a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.42); a.set_aspect('equal')
+        a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', va='center', fontsize=10 * FS)
+    a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.38); a.set_aspect('equal')   # 上は目標と箱の注記の 1 行ぶん
     a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
-    a.set_title('(b) 基本形と比較に用いた形態（上から）', fontsize=11)
+    a.set_title('(d) 基本形と比較に用いた形態（上から）', fontsize=11 * FS)
     # 枠の左端は形態名の実際の幅から決める（11-19、ユーザー「説明が図の線からはみ出ている…文字を包み込める範囲の枠線の長さに」）。
     # 以前は −1.0 の決め打ちで、長い名前（基本形・修正指針の N 倍）が枠の外へ出ていた。
     # 縦横比を固定しているので、x の幅を広げた分だけ図の幅も広げ、腕と文字の大きさを保つ。
-    x_right = 1.85
+    x_right = 2.27   # 値の列「1.451 m」が枠に収まる右端（値の幅は約 0.66 m 分。2.20 では枠の線に触れた）
     a.set_xlim(-1.0, x_right)
-    a.set_anchor('W')   # 縦横比の固定で余った幅は右に寄せ、savefig.bbox='tight' で切る（中央に置くと (a) との間が空く）
     fig.tight_layout()
     labels = [t for t in a.texts if t.get_ha() == 'right' and t.get_position()[0] == -0.14]
     for _ in range(4):
@@ -440,13 +463,43 @@ def fig_arm_forms():
             break
         grow = (x_right - left) / (x_right - a.get_xlim()[0])
         w, h = fig.get_size_inches()
-        wr = ax[1].get_gridspec().get_width_ratios()
-        ax[1].get_gridspec().set_width_ratios([wr[0], wr[1] * grow])
-        fig.set_size_inches(w + (wr[1] * grow - wr[1]) / sum(wr) * w, h)
+        fig.set_size_inches(w * grow, h)
         a.set_xlim(left, x_right)
         fig.tight_layout()
-    fig.savefig(os.path.join(OUT, 'arm_forms.png'))
-    plt.close(fig)
+    right = render(fig)
+
+    # ── (a) 手描き (b) M1 の出力 (c) メッシュ。(d) と同じ高さの図に、上端をそろえて置く ──
+    sketch = Image.open(os.path.join(D, 'tripo_arm_v2.png')).convert('RGB')
+    m1 = Image.open(os.path.join(D, 'tripo_arm_v2.jpg')).convert('RGB')
+    g = np.asarray(m1).min(axis=2) < 235                      # M1 の出力は白地。周りの余白を落とす
+    ys, xs = np.where(g); pad = 8
+    m1 = m1.crop((max(xs.min() - pad, 0), max(ys.min() - pad, 0), min(xs.max() + pad, m1.width), min(ys.max() + pad, m1.height)))
+    zr = (V[:, 2].min() - 0.03, V[:, 2].max() + 0.03); xr = (-0.13, 0.13)
+    # (a)(b) を (c) と同じ高さにする幅（11-19、ユーザー「cd と同じサイズにまで拡大したら」）。(c) の枠は目盛りと題の幅だけ見込む。
+    # 6.4 インチでは (a)(b) が (c) の 2/3 の高さだった。7.4 で (c) の枠とほぼ同じ高さ（6.8 では短くなる）
+    ratios = [sketch.width / sketch.height, m1.width / m1.height, 0.40]
+    fig, ax = plt.subplots(1, 3, figsize=(7.4, right.height / 200), gridspec_kw={'width_ratios': ratios})
+    # 題は枠の幅に収まる長さで折る（11-19、ユーザー「（横から）という文字が (b) まで伸びている」）
+    for a, im, t in ((ax[0], sketch, '(a) 手描きスケッチ'), (ax[1], m1, '(b) M1 の出力\n（Gemini）')):
+        a.imshow(im); a.set_axis_off(); a.set_title(t, fontsize=11 * FS)
+    a = ax[2]
+    a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.25)
+    a.set_xlim(*xr); a.set_ylim(*zr); a.set_aspect('equal')
+    a.set_xticks([-0.1, 0.1]); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]')
+    a.set_title('(c) 生成メッシュ\n（横から）', fontsize=11 * FS)
+    for a in ax:
+        a.set_anchor('N')                                     # 題の高さをそろえる
+    fig.tight_layout(w_pad=2.0)
+    left = render(fig)
+
+    gap = 60
+    out = Image.new('RGB', (left.width + gap + right.width, max(left.height, right.height)), 'white')
+    out.paste(left, (0, 0))
+    out.paste(right, (left.width + gap, 0))
+    out.save(os.path.join(OUT, 'arm_forms.png'), dpi=(200, 200))
+    plt.rcParams['font.size'] = fs0
+    k_paper = 6.3 / (out.width / 200)                         # 本文の幅 1.0 で貼ったときの縮み
+    print(f'  arm_forms: 幅 {out.width / 200:.1f} インチ → 紙面の文字 題 {11 * FS * k_paper:.1f} pt・形態名 {10 * FS * k_paper:.1f} pt・最小 {10 * FS * k_paper:.1f} pt')
     return 'arm_forms.png'
 
 
