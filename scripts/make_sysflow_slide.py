@@ -297,15 +297,37 @@ def build_preview(imgs, s=2.0, out=OUT_PREVIEW):
 
 
 def crop_stages():
-    """draw.io から書き出した sysflow_slide.png（解像度は問わない）から段を切り抜く。"""
-    big = Image.open(OUT_SLIDE)
+    """draw.io から書き出した sysflow_slide.png（解像度は問わない）から段を切り抜く。
+
+    段の区切りは画像の中の「段の枠と枠の間の白い縦の隙間」から求める（11-19 夕方）。
+    draw.io は余白 0 で書き出すと絵の左端（x ≈ 5）から切るので、CROPS の座標に倍率を掛けるだけでは
+    数 px ずれ、300 % の書き出しではずれも 3 倍になる。隙間が 3 つ見つからないときだけ CROPS に戻る。
+    """
+    big = Image.open(OUT_SLIDE).convert('RGB')
     k = big.size[0] / W
     if big.size[0] < 2 * W:
         print(f'⚠️ {OUT_SLIDE.name} は幅 {big.size[0]} px（draw.io の {k:.1f} 倍）。スライドでは粗く見える。'
               'draw.io の書き出しで「ズーム」を 300 % にする（11-19、ユーザー「解像度が悪い」）')
-    for name, (x0, x1) in CROPS.items():
+    a = np.asarray(big).astype(int)
+    white = (a.min(axis=2) > 245).mean(axis=0) > 0.9    # ほぼ白い列（段から段への矢印が横切るので「全部白」にはならない）
+    gaps, s0 = [], None
+    for x, w in enumerate(white):
+        if w and s0 is None:
+            s0 = x
+        if not w and s0 is not None:
+            if s0 > 0:
+                gaps.append((s0, x))
+            s0 = None
+    if len(gaps) == 3:                                   # ①|②|③|④ の間
+        mid = [round((g0 + g1) / 2) for g0, g1 in gaps]
+        boxes = {'stages1-2': (0, mid[1]), 'stage2': (mid[0], mid[1])}
+        print(f'段の隙間（px）: {gaps}')
+    else:
+        print(f'⚠️ 段の隙間が {len(gaps)} 個（3 個のはず）。CROPS の座標に倍率を掛けて切る')
+        boxes = {n: (round(x0 * k), round(x1 * k)) for n, (x0, x1) in CROPS.items()}
+    for name, (x0, x1) in boxes.items():
         out = OUT_SLIDE.with_name(f'sysflow_{name}.png')
-        im = big.crop((round(x0 * k), 0, round(x1 * k), big.size[1]))   # 高さは書き出しのまま（draw.io は余白 0 で絵の高さに切る）
+        im = big.crop((x0, 0, x1, big.size[1]))   # 高さは書き出しのまま（draw.io は余白 0 で絵の高さに切る）
         im.save(out)
         print(f'→ {out}  {im.size}')
 
