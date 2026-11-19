@@ -92,8 +92,17 @@ def crops():
     im = Image.open(FIG / 'matrix_reversal.png')          # 1735×755。右の 1 枚（順位の目盛りを含む）は x ≥ 1320
     im.crop((1320, 0, im.width, im.height)).save(OUT / 'crop_matrix_rank.png')
     print(f'→ {OUT / "crop_matrix_rank.png"}')
-    im = Image.open(FIG / 'arm_forms.png')                 # 1457×888。(b) は x ≥ 590
-    im.crop((590, 0, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
+    im = Image.open(FIG / 'arm_forms.png')
+    # (b) の左端は (a) との間の余白から求める（11-19: 図を作り直して 1555×1088 になり、決め打ちの x = 590 が「基本形」の字を切っていた）
+    dark = (np.array(im.convert('L')) < 200).any(axis=0)
+    gaps, s0 = [], None
+    for x, d in enumerate(dark):
+        if not d and s0 is None:
+            s0 = x
+        if d and s0 is not None:
+            gaps.append((x - s0, s0, x)); s0 = None
+    left = max(g for g in gaps if g[1] > im.width * 0.15)[2] - 12   # 左の余白を除いた、いちばん広い余白の右端
+    im.crop((left, 0, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
     print(f'→ {OUT / "crop_arm_forms.png"}')
     # ⛔ 11-19: slide_flow.png はスライドの図としては退役した（sysflow_slide.png に置き換え）。その ⑥ の切り抜きも 過去/ に置く
     PAST = OUT.parent / '過去'
@@ -167,7 +176,7 @@ def eval_questions():
     ax.set_ylim(0, 6.2)
     ax.axis('off')
     # パイプライン（中段）
-    steps = [('入れた形', 0.3), ('形と制御を\n一緒に学習', 3.5), ('順位を出す', 6.9), ('助言を返す', 10.3)]
+    steps = [('入れた形', 0.3), ('形と制御を\n一緒に学習', 3.5), ('順位を出す', 6.9), ('修正指針を返す', 10.3)]
     W, H, Y = 3.0, 1.3, 2.6
     for i, (t, x) in enumerate(steps):
         tile(ax, x, Y, W, H, fc='white', ec=ACCENT, lw=2.2, r=0.15)
@@ -193,7 +202,7 @@ def eval_questions():
     tag(7.6, 4.25, '判定の早さ', 'どれだけ学習すれば\n順位が分かるか', '結果⑤', 8.4, up=True)
     # 下段（出力の性質）
     tag(6.9, 0.25, '順位付け', 'タスクに応じた\n順位を付けられるか', '結果①②', 8.4, up=False)
-    tag(10.3, 0.25, '助言', '従うと\n届く形になるか', '結果③④', 11.8, up=False)
+    tag(10.3, 0.25, '修正指針', '従うと\n届く形になるか', '結果③④', 11.8, up=False)
     # 結果⑥ は R1〜R4・診断のどれにも当たらないので、問いとして足す（2026-11-10、ユーザーが A 案を選んだ。修論 4.7）
     tag(3.4, 0.25, '組めるか', '部品で組める長さに\n限っても通るか', '結果⑥', 5.0, up=False)
     ax.text(0.3, 0.9, '満たさないと\nシステムのここが\n壊れる', fontsize=17, color=NG, va='center')
@@ -202,7 +211,7 @@ def eval_questions():
 
 # ---------------------------------------------------------------- ④ 3 層
 def three_layers():
-    """修論 3.12 の 3 層を模式図で。値は助言の文にある 1.99 倍・上限・10 % だけ。"""
+    """修論 3.12 の 3 層を模式図で。値は修正指針の文にある 1.99 倍・上限・10 % だけ。"""
     fig = plt.figure(figsize=(15, 5.4))
     titles = [('第1層 幾何', '学習の前'), ('第2層 収束した形', '学習の後'), ('第3層 動き', '学習の後')]   # ①〜③ はスライドの段の番号とぶつかるので使わない
     advice = ['「腕全体を 1.99 倍にすれば届く」',
@@ -264,7 +273,7 @@ def closed_loop():
     ax.set_ylim(0, 6.0)
     ax.axis('off')
     W, H, Y, G = 3.0, 1.2, 1.5, 0.45
-    labels = ['① 診断', '② 助言を出す', '③ 助言どおりの\n形を作る', '④ 入れ直して\n学習・再生']
+    labels = ['① 診断', '② 修正指針を出す', '③ 修正指針どおりの\n形を作る', '④ 入れ直して\n学習・再生']
     xs = [0.3 + i * (W + G) for i in range(4)]
     for i, (x, t) in enumerate(zip(xs, labels)):
         tile(ax, x, Y, W, H, fc='white', ec=ACCENT, lw=2.2, r=0.15)
@@ -277,7 +286,7 @@ def closed_loop():
     ax.text((xs[0] + xs[3] + W) / 2, 0.33, '同じ診断に戻す', fontsize=15, color=MUTED, ha='center', va='center')
 
     items = [('1', '倍率の丸め', '四捨五入で 2 mm 足りず\n同じ診断が再び棄却\n→ 切り上げ（1.99 倍）'),
-             ('2', '形を作る工程', '助言どおりの形を作る\n工程にも欠陥があった'),
+             ('2', '形を作る工程', '修正指針どおりの形を作る\n工程にも欠陥があった'),
              ('3', '押しの倍率', '押し込む距離を含めず\n（2.11 倍）奥の箱を逃す\n→ 含めて 2.36 倍')]
     w, h = W + 0.3, 2.35
     for (n, head, body), x in zip(items, xs[1:]):
