@@ -8,7 +8,7 @@
 作るもの:
   切り抜き（既存の図から）
     crop_matrix_rank.png   matrix_reversal.png の右（順位の入れ替わり）→ 結果①
-    crop_arm_forms.png     arm_forms.png の (b)（比較に用いた形態）→ 評価の設定
+    crop_arm_forms.png     arm_forms.png の (d)（比較に用いた形態）→ 評価の設定
     crop_flow_advice.png   slide_flow.png の下の段 ⑥（判定と修正指針）→ 結果③（11-19 に退役。過去/ へ）
   新しい図
     alloc_pair.png         結果② 配分だけが違う形の組と、判定の方法ごとの区別（修論 4.4.3.2・表 4.7）
@@ -93,16 +93,17 @@ def crops():
     im.crop((1320, 0, im.width, im.height)).save(OUT / 'crop_matrix_rank.png')
     print(f'→ {OUT / "crop_matrix_rank.png"}')
     im = Image.open(FIG / 'arm_forms.png')
-    # (b) の左端は (a) との間の余白から求める（11-19: 図を作り直して 1555×1088 になり、決め打ちの x = 590 が「基本形」の字を切っていた）
-    dark = (np.array(im.convert('L')) < 200).any(axis=0)
+    # (d) 形態の上端は、上の段（(a) 手描き・(b) M1・(c) メッシュ）との間の余白から求める
+    # （11-19 夕方: 図を 2 段にした。それまでは (a) メッシュ と (b) 形態 が横に並び、間の縦の余白から左端を求めていた）
+    dark = (np.array(im.convert('L')) < 200).any(axis=1)
     gaps, s0 = [], None
-    for x, d in enumerate(dark):
+    for y, d in enumerate(dark):
         if not d and s0 is None:
-            s0 = x
+            s0 = y
         if d and s0 is not None:
-            gaps.append((x - s0, s0, x)); s0 = None
-    left = max(g for g in gaps if g[1] > im.width * 0.15)[2] - 12   # 左の余白を除いた、いちばん広い余白の右端
-    im.crop((left, 0, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
+            gaps.append((y - s0, s0, y)); s0 = None
+    top = max(g for g in gaps if g[1] > im.height * 0.15)[2] - 12   # 上の余白を除いた、いちばん広い余白の下端
+    im.crop((0, top, im.width, im.height)).save(OUT / 'crop_arm_forms.png')
     print(f'→ {OUT / "crop_arm_forms.png"}')
     # ⛔ 11-19: slide_flow.png はスライドの図としては退役した（sysflow_slide.png に置き換え）。その ⑥ の切り抜きも 過去/ に置く
     PAST = OUT.parent / '過去'

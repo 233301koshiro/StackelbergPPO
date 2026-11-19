@@ -368,15 +368,21 @@ def fig_margin_ladder():
 
 
 def fig_arm_forms():
-    """修論 4.1.1 の図: 検証に用いた水平 3 関節アーム（2026-10-22、ユーザー指摘「肝心のロボットの画像の一つもない」）。
+    """修論 4.1.1 の図 4.1 ＝ 予備審査論文の図 3: 検証に用いた水平 3 関節アーム（2026-10-22、ユーザー指摘「肝心のロボットの画像の一つもない」）。
 
-    (a) M2 が生成したメッシュ（`data/tripo_arm_colorful2`、系譜 第5段の v2c の元）を横から。
-    (b) 基本形と、比較に用いた 8 形態を上から。リンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
+    上の段: (a) 手描きスケッチ（`data/tripo_arm_colorful2/tripo_arm_v2.png`）、(b) M1（Gemini）の出力（同 `tripo_arm_v2.jpg`）、
+    (c) M2 が生成したメッシュ（同 GLB、系譜 第5段の v2c の元）を横から。(a)(b) は 2026-11-19 にユーザー「手描きと gemini の画像を横並びで」で足した。
+    下の段: (d) 基本形と、比較に用いた 8 形態を上から。リンク長と初期の太さは学習が読んだ XML（`*_phys_arm171`）から読む。
+    上の段と下の段は別の図に描いて縦に積む（下の段は形態名の幅に合わせて図の幅を変えるので、同じ gridspec に置くと上の段まで伸び縮みする）。
+    以前は (a) メッシュと (b) 形態を横に並べており、(a) の題「（横から）」が (b) の上まではみ出していた（2026-11-19 ユーザー指摘）。
     """
+    import io
     import xml.etree.ElementTree as ET
+    from PIL import Image
     sys.path.insert(0, os.path.join(ROOT, 'scripts'))
     import glb_to_links as G
-    mesh = G._apply_yup_zup(G._load_concat(os.path.join(ROOT, 'data/tripo_arm_colorful2/colorful stacking rod 3d model.glb')))
+    D = os.path.join(ROOT, 'data/tripo_arm_colorful2')
+    mesh = G._apply_yup_zup(G._load_concat(os.path.join(D, 'colorful stacking rod 3d model.glb')))
     V = np.asarray(mesh.vertices); C = np.asarray(mesh.visual.vertex_colors[:, :3]) / 255
     idx = np.random.default_rng(0).choice(len(V), min(30000, len(V)), replace=False)
     k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
@@ -399,12 +405,15 @@ def fig_arm_forms():
             out.append((k * float(np.linalg.norm(np.subtract(ft[3:], ft[:3]))), float(g.get('size'))))
         return out
 
-    fig, ax = plt.subplots(1, 2, figsize=(9.2, 5.6), gridspec_kw={'width_ratios': [0.42, 2.6]})
-    a = ax[0]
-    a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.4)
-    a.set_aspect('equal'); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]')
-    a.set_title('(a) 生成したメッシュ（横から）', fontsize=11)
-    a = ax[1]
+    def render(fig):
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', facecolor='white')
+        plt.close(fig)
+        buf.seek(0)
+        return Image.open(buf).convert('RGB')
+
+    # ── 下の段: (d) 形態 ──
+    fig, a = plt.subplots(figsize=(8.0, 5.6))
     for row, (lab, n) in enumerate(forms):
         y = -row * 0.3
         a.add_patch(plt.Circle((0, y), 0.1, color=col[0], alpha=0.6))
@@ -422,13 +431,12 @@ def fig_arm_forms():
         a.text(xv + (-0.02 if xv == 0.80 else 0.02), 0.2, lab, ha='right' if xv == 0.80 else 'left', fontsize=8.5)
     a.set_ylim(-(len(forms) - 1) * 0.3 - 0.2, 0.42); a.set_aspect('equal')
     a.set_yticks([]); a.set_xticks([0, 0.5, 1.0, 1.5]); a.set_xlabel('x [m]（根元の関節から。全関節 0°）')
-    a.set_title('(b) 基本形と比較に用いた形態（上から）', fontsize=11)
+    a.set_title('(d) 基本形と比較に用いた形態（上から）', fontsize=11)
     # 枠の左端は形態名の実際の幅から決める（11-19、ユーザー「説明が図の線からはみ出ている…文字を包み込める範囲の枠線の長さに」）。
     # 以前は −1.0 の決め打ちで、長い名前（基本形・修正指針の N 倍）が枠の外へ出ていた。
     # 縦横比を固定しているので、x の幅を広げた分だけ図の幅も広げ、腕と文字の大きさを保つ。
     x_right = 1.85
     a.set_xlim(-1.0, x_right)
-    a.set_anchor('W')   # 縦横比の固定で余った幅は右に寄せ、savefig.bbox='tight' で切る（中央に置くと (a) との間が空く）
     fig.tight_layout()
     labels = [t for t in a.texts if t.get_ha() == 'right' and t.get_position()[0] == -0.14]
     for _ in range(4):
@@ -440,13 +448,36 @@ def fig_arm_forms():
             break
         grow = (x_right - left) / (x_right - a.get_xlim()[0])
         w, h = fig.get_size_inches()
-        wr = ax[1].get_gridspec().get_width_ratios()
-        ax[1].get_gridspec().set_width_ratios([wr[0], wr[1] * grow])
-        fig.set_size_inches(w + (wr[1] * grow - wr[1]) / sum(wr) * w, h)
+        fig.set_size_inches(w * grow, h)
         a.set_xlim(left, x_right)
         fig.tight_layout()
-    fig.savefig(os.path.join(OUT, 'arm_forms.png'))
-    plt.close(fig)
+    bottom = render(fig)
+
+    # ── 上の段: (a) 手描き (b) M1 の出力 (c) メッシュ。高さをそろえ、幅は絵の縦横比から ──
+    sketch = Image.open(os.path.join(D, 'tripo_arm_v2.png')).convert('RGB')
+    m1 = Image.open(os.path.join(D, 'tripo_arm_v2.jpg')).convert('RGB')
+    g = np.asarray(m1).min(axis=2) < 235                      # M1 の出力は白地。周りの余白を落とす
+    ys, xs = np.where(g); pad = 8
+    m1 = m1.crop((max(xs.min() - pad, 0), max(ys.min() - pad, 0), min(xs.max() + pad, m1.width), min(ys.max() + pad, m1.height)))
+    zr = (V[:, 2].min() - 0.03, V[:, 2].max() + 0.03); xr = (-0.13, 0.13)
+    ratios = [sketch.width / sketch.height, m1.width / m1.height, 0.75]   # (c) は目盛りと題の幅を見込んで広めに
+    H = 3.0
+    fig, ax = plt.subplots(1, 3, figsize=(bottom.width / 200, H), gridspec_kw={'width_ratios': ratios})
+    for a, im, t in ((ax[0], sketch, '(a) 手描きスケッチ'), (ax[1], m1, '(b) M1（Gemini）の出力')):
+        a.imshow(im); a.set_axis_off(); a.set_title(t, fontsize=11)
+    a = ax[2]
+    a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.25)
+    a.set_xlim(*xr); a.set_ylim(*zr); a.set_aspect('equal')
+    a.set_xticks([-0.1, 0.1]); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]')
+    a.set_title('(c) 生成したメッシュ\n（横から）', fontsize=11)
+    fig.tight_layout(w_pad=4.0)
+    top = render(fig)
+
+    W = max(top.width, bottom.width)
+    out = Image.new('RGB', (W, top.height + bottom.height + 20), 'white')
+    out.paste(top, ((W - top.width) // 2, 0))
+    out.paste(bottom, ((W - bottom.width) // 2, top.height + 20))
+    out.save(os.path.join(OUT, 'arm_forms.png'), dpi=(200, 200))
     return 'arm_forms.png'
 
 
