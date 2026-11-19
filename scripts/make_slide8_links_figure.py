@@ -7,7 +7,7 @@ M2 が入力に忠実なので**設計が効いている証拠なのだが、ス
 
 ②が実際に生むのは「**バラバラのリンクと測った寸法**」なので、そちらを描く。
 
-出力: figures/slide8_links_split.png
+出力: docs/研究応用/執筆/使えそうな画像データ/過去/slide8_links_split.png
 """
 import numpy as np, trimesh, matplotlib
 matplotlib.use('Agg')
@@ -47,8 +47,8 @@ def main():
     ax.set_xlim(-0.05, x); ax.set_ylim(-0.20, 0.13)
     ax.set_aspect('equal'); ax.axis('off')
     plt.subplots_adjust(0.01, 0.01, 0.99, 0.99)
-    plt.savefig('figures/slide8_links_split.png', dpi=170)
-    print('figures/slide8_links_split.png')
+    plt.savefig('docs/研究応用/執筆/使えそうな画像データ/過去/slide8_links_split.png', dpi=170)
+    print('docs/研究応用/執筆/使えそうな画像データ/過去/slide8_links_split.png')
 
 
 if __name__ == '__main__':

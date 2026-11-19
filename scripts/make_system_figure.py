@@ -11,7 +11,7 @@ A4 縦の本文幅（160 mm）に入れると図中の文字が約 1 mm にな�
 
     python3 scripts/make_system_figure.py                  # 論文用 .drawio を作る
     DRAWIO=/path/to/drawio python3 scripts/make_system_figure.py --export
-        # → figures/system_overview.pdf（ベクター）。draw.io desktop の CLI が要る
+        # → 使えそうな画像データ/修論/system_overview.pdf（ベクター）。draw.io desktop の CLI が要る
         #   （AppImage を --appimage-extract し、xvfb-run 経由で --no-sandbox で呼ぶ）
 """
 import argparse
@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'システム図.drawio'
 OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'システム図_論文用.drawio'
-PDF = ROOT / 'figures' / 'system_overview.pdf'
+PDF = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / '修論' / 'system_overview.pdf'   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした
 
 # 2026-11-13 ユーザー「大枠ごとに段数を増やす、縦長のフローにして。つまり 4 段に論文用に組み直して。横長はスライドで使うから 2 パターン残して」
 #   → 論文用はフェーズ 1〜4 を 1 段ずつ縦に積む。横長の原本（スライド用）はそのまま残す。
@@ -158,7 +158,7 @@ def relayout(tree):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--export', action='store_true', help='figures/system_overview.pdf も書き出す')
+    ap.add_argument('--export', action='store_true', help='使えそうな画像データ/修論/system_overview.pdf も書き出す')
     ap.add_argument('--force', action='store_true', help='手で直した論文用の .drawio を上書きする（手直しと画像は消える）')
     a = ap.parse_args()
     if OUT.exists() and not a.force:

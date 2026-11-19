@@ -3,13 +3,13 @@
 
 字の箇条書き・表を図に置き換える。値はすべて修論の本文にあるもの（スライドで新しい値を作らない）。
 
-    python3 scripts/make_yobi_figures.py      # → docs/研究応用/執筆/使えそうな画像データ/*.png
+    python3 scripts/make_yobi_figures.py      # → docs/研究応用/執筆/使えそうな画像データ/スライド用/*.png
 
 作るもの:
   切り抜き（既存の図から）
     crop_matrix_rank.png   matrix_reversal.png の右（順位の入れ替わり）→ 結果①
     crop_arm_forms.png     arm_forms.png の (b)（比較に用いた形態）→ 評価の設定
-    crop_flow_advice.png   slide_flow.png の下の段 ⑥（判定と助言）→ 結果③
+    crop_flow_advice.png   slide_flow.png の下の段 ⑥（判定と修正指針）→ 結果③
   新しい図
     alloc_pair.png         結果② 配分だけが違う形の組と、判定の方法ごとの区別（修論 4.4.3.2・表 4.7）
     eval_questions.png     評価の問い R1〜R4・診断・部品で組めるか（修論 4.7）を、システムのどこが壊れるかで置く（修論 4.2.1）
@@ -30,8 +30,8 @@ import datetime as dt
 import matplotlib.dates as mdates
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ'   # 2026-11-17 の整理で yobi/ をここへ平らに移した
-FIG = ROOT / 'figures'
+OUT = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / 'スライド用'   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした
+FIG = ROOT / 'docs' / '研究応用' / '執筆' / '使えそうな画像データ' / '修論'
 
 # 既定のフォントは日本語を持たない。Noto CJK を明示登録する（make_slide_flow.py と同じ）
 for _ttc in sorted(pathlib.Path('/usr/share/fonts').rglob('*CJK*')):
@@ -183,12 +183,12 @@ def eval_questions():
     # 上段（学習の性質）
     # R1・R2 は学習、R4 は学習から順位までの量
     # 見出しは修論の記号（R1〜R4）ではなく中身の名前にする。聞き手には「R1」の意味が通じない（2026-11-10、ユーザー）。
-    # 対応: 形の効き目＝R1、形に出るか＝R2、順序づけ＝R3、判定の早さ＝R4（修論 表 4.3）
+    # 対応: 形の効き目＝R1、形に出るか＝R2、順位付け＝R3、判定の早さ＝R4（修論 表 4.3）
     tag(0.6, 4.25, '形の効き目', '形を変えると\n成績が変わるか', '付録', 4.4, up=True)
     tag(4.1, 4.25, '形に出るか', 'タスクで\n収束する形が変わるか', '付録', 5.6, up=True)
     tag(7.6, 4.25, '判定の早さ', 'どれだけ学習すれば\n順位が分かるか', '結果⑤', 8.4, up=True)
     # 下段（出力の性質）
-    tag(6.9, 0.25, '順序づけ', 'タスクに応じた\n順位を付けられるか', '結果①②', 8.4, up=False)
+    tag(6.9, 0.25, '順位付け', 'タスクに応じた\n順位を付けられるか', '結果①②', 8.4, up=False)
     tag(10.3, 0.25, '助言', '従うと\n届く形になるか', '結果③④', 11.8, up=False)
     # 結果⑥ は R1〜R4・診断のどれにも当たらないので、問いとして足す（2026-11-10、ユーザーが A 案を選んだ。修論 4.7）
     tag(3.4, 0.25, '組めるか', '部品で組める長さに\n限っても通るか', '結果⑥', 5.0, up=False)

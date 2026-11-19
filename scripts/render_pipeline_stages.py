@@ -4,13 +4,13 @@
 ⭐ 絵を描き起こすのではなく、**パイプラインの関数そのもの**（`glb_to_links.py` / `mesh_to_params.py`）を
   呼んで、実際に何が起きているかを描く。手描き A1 を例にする（修論 4.6 の E2E 実走の 1 例）。
 
-  figures/pipeline_m2_pose.png  真横に描いた絵（A1）と斜めに描いた絵（A3）の 3D 化の比較（M2 の失敗例）
-  figures/pipeline_m3.png   GLB の頂点 → マゼンタの頂点と関節（重心）→ 関節の高さで切ったリンク
-  figures/pipeline_m4.png   リンクごとのメッシュとカプセル（長さ・太さ・はみ出し）
-  figures/pipeline_*_paper.png  修論 図 3.2〜3.5 用（2026-10-21）。図の中の題を外す（キャプションと重なる）。
+  使えそうな画像データ/修論/pipeline_m2_pose.png  真横に描いた絵（A1）と斜めに描いた絵（A3）の 3D 化の比較（M2 の失敗例）
+  使えそうな画像データ/修論/pipeline_m3.png   GLB の頂点 → マゼンタの頂点と関節（重心）→ 関節の高さで切ったリンク
+  使えそうな画像データ/修論/pipeline_m4.png   リンクごとのメッシュとカプセル（長さ・太さ・はみ出し）
+  使えそうな画像データ/修論/pipeline_*_paper.png  修論 図 3.2〜3.5 用（2026-10-21）。図の中の題を外す（キャプションと重なる）。
       m12: A1 の手描き → M1 の整形画像 → M2 の GLB（失敗例の図の上の段だけ）
       m4 : はみ出しの割合と黒い点も外す（はみ出しは測った結果なので 4.3.2 で言う）
-  figures/pipeline_m5.png   XML のカプセル模型（初期姿勢）と、関節軸の割り当て
+  使えそうな画像データ/修論/pipeline_m5.png   XML のカプセル模型（初期姿勢）と、関節軸の割り当て
 
     python3 scripts/render_pipeline_stages.py              # A1
     python3 scripts/render_pipeline_stages.py --case B2    # 別の手描き（data/test/<case>/meshes が要る）
@@ -287,7 +287,7 @@ def m5_paper(xml_path, names, out):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--case', default='A1')
-    ap.add_argument('--out-dir', default='figures')
+    ap.add_argument('--out-dir', default='docs/研究応用/執筆/使えそうな画像データ/修論')   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした
     a = ap.parse_args()
     names = ['base', 'upper_arm', 'forearm', 'hand']
     # ⭐ data/test の topology / XML は古い抽出器の版がある（9-75 前）。図の値を揃えるため、

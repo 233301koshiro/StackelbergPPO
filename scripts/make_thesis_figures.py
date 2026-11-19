@@ -7,7 +7,7 @@
   ②台帳（第4章 表4.5）の確定値をこのファイル内に明示的に書き、出典をコメントで残す
 - 図を更新したら `python3 scripts/build_thesis_pdf.py` を走らせる
 
-出力: figures/*.png
+出力: docs/研究応用/執筆/使えそうな画像データ/修論/*.png（2026-11-19 までは figures/）
 使い方: python3 scripts/make_thesis_figures.py [図名 ...]（省略時は全部）
 """
 import os
@@ -22,7 +22,7 @@ import numpy as np
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUN = os.path.join(ROOT, 'single_run')
-OUT = os.path.join(ROOT, 'figures')
+OUT = os.path.join(ROOT, 'docs', '研究応用', '執筆', '使えそうな画像データ', '修論')   # 2026-11-19 にルートの figures/ と平らな置き方をやめ、用途別のフォルダ（修論/・予備審査/・勉強/・過去/）にした
 
 # matplotlib は fontconfig の別名（IPAexGothic 等）を見ないので、.ttc を直接登録する。
 # LaTeX 側と同じ Noto CJK を使い、PDF 内で本文と図の書体を揃える。
@@ -604,4 +604,4 @@ if __name__ == '__main__':
             print(f'[skip] 未知の図: {k}（候補: {", ".join(FIGS)}）')
             continue
         name = FIGS[k]()
-        print(f'[ok] figures/{name}')
+        print(f'[ok] {os.path.join(OUT, name)}')
