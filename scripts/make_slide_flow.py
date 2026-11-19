@@ -200,7 +200,7 @@ def main():
     py, ph = 0.03, 0.37
     tile(left, py, right - left, ph, fc='#fbfcfd', ec=ACCENT)
     fig.text(left + 0.015, py + ph - 0.052, '⑥ 判定と修正指針', fontsize=20, fontweight='bold', color=INK, va='baseline')
-    fig.text(left + 0.135, py + ph - 0.052, '例: 腕の先を ★ に届かせる', fontsize=15, color=MUTED, va='baseline')
+    fig.text(left + 0.165, py + ph - 0.052, '例: 腕の先を ★ に届かせる', fontsize=15, color=MUTED, va='baseline')
 
     axL = fig.add_axes([0.06, 0.055, 0.33, 0.215])
     tipL, tg, dL = top_view(axL, 'tripo_pj_short_phys_cg')
