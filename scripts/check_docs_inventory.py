@@ -58,7 +58,9 @@ def last_commit_date(p: pathlib.Path):
 def _since_last_inventory(toc: str) -> str:
     """目次.md の棚卸し記録から、前回実施日と経過日数を出す。"""
     import datetime
-    dates = sorted(re.findall(r'^###\s*(\d{4}-\d{2}-\d{2})', toc, re.M))
+    # 「### 2026-11-19 の図の置き場の整理」のように日付の直後が「の」の見出しは、棚卸しの外の記録なので数えない
+    # （2026-11-20 の棚卸しで、11-19 の整理を前回の棚卸しと読み、実際の前回 11-13 を隠していた）
+    dates = sorted(re.findall(r'^###\s*(\d{4}-\d{2}-\d{2})(?!\s*の)', toc, re.M))
     if not dates:
         return '⚠️ 目次.md に棚卸しの記録が見つからない（`### YYYY-MM-DD` の見出しで書く）'
     last = datetime.date.fromisoformat(dates[-1])
