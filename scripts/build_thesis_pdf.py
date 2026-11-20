@@ -299,6 +299,13 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                         segs = [s for r in table_rows if j < len(r) and '<br>' in r[j] for s in r[j].split('<br>')]
                         if segs:
                             fr[j] = max(fr[j], (max(_disp_width(s) for s in segs) + 3) / 75)
+                    # 最長のセルが全角 10 字以内の短い列（見出しや段階の名前）も、折り返さない幅を下限にする（2026-11-20、
+                    #   ユーザー「診断と修正指針の『針』だけ改行されているのが気になる」。新方針の予備審査資料の表 1 で
+                    #   「④ 診断と修正指針」の 1 字だけが次の行へ出た。11-19 の <br> の列と同じ型）
+                    for j in range(ncols):
+                        cw = [_disp_width(r[j]) for r in table_rows if j < len(r)]
+                        if cw and max(cw) <= 20:
+                            fr[j] = max(fr[j], (max(cw) + 3) / 75)
                     fr = [x / sum(fr) * 0.92 for x in fr]
                     col_spec = '|' + ''.join(f'p{{{x:.3f}\\textwidth}}|' for x in fr)
                 else:
