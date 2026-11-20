@@ -279,7 +279,8 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 ncols = max(len(r) for r in table_rows)
                 def _disp_width(s):
                     # 全角(CJK等)文字は半角の約2倍の表示幅として概算する
-                    return sum(2 if unicodedata.east_asian_width(ch) in 'WF' else 1 for ch in s)
+                    # 幅の決まらない字（A: ①・○・× など）も、U+2000 以降は日本語の書体で全角に描かれるので 2 と数える（2026-11-20、「結果①②」の「②」だけが折り返した）
+                    return sum(2 if (unicodedata.east_asian_width(ch) in 'WF' or (unicodedata.east_asian_width(ch) == 'A' and ord(ch) >= 0x2000)) else 1 for ch in s)
                 max_cell_w = max((_disp_width(c) for r in table_rows for c in r), default=0)
                 # セルの中の改行（md の <br>）は p 列の \newline でしか効かないので、固定幅列にする（2026-11-19、表の「第1層<br>（幾何）・判定」）
                 has_br = any('<br>' in c for r in table_rows for c in r)
@@ -295,20 +296,53 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                     fr = [max(x, 0.08) for x in fr]
                     # <br> で行を指定した列は、その 1 行が折り返さない幅を下限にする（本文幅は全角で約 37 字＝表示幅 75。
                     #   余白の分を 3 足す）。√文字量の幅では「（収束形態）・報告」の「告」だけが次の行へ出た（2026-11-19）
+                    mins = {}
                     for j in range(ncols):
                         segs = [s for r in table_rows if j < len(r) and '<br>' in r[j] for s in r[j].split('<br>')]
                         if segs:
-                            fr[j] = max(fr[j], (max(_disp_width(s) for s in segs) + 3) / 75)
-                    # 最長のセルが全角 10 字以内の短い列（見出しや段階の名前）も、折り返さない幅を下限にする（2026-11-20、
-                    #   ユーザー「診断と修正指針の『針』だけ改行されているのが気になる」。新方針の予備審査資料の表 1 で
-                    #   「④ 診断と修正指針」の 1 字だけが次の行へ出た。11-19 の <br> の列と同じ型）
-                    for j in range(ncols):
-                        cw = [_disp_width(r[j]) for r in table_rows if j < len(r)]
-                        if cw and max(cw) <= 20:
-                            fr[j] = max(fr[j], (max(cw) + 3) / 75)
-                    fr = [x / sum(fr) * 0.92 for x in fr]
-                    col_spec = '|' + ''.join(f'p{{{x:.3f}\\textwidth}}|' for x in fr)
+                            mins[j] = (max(_disp_width(s) for s in segs) + 3) / 75
+                    # 幅を本文幅の 92 % に配る。下限に届かない列は下限に固定し、残りを他の列で √文字量に比例して分ける
+                    #   （11-19 まではすべての列を一緒に 92 % へ縮めていたので、下限も 8 % ほど削られていた。11-20）
+                    total = 0.92
+                    fixed = {}
+                    while True:
+                        free = [j for j in range(ncols) if j not in fixed]
+                        rest = total - sum(fixed.values())
+                        wsum = sum(wts[j] for j in free) or 1
+                        share = {j: rest * wts[j] / wsum for j in free}
+                        lack = [j for j in free if share[j] < max(mins.get(j, 0), 0.08 * total)]
+                        if not lack or len(fixed) + len(lack) >= ncols:
+                            break
+                        for j in lack:
+                            fixed[j] = max(mins.get(j, 0), 0.08 * total)
+                    fr = [fixed.get(j, share.get(j, 0.08 * total)) for j in range(ncols)]
+                    if sum(fr) > total + 1e-9:   # 下限の合計が本文幅を超えるときは、比で縮める（これまでの振る舞い）
+                        fr = [x / sum(fr) * total for x in fr]
+                    # 最長のセルが全角 10 字以内の短い列（見出し・段階の名前・時期）は折り返さない（2026-11-20、ユーザー
+                    #   「診断と修正指針の『針』だけ改行されているのが気になる」）。字の幅の見積もりでは半角の数字や空白で多めに
+                    #   取りすぎ、長い列が細くなったので、短い列は l 列にして LaTeX に中身の幅を測らせ、残りの列は tabularx の
+                    #   X 列で残りの幅を √文字量の比で分ける。短い列の見積もりの合計が幅の半分を超える表と、短い列しか無い表は、
+                    #   これまでの p 列のまま
+                    short = [j for j in range(ncols) if j not in mins
+                             and max((_disp_width(r[j]) for r in table_rows if j < len(r)), default=0) <= 20]
+                    est = sum((max(_disp_width(r[j]) for r in table_rows if j < len(r)) + 3) / 75 for j in short)
+                    xcols = [j for j in range(ncols) if j not in short and j not in mins]
+                    tabx = bool(short) and bool(xcols) and est <= 0.5 * total
+                    if tabx:
+                        xs = sum(wts[j] for j in xcols)
+                        spec = []
+                        for j in range(ncols):
+                            if j in short:
+                                spec.append('l')
+                            elif j in mins:
+                                spec.append(f'p{{{fr[j]:.3f}\\textwidth}}')
+                            else:
+                                spec.append(f'>{{\\hsize={len(xcols) * wts[j] / xs:.3f}\\hsize}}X')
+                        col_spec = '|' + '|'.join(spec) + '|'
+                    else:
+                        col_spec = '|' + ''.join(f'p{{{x:.3f}\\textwidth}}|' for x in fr)
                 else:
+                    tabx = False
                     col_spec = '|' + 'l|' * ncols
                 # 直前の段落が表の題（**表 N.M**: …）なら、題と表を 1 つの minipage に入れて同じページに置く。
                 # 分けて出すと、題だけがページの下に残り表が次のページへ送られる（2026-10-22、表 4.3）。
@@ -328,14 +362,14 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                                + r'\par\else{\centering ' + caption + r'\par}\fi\vspace{4pt}\centering')
                 else:
                     out.append(r'\begin{center}')
-                out.append(r'\begin{tabular}{' + col_spec + '}')
+                out.append((r'\begin{tabularx}{0.92\textwidth}{' if tabx else r'\begin{tabular}{') + col_spec + '}')
                 out.append(r'\hline')
                 for row in table_rows:
                     row += [''] * (ncols - len(row))
                     cells_tex = ' & '.join(r'\newline '.join(md_inline(x) for x in c.split('<br>')) for c in row)
                     out.append(cells_tex + r' \\')
                     out.append(r'\hline')
-                out.append(r'\end{tabular}')
+                out.append(r'\end{tabularx}' if tabx else r'\end{tabular}')
                 if caption:
                     out.append(r"\end{minipage}\par\vspace{8pt}")
                     out.append('')
@@ -406,6 +440,7 @@ PREAMBLE = r"""
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{longtable}
+\usepackage{tabularx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{xcolor}

@@ -53,6 +53,7 @@ PREAMBLE = r"""
 \setmainfont{TeX Gyre Termes}
 \usepackage[margin=25mm]{geometry}
 \usepackage{graphicx}
+\usepackage{tabularx}
 \usepackage{amsmath}
 \usepackage{amssymb}
 \usepackage{xcolor}
