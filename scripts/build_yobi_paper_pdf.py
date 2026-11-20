@@ -11,6 +11,8 @@ Markdown→LaTeX の変換は build_thesis_pdf.py を借りる。違いは次の
 
 使い方:
     python3 scripts/build_yobi_paper_pdf.py          # → docs/pdf/予備審査論文_YYYYMMDD.pdf
+    # 2026-11-20 から、同じ組版で別の md も組める（先生の指摘で作った、スライドの補助資料の版）
+    python3 scripts/build_yobi_paper_pdf.py --src docs/研究応用/執筆/予備審査論文/新方針_予備審査資料.md --name 新方針_予備審査資料
 """
 import argparse
 import datetime
@@ -125,14 +127,19 @@ def refs_to_latex(body: str) -> str:
 def main():
     today = datetime.date.today().strftime('%Y%m%d')
     p = argparse.ArgumentParser()
-    p.add_argument('--out', default=str(T.ROOT / 'docs' / 'pdf' / f'予備審査論文_{today}.pdf'))
+    p.add_argument('--src', default=str(SRC), help='組む md（既定: 予備審査論文.md）')
+    p.add_argument('--name', default='予備審査論文', help='出力の名前（docs/pdf/<name>_YYYYMMDD.pdf）')
+    p.add_argument('--out', default=None)
     args = p.parse_args()
+    src = Path(args.src) if Path(args.src).is_absolute() else T.ROOT / args.src
+    out = args.out or str(T.ROOT / 'docs' / 'pdf' / f'{args.name}_{today}.pdf')
+    build = BUILD if args.name == '予備審査論文' else T.BUILD_DIR / args.name
 
     # 図 1 はスライド用に作ったフロー図（使えそうな画像データ/スライド用/sysflow_slide.png）。md から直接指す。
     # 2026-11-19 まではビルドのたびに figures/yobi_sysflow.png へ写していた（figures/ で始まる行しか図にならなかったため）
 
     tex_body = []
-    for head, body in split_parts(SRC.read_text()):
+    for head, body in split_parts(src.read_text()):
         if head == '概要':
             tex_body.append(r'\chapter*{概要}' + '\n' + T.md_to_latex_body(body, unnumbered=True)
                             + '\n\\newpage\n\\tableofcontents\n\\newpage')
@@ -151,21 +158,21 @@ def main():
                      AUTHOR=AUTHOR, ADVISOR=ADVISOR, UNIV=UNIV).items():
         pre = pre.replace(f'__{k}__', v)
 
-    BUILD.mkdir(parents=True, exist_ok=True)
-    tex = BUILD / 'yobi.tex'
+    build.mkdir(parents=True, exist_ok=True)
+    tex = build / 'yobi.tex'
     body = '\n\n'.join(tex_body)
     # 表の固定幅の列は合計 0.92\textwidth だが、列の間の余白（\tabcolsep）が足されて右の余白へ 12〜24pt はみ出していた。
     # 修論のビルドは変えず、ここで列の幅だけ縮める
     body = re.sub(r'p\{(0\.\d+)\\textwidth\}', lambda m: 'p{%.3f\\textwidth}' % (float(m.group(1)) * 0.92), body)
     tex.write_text(pre + body + POSTAMBLE)
     for run in range(2):  # 目次のため 2 回
-        r = subprocess.run(['xelatex', '-interaction=nonstopmode', '-output-directory', str(BUILD), str(tex)],
-                           capture_output=True, text=True, cwd=str(BUILD))
+        r = subprocess.run(['xelatex', '-interaction=nonstopmode', '-output-directory', str(build), str(tex)],
+                           capture_output=True, text=True, cwd=str(build))
         if r.returncode != 0 and run == 1:
             print('\n'.join(r.stdout.split('\n')[-40:]))
-            sys.exit(f'[ERROR] xelatex failed（{BUILD}/yobi.log）')
-    shutil.copy(BUILD / 'yobi.pdf', args.out)
-    print(f'[done] PDF saved → {args.out} ({(BUILD / "yobi.pdf").stat().st_size // 1024} KB)')
+            sys.exit(f'[ERROR] xelatex failed（{build}/yobi.log）')
+    shutil.copy(build / 'yobi.pdf', out)
+    print(f'[done] PDF saved → {out} ({(build / "yobi.pdf").stat().st_size // 1024} KB)')
 
 
 if __name__ == '__main__':

@@ -249,7 +249,8 @@
 | `make_sysflow_slide.py` | **予備審査のスライド用のシステムフロー図**（`docs/研究応用/執筆/使えそうな画像データ/システム図_スライド用.drawio`、画像を埋め込んだ draw.io）。工程名だけの箱と、各工程を通った後の実物の画像で流れを描く。確認用のプレビュー `スライド用/sysflow_preview.png`、スライドに貼る `スライド用/sysflow_slide.png` はユーザーが draw.io から 300 % で書き出し、`--crop` で段の切り抜き `スライド用/sysflow_stages1-2.png`・`sysflow_stage2.png` を作る（11-19、旧名 `sysflow_p*`）（2026-11-09、ユーザー「drawio をスライドに入れない？」）。詳細は [評価スクリプト.md](../docs/リポジトリ説明/02_コードと実験/評価スクリプト.md) |
 | `build_thesis_pdf.py` | **修論 PDF ビルド**（`docs/研究応用/修論ドラフト/` の全 md → xelatex で1冊に）。下記の注意を読んでから使う |
 | `build_kougo_pdf.py` | **修論の口語版の PDF ビルド**（`docs/研究応用/執筆/修論_口語版/` の 6 ファイル → `docs/pdf/修論_口語版_YYYYMMDD.pdf`）。変換は `build_thesis_pdf.py` を借りる（2026-10-20） |
-| `build_yobi_paper_pdf.py` | **予備審査論文の PDF ビルド**（`docs/研究応用/執筆/予備審査論文/予備審査論文.md` → `docs/pdf/予備審査論文_YYYYMMDD.pdf`）。先輩の予備審査論文の体裁（表紙・概要・目次・本文・謝辞・参考文献）。変換は `build_thesis_pdf.py` を借りる（2026-11-17） |
+| `build_yobi_paper_pdf.py` | **予備審査論文の PDF ビルド**（`docs/研究応用/執筆/予備審査論文/予備審査論文.md` → `docs/pdf/予備審査論文_YYYYMMDD.pdf`）。先輩の予備審査論文の体裁（表紙・概要・目次・本文・謝辞・参考文献）。変換は `build_thesis_pdf.py` を借りる（2026-11-17）。11-20 から `--src`・`--name` で新方針の予備審査資料も組む |
+| `make_yobi_shiryo_slides.py` | **新方針の予備審査資料に貼るスライドの図**（デッキの本編 2〜25 枚目の画像から題の帯とページ番号を落とす → `使えそうな画像データ/予備審査資料/slide_NN.png`）。画像はコネクタで取り出して渡す（2026-11-20） |
 | `make_thesis_figures.py` | **修論の図を一次データから生成**（`docs/研究応用/執筆/使えそうな画像データ/修論/*.png`）。学習曲線は `log/log_train.txt` から読む。図の数値は手で直さず、原本を確認してこれを再実行する |
 | `eval_morphology.py` | 形態評価（docs・コードのどちらからも参照なし。`compare_morphology.py` に役割が吸収されたとみられる） |
 
