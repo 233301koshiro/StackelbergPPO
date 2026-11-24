@@ -107,7 +107,9 @@ def md_inline(text: str) -> str:
                        r'{\\small\\textcolor{red}{[要参照挿入: \1]}}', p)
             result.append(p)
     # 太字が数式をまたぐと上の部分ごとの変換では対にならず、** が印字されていた（2026-10-20、3.2 節。Bug 73 追記）
-    return re.sub(r'\*\*(.+?)\*\*', r'\\textbf{\1}', ''.join(result))
+    out = re.sub(r'\*\*(.+?)\*\*', r'\\textbf{\1}', ''.join(result))
+    # 数字と「%」の間の空白では改行しない（2026-11-24、予備審査論文 5.8 の「−0.6」の後で改行し、「%」だけが次の行の頭に来た）
+    return re.sub(r'(\d) \\%', r'\1~\\%', out)
 
 def heading_number(title: str):
     """見出し先頭の節番号を整数列で返す。'4.3.2 R2…' → [4, 3, 2]。無ければ None。
@@ -138,6 +140,223 @@ PDF_DROP_SYMBOLS = re.compile(r'(?:[\u26A0\u26D4\u2705\u274C\u2B50]|[\U0001F000-
 
 def strip_pdf_symbols(md_text: str) -> str:
     return PDF_DROP_SYMBOLS.sub('', md_text).replace('\uFE0F', '')
+
+# ── 表の列の幅（2026-11-24）────────────────────────────────────────────
+# 列の幅を、字の実際の幅で行の折り返しを再現して決める。それまでは列の文字量の平方根に比例させていたので、
+# 「最良エピソード報酬」の「酬」、「修正指針の 1.99 倍」の「倍」のように 1 字だけが次の行へ落ち、
+# 狭い列では字間が広がっていた（ユーザー「1 文字のみの改行は好きじゃないのでセルを横に伸ばして解決できないか試して。
+# その分横が余っているセルを短くして帳尻を合わせる」）。決め方: ① 1 字だけ落ちる折り返しを無くす ② その中で表の高さ
+# （行数）を最小にする ③ 余った幅は、どのセルも折り返さない列へ回す。幅は em で出すので、本文の字の大きさ（BODY_PT）
+# だけ呼び出し側が合わせる（予備審査論文は 11pt で組むので 10.95 にする）。
+BODY_PT = 12.0              # 本文の字の大きさ（pt）。修論・口語版は 12pt
+TEXTWIDTH_PT = 455.24       # A4・左右 25 mm の本文幅（160 mm）
+TABCOLSEP_PT = 6.0          # LaTeX の既定。列の左右に 1 つずつ付く
+ORPHAN_LINES = 3            # 1 字だけ落ちる折り返し 1 つを、表が何行伸びるのと同じに数えるか
+_TERMES = {}
+
+def _termes(bold=False):
+    """TeX Gyre Termes の字幅（em）。読めなければ None（そのときは半角を 0.5 em と見なす）"""
+    key = 'b' if bold else 'r'
+    if key not in _TERMES:
+        try:
+            from fontTools.ttLib import TTFont
+            path = subprocess.run(['kpsewhich', 'texgyretermes-bold.otf' if bold else 'texgyretermes-regular.otf'],
+                                  capture_output=True, text=True).stdout.strip()
+            f = TTFont(path)
+            upm = f['head'].unitsPerEm
+            cmap, hmtx = f.getBestCmap(), f['hmtx'].metrics
+            _TERMES[key] = {cp: hmtx[g][0] / upm for cp, g in cmap.items()}
+        except Exception:
+            _TERMES[key] = None
+    return _TERMES[key]
+
+# xeCJK が和文として組む字（プリアンブルの \xeCJKsetcharclass と、xeCJK が既定で全角に組む約物）
+_CJK_RANGES = [(0x2460, 0x24FF), (0x25A0, 0x25FF), (0x2015, 0x2015)]
+_CJK_PUNCT = set('“”‘’—…')
+_NO_LINE_START = set('、。，．）」』】〕・ー〜ぁぃぅぇぉっゃゅょァィゥェォッャュョ％)]},.:;!?')
+_NO_LINE_END = set('（「『【〔([{')
+_PUNCT = set('、。，．・（）「」『』【】〔〕')
+_OPEN = set('（「『【〔')
+_CLOSE = set('）」』】〕、。，．')
+
+def _is_cjk(ch):
+    o = ord(ch)
+    if unicodedata.east_asian_width(ch) in 'WF' or ch in _CJK_PUNCT:
+        return True
+    return any(a <= o <= b for a, b in _CJK_RANGES)
+
+def _cell_tokens(text):
+    """セルの md を、折り返しの単位 [幅(em), 前に空白があるか] の列にする。
+    和文は 1 字ずつ、欧文と数字は空白までを 1 語（ハイフネーションは見込まない＝幅を多めに見る）"""
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    t = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', t)
+    # 数式は命令を 1 字分の幅、括弧を 0 と見なして素の字にする
+    t = re.sub(r'\$([^$]+)\$', lambda m: re.sub(r'\\[A-Za-z]+', 'x', m.group(1)).replace('{', '').replace('}', '').replace('_', '').replace('^', ''), t)
+    code = re.findall(r'`([^`]+)`', t)
+    t = re.sub(r'`([^`]+)`', lambda m: '\x00' * len(m.group(1)), t)   # コードは等幅（0.53 em）
+    fm = _termes()
+    toks, word, space = [], 0.0, False
+    def flush():
+        nonlocal word, space
+        if word:
+            toks.append([word, space]); word, space = 0.0, False
+    for ch in t:
+        if ch == ' ':
+            flush(); space = True
+        elif ch == '\x00':
+            word += 0.53
+        elif _is_cjk(ch):
+            flush()
+            # 和文どうしの間の空白は xeCJK が捨てる（「中腕 対 長腕」は「中腕対長腕」と組まれる。幅も切れ目も無い）
+            if space and toks and len(toks[-1]) > 2:
+                space = False
+            # 約物が続くと xeCJK が半角分詰める（「）・」）。詰めを見込まないと、実際は 1 字多く行に入り、最後の 1 字だけが落ちた
+            w = 0.5 if (ch in _PUNCT and toks and len(toks[-1]) > 2 and toks[-1][2] in _PUNCT) else 1.0
+            toks.append([w, space, ch]); space = False
+        else:
+            w = fm.get(ord(ch)) if fm else None
+            word += w if w is not None else (1.0 if unicodedata.east_asian_width(ch) == 'A' else 0.5)
+    flush()
+    return toks
+
+def _script(ch):
+    """語の途中かを見るための字の種類（漢字・カタカナ）。それ以外は None"""
+    if not ch:
+        return None
+    o = ord(ch)
+    if 0x4E00 <= o <= 0x9FFF:
+        return 'kanji'
+    if 0x30A0 <= o <= 0x30FF:
+        return 'kana'
+    return None
+
+def _layout(toks, width, bad=None):
+    """幅 width（em）で前から詰めたときの各行の幅。1 語が幅を超えるときはその語で 1 行。
+    bad にリストを渡すと、語の途中（漢字どうし・カタカナどうしの間）で割った数を足す（「実／効密度」「ギ／ア比」）。
+    行頭に置けない字（、。）など）は前の字と、行末に置けない字（（「 など）は次の字と、1 つの単位にしてから詰める
+    （単位にせずに詰めると、「最大トルク（ギ」のように列の幅を超えた行を見積もり、実際の組版と食い違った）"""
+    units = []   # [幅, 前に空白, 先頭の字, 末尾の字]
+    for i, tk in enumerate(toks):
+        w, space = tk[0], tk[1]
+        ch = tk[2] if len(tk) > 2 else None
+        prev_open = units and units[-1][3] in _NO_LINE_END
+        if units and (prev_open or (ch in _NO_LINE_START and not space)):
+            units[-1][0] += w + (0.25 if space else 0)
+            units[-1][3] = ch
+        else:
+            units.append([w, space, ch, ch])
+    lines, cur, prev_last = [], 0.0, None
+    for w, space, first, last in units:
+        # 行末の閉じ括弧・句読点と行頭の開き括弧は、xeCJK が半角に詰める
+        add = w + (0.25 if space and cur > 0 else 0)
+        if cur > 0 and cur + add - (0.5 if last in _CLOSE else 0) > width + 1e-6:
+            lines.append(cur)
+            cur = w - (0.5 if first in _OPEN else 0)
+            if bad is not None and not space and _script(prev_last) and _script(prev_last) == _script(first):
+                bad.append(1)
+        elif cur == 0:
+            cur = w - (0.5 if first in _OPEN else 0)
+        else:
+            cur += add
+        prev_last = last
+    lines.append(cur)
+    return lines
+
+def _cell_layout(cell, width):
+    """セル（<br> で区切った行を含む）の (行数, 必ず避ける折り返しの数, 最後の行が 2 字の数, 語の途中で割った数)。
+    必ず避けるのは、<br> で指定した 1 行が折り返すことと、最後の行が全角 1 字になること（ユーザーが嫌うのはこれ）。
+    最後の行が 2 字の折り返しは、行が 1 つ増えるのと同じ重さで避ける（11-24 に必ず避けるものにしたら、修論の表 4.3 が 4 行伸びた）"""
+    n = orph = short = 0
+    bad = []
+    segs = cell.split('<br>')
+    for seg in segs:
+        ls = _layout(_cell_tokens(seg), width, bad)
+        n += len(ls)
+        if len(ls) > 1 and (len(segs) > 1 or ls[-1] <= 1.5):
+            orph += 1
+        elif len(ls) > 1 and ls[-1] <= 2.6:
+            short += 1
+    return n, orph, short, len(bad)
+
+def table_col_widths(rows, ncols, budget_frac=1.0):
+    """各列の幅（em）を返す。表の外形（列間の余白と罫線を含む）が本文幅の budget_frac 倍に収まるようにする"""
+    pad = (2 * TABCOLSEP_PT + 0.4) / BODY_PT
+    budget = budget_frac * TEXTWIDTH_PT / BODY_PT - ncols * pad - 0.4 / BODY_PT
+    cols = [[r[j] if j < len(r) else '' for r in rows] for j in range(ncols)]
+    margin = 0.1   # 字幅の見積もりの誤差に対する余裕（em）。11-24 に LaTeX の実測と 10 セルを比べ、約物の詰め以外は 1/1000 em まで一致した
+    natural = [max(max((sum(t[0] + (0.25 if t[1] else 0) for t in _cell_tokens(s))
+                        for s in c.split('<br>')), default=0) for c in col) + margin for col in cols]
+    # 各列の候補の幅: 0.25 em 刻みで、行数・避けたい折り返し・語の途中の割れが変わる最小の幅だけを残す
+    cands = []
+    for j, col in enumerate(cols):
+        seen, cj = {}, []
+        w = natural[j]
+        # 割れない最長の単位（欧文の 1 語・禁則で組になった字）より狭くすると、その語が列からはみ出す（表 4.15 の exec_R_eps）
+        longest = max((max(_layout(_cell_tokens(sg), 0.0)) for c in col for sg in c.split('<br>')), default=0) + margin
+        lo = max(2.0, min(natural[j], 3.0), longest)
+        while w >= lo - 1e-9:
+            prof = tuple(_cell_layout(c, w - margin) for c in col)
+            seen[prof] = w   # 狭くしていくので、同じ折り返し方の最小の幅で上書きされる
+            w -= 0.25
+        for prof, w in seen.items():
+            cj.append((w, prof))
+        cj.sort()
+        cands.append(cj)
+    nrows = len(rows)
+    best = None
+    order = sorted(range(ncols), key=lambda j: len(cands[j]))
+    # 選び方: ① 表の行数＋最後の行が 2 字の数＋1 字落ちの数×ORPHAN_LINES が少ない ② 語の途中の割れが少ない ③ 幅が狭い。
+    #   1 字落ちを絶対に避けると、避けきれない表（修論の表 4.3）で 1 つを減らすために他の列が細くなり、表が 7 行伸びた（11-24）
+    def rec(k, used, lines, orph, nshort, nbad, pick):
+        nonlocal best
+        if used > budget + 1e-9:
+            return
+        if k == ncols:
+            key = (sum(lines) + nshort + ORPHAN_LINES * orph, nbad, used)
+            if best is None or key < best[0]:
+                best = (key, dict(pick))
+            return
+        j = order[k]
+        for w, prof in cands[j]:
+            if used + w + sum(cands[jj][0][0] for jj in order[k+1:]) > budget + 1e-9:
+                break
+            nl = [max(a, p[0]) for a, p in zip(lines, prof)]
+            no = orph + sum(p[1] for p in prof)
+            ns = nshort + sum(p[2] for p in prof)
+            nb = nbad + sum(p[3] for p in prof)
+            if best is not None and sum(nl) + ORPHAN_LINES * no > best[0][0]:
+                continue
+            pick[j] = w
+            rec(k + 1, used + w, nl, no, ns, nb, pick)
+            del pick[j]
+    rec(0, 0.0, [1] * nrows, 0, 0, 0, {})
+    if best is None:
+        return None
+    widths = [best[1][j] for j in range(ncols)]
+    # 余った幅は 0.25 em ずつ、足したときに表の評価（行数＋2 字の最後の行＋1 字落ち×ORPHAN_LINES、次に語の途中の割れ）が
+    #   最も良くなる列へ足す。評価が同じなら折り返している列を優先する（11-24 の最初の版は 1 行に収まる列だけに配り、
+    #   折り返す列が細いまま「関／節検出」「リンク分／割」と割れていた。新方針の資料の表 1）
+    # 表の幅は、収まる限り本文幅の 92 %（これまでの表の幅）にそろえ、それより広く要る表だけ本文幅まで広げる
+    extra = max(sum(widths), budget - (1 - 0.92) * TEXTWIDTH_PT / BODY_PT) - sum(widths)
+    def score(ws):
+        lines = orph = short = bad = 0
+        for r in rows:
+            lay = [_cell_layout(r[k] if k < len(r) else '', ws[k] - margin) for k in range(ncols)]
+            lines += max(l[0] for l in lay)
+            orph += sum(l[1] for l in lay); short += sum(l[2] for l in lay); bad += sum(l[3] for l in lay)
+        return (lines + short + ORPHAN_LINES * orph, bad)
+    step = 0.25
+    while extra >= step - 1e-9:
+        opts = []
+        for k in range(ncols):
+            trial = list(widths); trial[k] += step
+            multi = any(_cell_layout(c, widths[k] - margin)[0] > 1 for c in cols[k])
+            opts.append((score(trial), 0 if multi else 1, k))
+        _, _, k = min(opts)
+        widths[k] += step
+        extra -= step
+    return widths
+
 
 def md_to_latex_body(md_text: str, unnumbered: bool = False,
                      merge: bool = False, title_override: str = None) -> str:
@@ -284,7 +503,14 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 max_cell_w = max((_disp_width(c) for r in table_rows for c in r), default=0)
                 # セルの中の改行（md の <br>）は p 列の \newline でしか効かないので、固定幅列にする（2026-11-19、表の「第1層<br>（幾何）・判定」）
                 has_br = any('<br>' in c for r in table_rows for c in r)
-                if max_cell_w > 22 or ncols >= 5 or has_br:
+                widths = (table_col_widths(table_rows, ncols)
+                          if (max_cell_w > 22 or ncols >= 5 or has_br) else None)
+                if widths:
+                    # 列の幅は字の幅で折り返しを再現して決める（table_col_widths）。左寄せにして、狭い列で字間が広がるのを防ぐ
+                    tabx = False
+                    col_spec = '|' + ''.join(f'>{{\\raggedright\\arraybackslash}}p{{{w:.2f}em}}|' for w in widths)
+                elif max_cell_w > 22 or ncols >= 5 or has_br:
+                    # （以下は table_col_widths が幅を決められなかったとき〔フォントが読めない・最小の幅でも本文幅を超える〕の旧い決め方）
                     # 長文セル（比較表等）は折り返し可能な固定幅列にする。
                     # l| のままだと1行に収まらず紙面外へはみ出す（Overfull \hbox）。
                     # 列幅は列の文字量の平方根に比例させる（2026-10-21）。等分だと短い列（「判定」「報告」）が

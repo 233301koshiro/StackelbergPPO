@@ -88,6 +88,23 @@ EXTRA = [
 ]
 ALL_RULES = [('話し言葉', p, a) for p, a in RULES] + EXTRA
 
+# 予備審査論文と新方針の資料だけに当てるもの（2026-11-24。修論の両版へ持ち込むかはユーザーの判断待ちで、
+#   修論には今も 40 か所ほどある。持ち込んだら EXTRA へ移す）
+YOBI = {'予備審査論文.md', '新方針_予備審査資料.md'}
+_NO = r'(?<![そこあどもへとでら])の'   # 指示語（その・この）・もの・複合の助詞（への・との・での・からの）の「の」は数えない
+EXTRA_YOBI = [
+    # 判定 md の型 67（ユーザー 11-24「同じてにおはが続く場合は修正」）: 「の」で名詞を 3 つ以上つながない
+    ('助詞の連続', _NO + r'[^、。の（）「」\s$|*:]{1,6}' + _NO + r'[^、。の（）「」\s$|*:]{1,6}' + _NO,
+     '「の」を 1 つ動詞や「における」に開く（「手描きの入力の腕全体の質量」→「手描きスケッチの一例から生成した腕では全体の質量」）'),
+    # 判定 md の型 54 の続き（ユーザー 11-24「同じ意味を指す言葉は統一する」）
+    ('用語', r'修正の方向|修正方向|修正方針', '修正指針（1.2 の障壁 3 で名付ける）'),
+    ('用語', r'色マーカー|(?<!関節)マーカー', '関節マーカー（1.2 の 1 で名付ける）'),
+    ('用語', r'実効到達距離|実効リーチ|公称リーチ|到達距離', '到達半径（3.4 で定義）か総リーチ（リンク長の合計、4.1 で定義）'),
+    ('用語', r'三次元化', '三次元形状生成（M2 の名前）'),
+    ('用語', r'キューブ', '箱'),
+    ('用語', r'線画|実走', '手描きスケッチ・実行'),
+]
+
 def body(path: Path) -> str:
     t = re.split(r'^## 執筆メモ|^# 謝辞', path.read_text(encoding='utf-8'), flags=re.M)[0]  # 謝辞は敬体が定型（予備審査論文）
     # コードブロックは空行に置き換える（行番号を保つ）
@@ -96,9 +113,10 @@ def body(path: Path) -> str:
     t = re.sub(r'\]\([^)\n]*\)', '](…)', t)
     return '\n'.join('' if l.startswith('>') else l for l in t.split('\n'))
 
-def scan(text: str):
+def scan(text: str, name: str = ''):
+    rules = ALL_RULES + (EXTRA_YOBI if name in YOBI else [])
     for n, line in enumerate(text.split('\n'), 1):
-        for cat, pat, alt in ALL_RULES:
+        for cat, pat, alt in rules:
             for m in re.finditer(pat, line):
                 yield n, cat, m.group(0).strip('。、 '), alt, line[max(0, m.start() - 25):m.end() + 15]
 
@@ -128,11 +146,23 @@ def main():
         n_shishin = sum(1 for w, _ in hits if w == '指針')
         if n_shishin != 1:   # 「指針の倍率」の 1 つだけ（「修正指針」の中の「指針」は拾わない）
             wrong.add(f'指針を {n_shishin} 件拾った（期待 1）')
+        # 予備審査論文だけに当てる型（2026-11-24）
+        ysample = ('手描きの入力の腕全体の質量。修正の方向を得る。色マーカーを描く。実効到達距離を測る。M2 三次元化。'
+                   'キューブを押す。線画からの実走。部品の組み合わせそのものは最適化していない。関節マーカーを描く。'
+                   'タスクの形態への反映。')
+        yhits = [w for _, _, w, _, _ in scan(ysample, '予備審査論文.md')]
+        ywant = {'の入力の腕全体の', '修正の方向', '色マーカー', '実効到達距離', '三次元化', 'キューブ', '線画', '実走'}
+        ywrong = {w for w in yhits if w not in ywant}          # 「そのもの」「関節マーカー」「への」を拾ってはいけない
+        if [w for _, _, w, _, _ in scan(ysample)] and any(w in ywant for _, _, w, _, _ in scan(ysample)):
+            ywrong.add('修論の本文にも当たった')
+        found |= set(yhits) & ywant
+        want |= ywant
+        wrong |= ywrong
         print('拾えた:', sorted(found), '／ 期待:', sorted(want), '／ 拾ってはいけないのに拾った:', sorted(wrong))
         sys.exit(0 if want <= found and not wrong else 1)
     total, by_cat = 0, {}
     for f in FILES:
-        for n, cat, w, alt, ctx in scan(body(f)):
+        for n, cat, w, alt, ctx in scan(body(f), f.name):
             total += 1
             by_cat[cat] = by_cat.get(cat, 0) + 1
             print(f'{f.name}:{n}: [{cat}]「{w}」→ {alt}\n    …{ctx}…')

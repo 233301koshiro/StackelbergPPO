@@ -125,7 +125,8 @@ def refs_to_latex(body: str) -> str:
     out = [r'\begin{list}{}{\setlength{\leftmargin}{2.2em}\setlength{\labelwidth}{2em}'
            r'\setlength{\itemsep}{2pt}\small}']
     for n, txt in items:
-        out.append(rf'\item[[{n}]] ' + T.md_inline(txt))
+        # 番号の [n] は波括弧で包む。\item[[n]] と書くと LaTeX は最初の ] で引数を閉じ、「[1 ]」と組まれていた（2026-11-24）
+        out.append(rf'\item[{{[{n}]}}] ' + T.md_inline(txt))
     out.append(r'\end{list}')
     return '\n'.join(out)
 
@@ -144,6 +145,7 @@ def main():
     # 図 1 はスライド用に作ったフロー図（使えそうな画像データ/スライド用/sysflow_slide.png）。md から直接指す。
     # 2026-11-19 まではビルドのたびに figures/yobi_sysflow.png へ写していた（figures/ で始まる行しか図にならなかったため）
 
+    T.BODY_PT = 10.95   # 11pt で組むので、表の列の幅（em）の計算を合わせる
     tex_body = []
     for head, body in split_parts(src.read_text()):
         if head == '概要':
@@ -167,9 +169,8 @@ def main():
     build.mkdir(parents=True, exist_ok=True)
     tex = build / 'yobi.tex'
     body = '\n\n'.join(tex_body)
-    # 表の固定幅の列は合計 0.92\textwidth だが、列の間の余白（\tabcolsep）が足されて右の余白へ 12〜24pt はみ出していた。
-    # 修論のビルドは変えず、ここで列の幅だけ縮める
-    body = re.sub(r'p\{(0\.\d+)\\textwidth\}', lambda m: 'p{%.3f\\textwidth}' % (float(m.group(1)) * 0.92), body)
+    # 11-17〜11-23 は、表の固定幅の列（0.xx\textwidth）が列の間の余白の分はみ出すので、ここで 0.92 倍に縮めていた。
+    # 11-24 から列の幅は build_thesis_pdf.table_col_widths が余白と罫線を含めて em で決めるので、縮めない
     tex.write_text(pre + body + POSTAMBLE)
     for run in range(2):  # 目次のため 2 回
         r = subprocess.run(['xelatex', '-interaction=nonstopmode', '-output-directory', str(build), str(tex)],
