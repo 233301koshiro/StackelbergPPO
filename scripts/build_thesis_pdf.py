@@ -152,6 +152,7 @@ BODY_PT = 12.0              # 本文の字の大きさ（pt）。修論・口語
 TEXTWIDTH_PT = 455.24       # A4・左右 25 mm の本文幅（160 mm）
 TABCOLSEP_PT = 6.0          # LaTeX の既定。列の左右に 1 つずつ付く
 ORPHAN_LINES = 3            # 1 字だけ落ちる折り返し 1 つを、表が何行伸びるのと同じに数えるか
+BAD_LINES = 0      # 語の途中の割れ 1 つを行いくつと同じ重さで避けるか。0 は「同点のときだけ見る」（11-24 に 0.5・1 も試した。1 は 4 文書の表の計で割れ 117 → 63 だが行が 673 → 694 に伸びた。0.5 は割れ 84・行 678 だが、予備審査論文の表 1 の「出力」の列が 1 行増え、見積もりと LaTeX の折り返しが 1 字ずれて「い」）」だけが落ちた。割れは表の中身〔欄の名前を短くする・注記を題へ移す〕で直す）
 _TERMES = {}
 
 def _termes(bold=False):
@@ -305,14 +306,14 @@ def table_col_widths(rows, ncols, budget_frac=1.0):
     nrows = len(rows)
     best = None
     order = sorted(range(ncols), key=lambda j: len(cands[j]))
-    # 選び方: ① 表の行数＋最後の行が 2 字の数＋1 字落ちの数×ORPHAN_LINES が少ない ② 語の途中の割れが少ない ③ 幅が狭い。
+    # 選び方: ① 表の行数＋最後の行が 2 字の数＋1 字落ちの数×ORPHAN_LINES＋語の途中の割れ×BAD_LINES が少ない ② 語の途中の割れが少ない ③ 幅が狭い。
     #   1 字落ちを絶対に避けると、避けきれない表（修論の表 4.3）で 1 つを減らすために他の列が細くなり、表が 7 行伸びた（11-24）
     def rec(k, used, lines, orph, nshort, nbad, pick):
         nonlocal best
         if used > budget + 1e-9:
             return
         if k == ncols:
-            key = (sum(lines) + nshort + ORPHAN_LINES * orph, nbad, used)
+            key = (sum(lines) + nshort + ORPHAN_LINES * orph + BAD_LINES * nbad, nbad, used)
             if best is None or key < best[0]:
                 best = (key, dict(pick))
             return
@@ -344,7 +345,7 @@ def table_col_widths(rows, ncols, budget_frac=1.0):
             lay = [_cell_layout(r[k] if k < len(r) else '', ws[k] - margin) for k in range(ncols)]
             lines += max(l[0] for l in lay)
             orph += sum(l[1] for l in lay); short += sum(l[2] for l in lay); bad += sum(l[3] for l in lay)
-        return (lines + short + ORPHAN_LINES * orph, bad)
+        return (lines + short + ORPHAN_LINES * orph + BAD_LINES * bad, bad)
     step = 0.25
     while extra >= step - 1e-9:
         opts = []
