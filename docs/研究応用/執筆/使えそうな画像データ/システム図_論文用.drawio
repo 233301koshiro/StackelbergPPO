@@ -7,7 +7,7 @@
         <mxCell id="g1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE6CC;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#FF8000;align=right;spacingRight=14;strokeWidth=3;" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;1. 入力・画像整形フェーズ&lt;/font&gt;" vertex="1">
           <mxGeometry height="320" width="690" x="30" y="20" as="geometry" />
         </mxCell>
-        <mxCell id="g2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D6EFFF;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#66B2FF;align=right;spacingRight=14;strokeWidth=3;" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;2. 3D変換・リンク分割フェーズ&lt;/font&gt;" vertex="1">
+        <mxCell id="g2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D6EFFF;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#66B2FF;align=right;spacingRight=14;strokeWidth=3;" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;2. 三次元形状生成・リンク分割フェーズ&lt;/font&gt;" vertex="1">
           <mxGeometry height="426" width="690" x="30" y="384" as="geometry" />
         </mxCell>
         <mxCell id="g3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E5DDE7;verticalAlign=top;fontStyle=1;fontSize=14;spacingTop=10;strokeColor=#B266FF;align=right;spacingRight=14;strokeWidth=3;" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;3. シミュレーションモデル生成&lt;/font&gt;" vertex="1">
@@ -37,7 +37,7 @@
         <mxCell id="sk" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" value="手描きスケッチ" vertex="1">
           <mxGeometry height="60" width="110" x="248" y="58" as="geometry" />
         </mxCell>
-        <mxCell id="nl" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" value="固定プロンプト&#xa;(マーカー規約)" vertex="1">
+        <mxCell id="nl" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;darkOpacity=0.05;fillColor=#fff2cc;strokeColor=#d6b656;" value="固定プロンプト&#xa;(関節マーカー)" vertex="1">
           <mxGeometry height="60" width="110" x="248" y="178" as="geometry" />
         </mxCell>
         <mxCell id="m1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;align=left;" value="M1: 画像整形&lt;br&gt;(Gemini API・温度0)&lt;br&gt;・設計図風に整形&lt;br&gt;・関節にマゼンタ球" vertex="1">
@@ -67,7 +67,7 @@
         <mxCell id="e_m1_d1" edge="1" parent="1" source="m1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="d1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="m2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" value="M2: 3D生成&#xa;(Tripo3D API)&#xa;※seed固定" vertex="1">
+        <mxCell id="m2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" value="M2: 三次元形状生成&#xa;(Tripo3D API)&#xa;※seed固定" vertex="1">
           <mxGeometry height="60" width="120" x="140.5" y="458" as="geometry" />
         </mxCell>
         <mxCell id="d2" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#d5e8d4;strokeColor=#82b366;" value="三次元メッシュ&lt;br&gt;(単一・色付き)" vertex="1">
