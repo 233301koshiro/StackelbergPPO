@@ -47,6 +47,7 @@ PREAMBLE = r"""
 \xeCJKsetcharclass{"2460}{"24FF}{1}
 \xeCJKsetcharclass{"25A0}{"25FF}{1}
 \xeCJKsetcharclass{"2015}{"2015}{1}   % 副題を挟む「―」。欧文の書体に字が無く消えていた（2026-11-20）
+\xeCJKsetcharclass{"00B7}{"00B7}{0}   % 単位の中黒（N·m・kg·m²）は欧文の字として組む。和文の字のままだと後ろで改行でき、表で「150 N·／m」と割れた（2026-11-24）
 \setCJKmainfont{Noto Serif CJK JP}
 \setCJKsansfont{Noto Sans CJK JP}
 \setCJKmonofont{Noto Sans Mono CJK JP}
