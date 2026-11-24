@@ -15,6 +15,7 @@ import re
 import sys
 
 import matplotlib
+import matplotlib.ticker
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
@@ -503,7 +504,7 @@ def fig_arm_forms():
     return 'arm_forms.png'
 
 
-# ── 図: R4 の確定エポック（4.6.3、系譜 9-338） ──────────────────────────────
+# ── 図: R4 の確定エポック（4.4.4、系譜 9-338） ──────────────────────────────
 #   値は rank_settle.py の settle_epoch（running best・「以降一度も最終順位から外れない最小のエポック」）で
 #   ①原本（log_train.txt）から数える。較正に使ったのは seed 0・1（seed 1 は新しい種の *_s2_ws）。
 #   seed 2（*_s3）は較正に使っていない（9-338 で事前登録して確かめた）。
@@ -660,7 +661,74 @@ def fig_target_star():
     return 'ra_target_star.png'
 
 
+# ── 図: 学習曲線（シードの帯。修論第4章・予備審査の 2 文書、2026-11-24 ユーザー判断） ─────────────────
+#   量は判定規則と同じ「そのエポックまでの最良エピソード報酬」（running best of exec_R_eps）。シードごとの細い線と、
+#   シード間の最小〜最大の帯（判定規則「シード間の範囲が重ならない」と同じ。標準誤差の帯は判定規則と食い違うので使わない）。
+#   第 30 エポックに縦線（判定に要する学習量、修論 4.4.4）。
+#   ⛔ 押しの 2 枚は取り直し（系譜 9-351）の `_vp` を使うので、judge_reading57.py と同じ前提（47 本すべてが完走し、
+#   目視記録に行がある）がそろうまで描かない（報酬を読み 57 の判定より前に見ないため）。そろう前は枠だけを出す。
+C_PROX, C_DIST = '#8e44ad', '#e67e22'
+
+
+def fig_learning_curves():
+    sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+    import judge_reading57 as j57
+    seen = j57.visual_names()
+    push_ok, push_st, _ = j57.ready([n + '_vp' for n in sorted(j57.ALL_SRCS)], seen)
+    S = lambda base, *suf: [base + s for s in suf]  # noqa: E731
+    V = lambda names: [n + '_vp' for n in names]  # noqa: E731
+    panels = [  # (題, 取り直しか, [(形の名前, 色, runs)])
+        ('到達: 中腕 対 長腕（3 シード）', False,
+         [('中腕', C_MID, S('tripo_pj_mid_phys', '', '_s2_ws', '_s3')),
+          ('長腕', C_LONG, S('tripo_pj_long_phys', '', '_s2_ws', '_s3'))]),
+        ('押し: 中腕 対 長腕（3 シード）', True,
+         [('中腕', C_MID, V(j57.MID)), ('長腕', C_LONG, V(j57.LONG))]),
+        ('押し: 根元重 対 先端重（5 シード）', True,
+         [('根元重', C_PROX, V(j57.PROX)), ('先端重', C_DIST, V(j57.DIST))]),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(13.2, 4.3))
+    for ax, (title, retake, groups) in zip(axes, panels):
+        ax.set_title(title, fontsize=12.5, pad=8)
+        ax.set_xlabel('エポック')
+        if retake and not push_ok:
+            ax.text(0.5, 0.5, f'読み 57 の判定の後に描く\n（{push_st}）', transform=ax.transAxes,
+                    ha='center', va='center', fontsize=11, color='#777777')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            print(f'[curves] {title}: ⏳ 描かない（{push_st}）')
+            continue
+        for name, col, runs in groups:
+            cs = [curve(r) for r in runs]
+            last = min(int(e[-1]) for e, _ in cs)
+            ep = np.arange(last + 1)
+            ys = []
+            for (e, y), r in zip(cs, runs):
+                rb = running_best(y)
+                yy = np.interp(ep, e, rb)
+                ys.append(yy)
+                ax.plot(ep, yy, color=col, lw=0.9, alpha=0.75)
+            ys = np.array(ys)
+            ax.fill_between(ep, ys.min(0), ys.max(0), color=col, alpha=0.22, lw=0, label=f'{name}（{len(runs)} シード）')
+            print(f'[curves] {title} {name}: 第 30 エポック {ys[:, 30].min():.2f}〜{ys[:, 30].max():.2f}・'
+                  f'第 {last} エポック {ys[:, -1].min():.2f}〜{ys[:, -1].max():.2f}')
+        ax.axvline(30, color='k', ls='--', lw=1.0)
+        ax.text(31.5, 0.04, '第 30 エポック', transform=ax.get_xaxis_transform(), fontsize=9.5)
+        ax.set_yscale('symlog', linthresh=1)
+        # 縦軸はデータの範囲に合わせる（到達は全部負なので、正の側を空けない）。目盛りは 10^n でなく素の数で書く
+        lo, hi = ax.dataLim.y0, ax.dataLim.y1
+        ax.set_ylim(lo * 1.4 if lo < 0 else -1, hi * 0.6 if hi < -1 else hi * 1.6 + 1)
+        ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f'{v:g}'))
+        ax.set_xlim(0, 200)
+        ax.legend(loc='lower right', fontsize=10, frameon=False)
+    axes[0].set_ylabel('そのエポックまでの最良エピソード報酬\n（上ほど良い、0 付近を線形にした対数軸）', fontsize=10.5)
+    fig.tight_layout(w_pad=2.2)
+    fig.savefig(os.path.join(OUT, 'learning_curves.png'))
+    plt.close(fig)
+    return 'learning_curves.png'
+
+
 FIGS = {'matrix': fig_matrix_reversal,
+        'curves': fig_learning_curves,
         'star': fig_target_star,
         'r4': fig_r4_settle,
         'arm': fig_arm_forms,
