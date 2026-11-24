@@ -29,9 +29,9 @@ SRC = T.ROOT / 'docs' / '研究応用' / '執筆' / '予備審査論文' / '予�
 BUILD = T.BUILD_DIR / 'yobi'            # build_pdf/ は .gitignore 済み
 
 # 表紙。学籍番号は 11-18 にユーザーから。専攻も 11-18 にユーザーが確認
-# 題目は 2026-11-20 にデッキの 1 枚目と同じ主題＋副題へ（先生の指摘「目的が抽象的すぎる。技術のキーポイントを入れる」、ユーザーがデッキに反映）
-TITLE = '手描きスケッチによるロボット設計支援'
-SUBTITLE = '―形態と制御の同時最適化に基づくタスク適性の判定と修正指針の提示―'
+# 題目は 2026-11-24 にユーザーが決めた 1 段の題（副題なし）。改行の位置は「〜を行う」の後。
+# 旧: 11-20 の主題「手描きスケッチによるロボット設計支援」＋副題「―形態と制御の同時最適化に基づくタスク適性の判定と修正指針の提示―」
+TITLE = r'形態と制御の同時最適化により適性判定と修正提示を行う\\手描きスケッチからのロボット生成システムの研究'
 YEAR = '2026'
 DEGREE = '修士（工学）'
 MAJOR = '情報・知能工学専攻'
@@ -82,8 +82,6 @@ PREAMBLE = r"""
 \centering
 \vspace*{30mm}
 {\LARGE __TITLE__\par}
-\vspace{6mm}
-{\large __SUBTITLE__\par}
 \vspace{34mm}
 {\large __YEAR__\par}
 \vspace{20mm}
@@ -164,7 +162,7 @@ def main():
             tex_body.append(T.md_to_latex_body(f'# {title}\n{body}'))
 
     pre = PREAMBLE
-    for k, v in dict(TITLE=TITLE, SUBTITLE=SUBTITLE, YEAR=YEAR, DEGREE=DEGREE, MAJOR=MAJOR, STUDENT_ID=STUDENT_ID,
+    for k, v in dict(TITLE=TITLE, YEAR=YEAR, DEGREE=DEGREE, MAJOR=MAJOR, STUDENT_ID=STUDENT_ID,
                      AUTHOR=AUTHOR, ADVISOR=ADVISOR, UNIV=UNIV).items():
         pre = pre.replace(f'__{k}__', v)
 
