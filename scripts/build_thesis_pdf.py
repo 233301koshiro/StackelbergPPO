@@ -151,6 +151,7 @@ def strip_pdf_symbols(md_text: str) -> str:
 BODY_PT = 12.0              # 本文の字の大きさ（pt）。修論・口語版は 12pt
 TEXTWIDTH_PT = 455.24       # A4・左右 25 mm の本文幅（160 mm）
 TABCOLSEP_PT = 6.0          # LaTeX の既定。列の左右に 1 つずつ付く
+_MARGIN = 0.1
 ORPHAN_LINES = 3            # 1 字だけ落ちる折り返し 1 つを、表が何行伸びるのと同じに数えるか
 BAD_LINES = 0      # 語の途中の割れ 1 つを行いくつと同じ重さで避けるか。0 は「同点のときだけ見る」（11-24 に 0.5・1 も試した。1 は 4 文書の表の計で割れ 117 → 63 だが行が 673 → 694 に伸びた。0.5 は割れ 84・行 678 だが、予備審査論文の表 1 の「出力」の列が 1 行増え、見積もりと LaTeX の折り返しが 1 字ずれて「い」）」だけが落ちた。割れは表の中身〔欄の名前を短くする・注記を題へ移す〕で直す）
 _TERMES = {}
@@ -180,28 +181,83 @@ _PUNCT = set('、。，．・（）「」『』【】〔〕')
 _OPEN = set('（「『【〔')
 _CLOSE = set('）」』】〕、。，．')
 
+# 表のセルの括弧の組（2026-11-24、ユーザー「()の中の言葉が改行されるときは()の始まりから改行をすること」）。
+# いちばん外の全角の（…）を印に置き換え、折り返しの見積もり（_layout）と LaTeX の出力（_paren_groups_tex）の両方が同じ組を見る。
+# 組が列の幅に収まるなら \mbox で 1 つにまとめ（入らなければ組ごと次の行へ送られる）、列の幅より長い組は（の前で必ず改行する
+_GO, _GC = '\ue000', '\ue001'
+
+def _mark_paren_groups(md):
+    """セルの md の、いちばん外の（…）の（と）を印に置き換える。コード・数式・リンクの中の括弧と、太字の境をまたぐ組は印を付けない"""
+    spans = [m.span() for m in re.finditer(r'`[^`]+`|\$[^$]+\$|\[[^\]]+\]\([^)]+\)', md)]
+    out, depth, start = list(md), 0, None
+    for i, ch in enumerate(md):
+        if any(a <= i < b for a, b in spans):
+            continue
+        if ch == '（':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '）' and depth > 0:
+            depth -= 1
+            if depth == 0 and md[:start].count('**') % 2 == 0 and md[start:i + 1].count('**') % 2 == 0:
+                out[start], out[i] = _GO, _GC
+    return ''.join(out)
+
+def _group_width(md_group):
+    """印を付けた組（（…））を行頭に置いたときの幅（em）。行頭の（は半角に詰まる"""
+    toks = _cell_tokens(md_group.replace(_GO, '（').replace(_GC, '）'))
+    return sum(t[0] + (0.25 if t[1] and k else 0) for k, t in enumerate(toks)) - 0.5
+
+def _cell_tex(seg, width=None):
+    """セルの 1 行（<br> で区切った 1 つ）の md を LaTeX にする。width（em、列の幅）が分かれば括弧の組を折り返さないように組む"""
+    if width is None:
+        return md_inline(seg)
+    m = _mark_paren_groups(seg)
+    widths = [_group_width(g) for g in re.findall(_GO + '.*?' + _GC, m)]
+    tex = md_inline(m)
+    it = iter(widths)
+    def rep(mt):
+        inner = mt.group(1)
+        if next(it) <= width - _MARGIN + 1e-6:
+            return r'\hspace{0pt}（\nobreak\mbox{' + inner + '）}'
+        before = tex[:mt.start()].strip()
+        return (r'\newline ' if before else '') + '（' + inner + '）'
+    return re.sub(_GO + '(.*?)' + _GC, rep, tex)
+
 def _is_cjk(ch):
     o = ord(ch)
     if unicodedata.east_asian_width(ch) in 'WF' or ch in _CJK_PUNCT:
         return True
     return any(a <= o <= b for a, b in _CJK_RANGES)
 
+class _Toks(list):
+    groups = None
+
 def _cell_tokens(text):
     """セルの md を、折り返しの単位 [幅(em), 前に空白があるか] の列にする。
     和文は 1 字ずつ、欧文と数字は空白までを 1 語（ハイフネーションは見込まない＝幅を多めに見る）"""
-    t = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', _mark_paren_groups(text))
     t = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', t)
     # 数式は命令を 1 字分の幅、括弧を 0 と見なして素の字にする
     t = re.sub(r'\$([^$]+)\$', lambda m: re.sub(r'\\[A-Za-z]+', 'x', m.group(1)).replace('{', '').replace('}', '').replace('_', '').replace('^', ''), t)
     code = re.findall(r'`([^`]+)`', t)
     t = re.sub(r'`([^`]+)`', lambda m: '\x00' * len(m.group(1)), t)   # コードは等幅（0.53 em）
     fm = _termes()
-    toks, word, space = [], 0.0, False
+    toks, word, space = _Toks(), 0.0, False
+    toks.groups = []          # 各単位が属する括弧の組の番号（組の外は None）
+    grp, ngrp = None, 0
     def flush():
         nonlocal word, space
         if word:
-            toks.append([word, space]); word, space = 0.0, False
+            toks.append([word, space]); toks.groups.append(grp); word, space = 0.0, False
     for ch in t:
+        if ch in (_GO, _GC):
+            flush()
+            if ch == _GO:
+                grp, ngrp = ngrp, ngrp + 1
+            ch, close = ('（', False) if ch == _GO else ('）', True)
+        else:
+            close = False
         if ch == ' ':
             flush(); space = True
         elif ch == '\x00':
@@ -213,7 +269,9 @@ def _cell_tokens(text):
                 space = False
             # 約物が続くと xeCJK が半角分詰める（「）・」）。詰めを見込まないと、実際は 1 字多く行に入り、最後の 1 字だけが落ちた
             w = 0.5 if (ch in _PUNCT and toks and len(toks[-1]) > 2 and toks[-1][2] in _PUNCT) else 1.0
-            toks.append([w, space, ch]); space = False
+            toks.append([w, space, ch]); toks.groups.append(grp); space = False
+            if close:
+                grp = None
         else:
             w = fm.get(ord(ch)) if fm else None
             word += w if w is not None else (1.0 if unicodedata.east_asian_width(ch) == 'A' else 0.5)
@@ -231,12 +289,13 @@ def _script(ch):
         return 'kana'
     return None
 
-def _layout(toks, width, bad=None):
+def _layout(toks, width, bad=None, split=None):
     """幅 width（em）で前から詰めたときの各行の幅。1 語が幅を超えるときはその語で 1 行。
     bad にリストを渡すと、語の途中（漢字どうし・カタカナどうしの間）で割った数を足す（「実／効密度」「ギ／ア比」）。
     行頭に置けない字（、。）など）は前の字と、行末に置けない字（（「 など）は次の字と、1 つの単位にしてから詰める
     （単位にせずに詰めると、「最大トルク（ギ」のように列の幅を超えた行を見積もり、実際の組版と食い違った）"""
-    units = []   # [幅, 前に空白, 先頭の字, 末尾の字]
+    units = []   # [幅, 前に空白, 先頭の字, 末尾の字, 括弧の組の番号, \mbox にまとめたか, 前で必ず改行するか]
+    groups = getattr(toks, 'groups', None) or [None] * len(toks)
     for i, tk in enumerate(toks):
         w, space = tk[0], tk[1]
         ch = tk[2] if len(tk) > 2 else None
@@ -245,12 +304,33 @@ def _layout(toks, width, bad=None):
             units[-1][0] += w + (0.25 if space else 0)
             units[-1][3] = ch
         else:
-            units.append([w, space, ch, ch])
+            units.append([w, space, ch, ch, groups[i], False, False])
+    # 括弧の組: 列に収まる組は 1 つの単位にまとめる（LaTeX では \mbox）。収まらない組は（の前で必ず改行する（LaTeX では \newline）
+    merged = []
+    for u in units:
+        g = u[4]
+        if g is not None and merged and merged[-1][4] == g:
+            merged[-1].append(u)
+        else:
+            merged.append([u[0], u[1], u[2], u[3], g, u] if g is not None else u)
+    units = []
+    for m in merged:
+        if m[4] is None or not isinstance(m[5], list):
+            units.append(m); continue
+        mem = m[5:]
+        gw = sum(x[0] + (0.25 if x[1] and k else 0) for k, x in enumerate(mem))
+        if gw - 0.5 <= width + 1e-6:
+            units.append([gw, mem[0][1], mem[0][2], mem[-1][3], m[4], True, False])
+        else:
+            mem[0][6] = True
+            units.extend(mem)
+            if split is not None:
+                split.append(1)
     lines, cur, prev_last = [], 0.0, None
-    for w, space, first, last in units:
-        # 行末の閉じ括弧・句読点と行頭の開き括弧は、xeCJK が半角に詰める
+    for w, space, first, last, _g, boxed, force in units:
+        # 行末の閉じ括弧・句読点と行頭の開き括弧は、xeCJK が半角に詰める（\mbox の中の閉じ括弧は詰まらない）
         add = w + (0.25 if space and cur > 0 else 0)
-        if cur > 0 and cur + add - (0.5 if last in _CLOSE else 0) > width + 1e-6:
+        if cur > 0 and (force or cur + add - (0.5 if last in _CLOSE and not boxed else 0) > width + 1e-6):
             lines.append(cur)
             cur = w - (0.5 if first in _OPEN else 0)
             if bad is not None and not space and _script(prev_last) and _script(prev_last) == _script(first):
@@ -271,12 +351,20 @@ def _cell_layout(cell, width):
     bad = []
     segs = cell.split('<br>')
     for seg in segs:
-        ls = _layout(_cell_tokens(seg), width, bad)
+        split = []
+        ls = _layout(_cell_tokens(seg), width, bad, split)
         n += len(ls)
-        if len(ls) > 1 and (len(segs) > 1 or ls[-1] <= 1.5):
+        # 列より長い括弧の組が中で割れることは数えない（11-24 に「行が 1 つ増えるのと同じ」に数えたら、組を 1 行に収めるために
+        #   他の列が細くなり、修論の表 4.3 の欄の名前「要求・軸」「シード数」が 1 字落ちた。ユーザーの規則は（の位置だけ）
+        if len(ls) > 1 and len(segs) > 1:
             orph += 1
-        elif len(ls) > 1 and ls[-1] <= 2.6:
-            short += 1
+        # 2 行目からの行は、最後の行に限らず見る。括弧の組の前で改行すると、その前の行が「い」だけになることがある
+        #   （11-24、修論の表 4.7「比較できな／い／（押せない形態がある）」）
+        for x in ls[1:]:
+            if len(segs) == 1 and x <= 1.5:
+                orph += 1
+            elif x <= 2.6:
+                short += 1
     return n, orph, short, len(bad)
 
 def table_col_widths(rows, ncols, budget_frac=1.0):
@@ -284,7 +372,7 @@ def table_col_widths(rows, ncols, budget_frac=1.0):
     pad = (2 * TABCOLSEP_PT + 0.4) / BODY_PT
     budget = budget_frac * TEXTWIDTH_PT / BODY_PT - ncols * pad - 0.4 / BODY_PT
     cols = [[r[j] if j < len(r) else '' for r in rows] for j in range(ncols)]
-    margin = 0.1   # 字幅の見積もりの誤差に対する余裕（em）。11-24 に LaTeX の実測と 10 セルを比べ、約物の詰め以外は 1/1000 em まで一致した
+    margin = _MARGIN   # 字幅の見積もりの誤差に対する余裕（em）。11-24 に LaTeX の実測と 10 セルを比べ、約物の詰め以外は 1/1000 em まで一致した
     natural = [max(max((sum(t[0] + (0.25 if t[1] else 0) for t in _cell_tokens(s))
                         for s in c.split('<br>')), default=0) for c in col) + margin for col in cols]
     # 各列の候補の幅: 0.25 em 刻みで、行数・避けたい折り返し・語の途中の割れが変わる最小の幅だけを残す
@@ -593,7 +681,8 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
                 out.append(r'\hline')
                 for row in table_rows:
                     row += [''] * (ncols - len(row))
-                    cells_tex = ' & '.join(r'\newline '.join(md_inline(x) for x in c.split('<br>')) for c in row)
+                    cells_tex = ' & '.join(r'\newline '.join(_cell_tex(x, widths[k] if widths else None) for x in c.split('<br>'))
+                                           for k, c in enumerate(row))
                     out.append(cells_tex + r' \\')
                     out.append(r'\hline')
                 out.append(r'\end{tabularx}' if tabx else r'\end{tabular}')
