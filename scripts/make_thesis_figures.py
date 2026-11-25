@@ -690,19 +690,22 @@ def fig_learning_curves():
     push_ok, push_st, _ = j57.ready([n + '_vp' for n in sorted(j57.ALL_SRCS)], seen)
     S = lambda base, *suf: [base + s for s in suf]  # noqa: E731
     V = lambda names: [n + '_vp' for n in names]  # noqa: E731
-    panels = [  # (題, 取り直しか, [(形の名前, 色, runs)])
-        ('到達: 中腕 対 長腕（3 シード）', False,
+    panels = [  # (題, 取り直しか, [(形の名前, 色, runs)])。シード数は凡例に書く
+        ('到達: 中腕 対 長腕', False,
          [('中腕', C_MID, S('tripo_pj_mid_phys', '', '_s2_ws', '_s3')),
           ('長腕', C_LONG, S('tripo_pj_long_phys', '', '_s2_ws', '_s3'))]),
-        ('押し: 中腕 対 長腕（3 シード）', True,
+        ('押し: 中腕 対 長腕', True,
          [('中腕', C_MID, V(j57.MID)), ('長腕', C_LONG, V(j57.LONG))]),
-        ('押し: 根元重 対 先端重（5 シード）', True,
+        ('押し: 根元重 対 先端重', True,
          [('根元重', C_PROX, V(j57.PROX)), ('先端重', C_DIST, V(j57.DIST))]),
     ]
-    fig, axes = plt.subplots(1, 3, figsize=(13.2, 4.3))
+    # 2026-11-25: 13.2 in では版面（6.30 in）で文字が約 5 pt になったので 9.0 in に縮め、文字を上げた
+    #   （刷り上がりで 8 pt 以上。予備審査論文の最終確認チェックリスト 20-2 の「図の文字は 8〜9 pt」）
+    fig, axes = plt.subplots(1, 3, figsize=(9.0, 3.7))
     for ax, (title, retake, groups) in zip(axes, panels):
-        ax.set_title(title, fontsize=12.5, pad=8)
-        ax.set_xlabel('エポック')
+        ax.set_title(title, fontsize=13, pad=6)
+        ax.set_xlabel('エポック', fontsize=12)
+        ax.tick_params(labelsize=11.5)
         if retake and not push_ok:
             ax.text(0.5, 0.5, f'読み 57 の判定の後に描く\n（{push_st}）', transform=ax.transAxes,
                     ha='center', va='center', fontsize=11, color='#777777')
@@ -725,16 +728,17 @@ def fig_learning_curves():
             print(f'[curves] {title} {name}: 第 30 エポック {ys[:, 30].min():.2f}〜{ys[:, 30].max():.2f}・'
                   f'第 {last} エポック {ys[:, -1].min():.2f}〜{ys[:, -1].max():.2f}')
         ax.axvline(30, color='k', ls='--', lw=1.0)
-        ax.text(31.5, 0.04, '第 30 エポック', transform=ax.get_xaxis_transform(), fontsize=9.5)
+        # 「30」は文字で置くと曲線か凡例に重なるので、横軸の目盛りに入れる（下の set_xticks）
         ax.set_yscale('symlog', linthresh=1)
         # 縦軸はデータの範囲に合わせる（到達は全部負なので、正の側を空けない）。目盛りは 10^n でなく素の数で書く
         lo, hi = ax.dataLim.y0, ax.dataLim.y1
         ax.set_ylim(lo * 1.4 if lo < 0 else -1, hi * 0.6 if hi < -1 else hi * 1.6 + 1)
         ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, _: f'{v:g}'))
         ax.set_xlim(0, 200)
-        ax.legend(loc='lower right', fontsize=10, frameon=False)
-    axes[0].set_ylabel('そのエポックまでの最良エピソード報酬\n（上ほど良い、0 付近を線形にした対数軸）', fontsize=10.5)
-    fig.tight_layout(w_pad=2.2)
+        ax.set_xticks([0, 30, 100, 200])
+        ax.legend(loc='lower right', fontsize=11.5, frameon=False, handlelength=1.2, borderaxespad=0.2)
+    axes[0].set_ylabel('その時点までの最良エピソード報酬', fontsize=12)
+    fig.tight_layout(w_pad=0.8)
     fig.savefig(os.path.join(OUT, 'learning_curves.png'))
     plt.close(fig)
     return 'learning_curves.png'
