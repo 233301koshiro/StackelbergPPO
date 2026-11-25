@@ -254,6 +254,7 @@
 | `build_thesis_pdf.py` | **修論 PDF ビルド**（`docs/研究応用/修論ドラフト/` の全 md → xelatex で1冊に）。下記の注意を読んでから使う |
 | `build_kougo_pdf.py` | **修論の口語版の PDF ビルド**（`docs/研究応用/執筆/修論_口語版/` の 6 ファイル → `docs/pdf/修論_口語版_YYYYMMDD.pdf`）。変換は `build_thesis_pdf.py` を借りる（2026-10-20） |
 | `build_yobi_paper_pdf.py` | **予備審査論文の PDF ビルド**（`docs/研究応用/執筆/予備審査論文/予備審査論文.md` → `docs/pdf/予備審査論文_YYYYMMDD.pdf`）。先輩の予備審査論文の体裁（表紙・概要・目次・本文・謝辞・参考文献）。変換は `build_thesis_pdf.py` を借りる（2026-11-17）。11-20 から `--src`・`--name` で新方針の予備審査資料も組む |
+| `build_qa_page.py` | **想定問答を読むためのページ**（`想定問答.md` → `docs/研究応用/執筆/想定問答.html`。型は `scripts/qa_page_template.html`）。md の目次の段・各 Q の「🗣️ 30 秒」の行・「言ってはいけない」の段落・全文を埋め込む。md を直したら回して Artifact に公開し直す。`--check` は件数だけ（2026-11-25） |
 | `make_yobi_shiryo_figures.py` | **新方針の予備審査資料の図の切り出し**。スライド 12 の切り抜き（③）と、図形で組んだスライド 13・15 の図だけを作る（ほかの図は元のファイルをそのまま使う。スクリーンショットは使わない）。スライドの画像はコネクタで取り出して渡す（2026-11-20） |
 | `make_thesis_figures.py` | **修論の図を一次データから生成**（`docs/研究応用/執筆/使えそうな画像データ/修論/*.png`）。学習曲線は `log/log_train.txt` から読む。図の数値は手で直さず、原本を確認してこれを再実行する |
 | `eval_morphology.py` | 形態評価（docs・コードのどちらからも参照なし。`compare_morphology.py` に役割が吸収されたとみられる） |

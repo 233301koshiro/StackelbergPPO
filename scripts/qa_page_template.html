@@ -1,0 +1,122 @@
+<title>想定問答</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+<style>
+/* 練習帳: 1 行目は突っ込みだけ。答えは押したときだけ開く（自分で言ってから開ける） */
+:root{
+  --bg:#f5f7f6; --surface:#ffffff; --ink:#14201e; --ink-2:#4a5855; --ink-3:#74827f; --line:#dde4e1;
+  --accent:#17687a; --accent-soft:#e2eff2; --bad:#b8382c; --bad-soft:#f8e5e2; --star:#a86b00;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111716; --surface:#192120; --ink:#e7eeec; --ink-2:#a9b6b3; --ink-3:#7f8d8a; --line:#2b3533;
+  --accent:#62b6c8; --accent-soft:#1d3237; --bad:#ef7464; --bad-soft:#3a1d19; --star:#e2a83f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111716; --surface:#192120; --ink:#e7eeec; --ink-2:#a9b6b3; --ink-3:#7f8d8a; --line:#2b3533;
+  --accent:#62b6c8; --accent-soft:#1d3237; --bad:#ef7464; --bad-soft:#3a1d19; --star:#e2a83f; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.7;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:760px;margin:0 auto}
+header.top{padding-block:28px 10px}
+h1{font-size:26px;font-weight:700;letter-spacing:.02em;margin:0 0 4px}
+.lead{color:var(--ink-2);margin:0;max-width:60ch}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:10px}
+.tiers{display:flex;gap:4px;flex-wrap:wrap}
+.tiers button{font:inherit;font-size:13px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.tiers button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+#q{flex:1 1 180px;min-width:0;font:inherit;font-size:14px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+#count{font-size:12px;color:var(--ink-3);font-family:var(--f-mono)}
+.card{border-bottom:1px solid var(--line);padding:14px 2px 12px}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--ink-3);margin-bottom:2px}
+.stars{color:var(--star);letter-spacing:.05em}
+.num{font-family:var(--f-mono)}
+.scene{border:1px solid var(--line);border-radius:4px;padding:0 6px;background:var(--surface)}
+.q{font-size:16px;font-weight:700;margin:0 0 8px}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+.acts button{font:inherit;font-size:13px;line-height:1.4;padding:4px 10px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.acts .a30{color:var(--accent);border-color:var(--accent)}
+.acts .ng{color:var(--bad)}
+.acts button[aria-expanded="true"]{background:var(--accent-soft);color:var(--ink);border-color:var(--accent)}
+.acts button:focus-visible,.tiers button:focus-visible,#q:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel{margin:10px 0 2px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:14px;overflow-x:auto}
+.panel.short{font-size:15px;border-color:var(--accent)}
+.panel.ngp{border-color:var(--bad);background:var(--bad-soft)}
+.md h2,.md h3,.md h4{font-size:14px;margin:12px 0 4px}
+.md p{margin:0 0 8px} .md ul,.md ol{margin:0 0 8px;padding-left:1.3em} .md li{margin:2px 0}
+.md blockquote{margin:6px 0;padding:2px 10px;border-left:3px solid var(--line);color:var(--ink-2)}
+.md table{border-collapse:collapse;font-size:13px;margin:6px 0}
+.md th,.md td{border:1px solid var(--line);padding:4px 6px;vertical-align:top}
+.md code{font-family:var(--f-mono);font-size:12px;background:var(--bg);padding:0 3px;border-radius:3px}
+.md a{color:var(--accent)}
+.empty{color:var(--ink-3);padding:24px 0}
+.note{font-size:12px;color:var(--ink-3);margin:10px 0 0}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>想定問答</h1>
+  <p class="lead">発表で聞かれそうな突っ込みを、聞かれやすい順に。まず自分で答えてから「30 秒の答え」を開く。</p>
+  <p class="note">★★★ スライドを見ただけで出る　★★ 結果に踏み込むと出る　★ 論文を読んだ人から出る。元の md（想定問答.md）の写しで、正は md。</p>
+</header>
+<div class="bar">
+  <div class="tiers" role="group" aria-label="段">
+    <button type="button" data-t="3" aria-pressed="true">★★★</button>
+    <button type="button" data-t="2" aria-pressed="false">★★</button>
+    <button type="button" data-t="1" aria-pressed="false">★</button>
+    <button type="button" data-t="all" aria-pressed="false">すべて</button>
+  </div>
+  <input id="q" type="search" placeholder="言葉で探す（例: seed、実機、ホッケー）" aria-label="言葉で探す">
+  <span id="count"></span>
+</div>
+<main id="list"></main>
+</div>
+
+<script>
+const DATA=/*__DATA__*/[];
+const $=s=>document.querySelector(s);
+const md=s=>window.marked?marked.parse(s):`<pre style="white-space:pre-wrap">${s.replace(/[&<]/g,c=>c==="&"?"&amp;":"&lt;")}</pre>`;
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let tier="3",query="";
+function card(it){
+  const stars=it.tier>0?"★".repeat(it.tier):it.tier===0?"対象外":"目次に無い";
+  const acts=[];
+  if(it.short) acts.push(`<button type="button" class="a30" data-p="s">30 秒の答え</button>`);
+  if(it.taboo) acts.push(`<button type="button" class="ng" data-p="n">言ってはいけない</button>`);
+  acts.push(`<button type="button" data-p="f">全文</button>`);
+  return `<article class="card" id="${it.id}"><div class="meta"><span class="stars">${stars}</span><span class="num">${it.id.replace("-axes","（関節軸）")}</span>${it.scene?`<span class="scene">${esc(it.scene)}</span>`:""}</div>
+  <h2 class="q">${esc(it.lay)}</h2><div class="acts">${acts.join("")}</div>
+  <div class="panel short" data-k="s" hidden>${esc(it.short)}</div>
+  <div class="panel ngp md" data-k="n" hidden></div>
+  <div class="panel md" data-k="f" hidden></div></article>`;
+}
+function render(){
+  const q=query.trim().toLowerCase();
+  const list=DATA.filter(it=>(tier==="all"||String(it.tier)===tier)&&(!q||(it.lay+it.title+it.short+it.full).toLowerCase().includes(q)));
+  $("#list").innerHTML=list.length?list.map(card).join(""):`<p class="empty">当てはまる問いはありません。段を「すべて」にするか、別の言葉で探してください。</p>`;
+  $("#count").textContent=`${list.length} 問`;
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest(".tiers button");
+  if(t){tier=t.dataset.t;document.querySelectorAll(".tiers button").forEach(b=>b.setAttribute("aria-pressed",b===t?"true":"false"));render();return}
+  const b=e.target.closest(".acts button");
+  if(!b)return;
+  const c=b.closest(".card"),k=b.dataset.p,open=b.getAttribute("aria-expanded")==="true";
+  c.querySelectorAll(".acts button").forEach(x=>x.setAttribute("aria-expanded","false"));
+  c.querySelectorAll(".panel").forEach(p=>p.hidden=true);
+  if(open)return;
+  b.setAttribute("aria-expanded","true");
+  const p=c.querySelector(`.panel[data-k="${k}"]`),it=DATA.find(d=>d.id===c.id);
+  if(k==="n"&&!p.dataset.done){p.innerHTML=md(it.taboo);p.dataset.done=1}
+  if(k==="f"&&!p.dataset.done){p.innerHTML=md(it.full);p.dataset.done=1}
+  p.hidden=false;
+});
+$("#q").addEventListener("input",e=>{query=e.target.value;if(query&&tier!=="all"){tier="all";document.querySelectorAll(".tiers button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.t==="all"?"true":"false"))}render()});
+render();
+</script>
