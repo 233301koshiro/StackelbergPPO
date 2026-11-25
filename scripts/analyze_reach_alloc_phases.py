@@ -18,6 +18,10 @@
 使い方:
     python3 scripts/analyze_reach_alloc_phases.py              # 話ごと・全体・seed ごと
     python3 scripts/analyze_reach_alloc_phases.py --self-check # 9-278 の prox seed 0 の n10（19・21・19・19・20）を再現するか
+    python3 scripts/analyze_reach_alloc_phases.py --trace-dir <dir>   # 50 話の再生（TRACE_EPISODES=50・TRACE_OUT=<dir>/<run>.npz）を読む
+
+保持は前半（n10 から 50 step ＝ 2 秒、He）と後半（Hl）に分け、前半の関節の速さの RMS（qd_early, rad/s）と
+|制御入力| の最大の中央（u_early・u_late、ep_u_abs）も出す。f ＝ 先端重の保持の超過のうち前半が占める割合。
 """
 import os
 import sys
@@ -31,6 +35,7 @@ RUNS = {
     'dist': ['tripo_pjd_dist_phys_cg', 'tripo_pjd_dist_phys_cg_s2', 'tripo_pjd_dist_phys_cg_s2_ws',
              'tripo_pjd_dist_phys_cg_s3'],
 }
+TRACE_DIR = None  # --trace-dir <dir>: <dir>/<run>.npz を読む（50 話の再生を TRACE_OUT で別の場所へ書いたとき）
 STEP_RAD = np.pi * 0.04  # 関節の速度の上限 π rad/s × 1 step 0.04 s
 
 
@@ -38,8 +43,17 @@ def yaw(R):
     return np.arctan2(R[..., 1, 0], R[..., 0, 0])
 
 
+EARLY = 50  # 保持の前半 ＝ n10 から 50 step（2 秒）
+
+
+def trace_path(run):
+    if TRACE_DIR:
+        return os.path.join(TRACE_DIR, f'{run}.npz')
+    return os.path.join(ROOT, 'single_run', run, 'trace', 'arm_trace.npz')
+
+
 def episodes(run):
-    z = np.load(os.path.join(ROOT, 'single_run', run, 'trace', 'arm_trace.npz'), allow_pickle=True)
+    z = np.load(trace_path(run), allow_pickle=True)
     tgt = z['target'][:2]
     rows = []
     for e in range(int(z['ep_count'])):
@@ -62,7 +76,13 @@ def episodes(run):
             ev = tip[t] - tgt
             errs.append(np.linalg.norm(ev))
             jerr.append(np.linalg.norm(np.linalg.pinv(J) @ ev))
-        rows.append(dict(ep=e, n10=n10, dqmax=np.degrees(dq.max()), jmax=int(dq.argmax()) + 1,
+        qd = np.diff(q, axis=0) / 0.04
+        u = np.array(z['ep_u_abs'][e], float)
+        early = slice(n10, min(n10 + EARLY, len(d)))
+        rows.append(dict(ep=e, n10=n10, R=float(z['ep_reward'][e]), fin_mm=d[-1] * 1e3,
+                         He=d[early].sum(), Hl=d[n10 + EARLY:].sum(),
+                         qd_early=float(np.sqrt((qd[n10:n10 + EARLY] ** 2).sum(1).mean())),
+                         u_early=float(np.median(u[early])), u_late=float(np.median(u[n10 + EARLY:])), dqmax=np.degrees(dq.max()), jmax=int(dq.argmax()) + 1,
                          ratio=n10 / (dq.max() / STEP_RAD), qfin=np.degrees(q[-1]).round(0),
                          e_mm=np.median(errs) * 1e3, je_mrad=np.median(jerr) * 1e3,
                          A=d[:n10].sum(), H=d[n10:].sum(), ctrl=float(z['ep_reward_ctrl'][e])))
@@ -73,10 +93,13 @@ def med(rows, k):
     return float(np.median([r[k] for r in rows]))
 
 
-KEYS = ['n10', 'dqmax', 'ratio', 'e_mm', 'je_mrad', 'A', 'H', 'ctrl']
+KEYS = ['R', 'n10', 'dqmax', 'ratio', 'e_mm', 'je_mrad', 'A', 'H', 'He', 'Hl', 'fin_mm', 'qd_early', 'u_early', 'u_late', 'ctrl']
 
 
 def main():
+    global TRACE_DIR
+    if '--trace-dir' in sys.argv:
+        TRACE_DIR = sys.argv[sys.argv.index('--trace-dir') + 1]
     if '--self-check' in sys.argv:
         got = [r['n10'] for r in episodes('tripo_pjd_prox_phys')]
         ok = got == [19, 21, 19, 19, 20]
@@ -92,13 +115,19 @@ def main():
                       f"|J⁺e|={x['je_mrad']:.2f}mrad A={x['A']:.2f} H={x['H']:.2f} ctrl={x['ctrl']:.3f}")
     allp = sum(data['prox'], [])
     alld = sum(data['dist'], [])
-    print('\n全体（4 seed × 5 話の中央）  prox / dist / 比 dist÷prox')
+    print('\n全体（4 seed の全話の中央）  prox / dist / 比 dist÷prox')
     for k in KEYS:
         print(f'  {k:8s} {med(allp, k):8.3f} {med(alld, k):8.3f} {med(alld, k) / med(allp, k):6.2f}')
-    print('\nseed ごと（5 話の中央の比 dist÷prox）')
+    print('\nseed ごと（各話の中央の比 dist÷prox）')
     for i, s in enumerate(SEEDS):
         p, d = data['prox'][i], data['dist'][i]
         print(f'  {s:10s} ' + ' '.join(f'{k}={med(d, k) / med(p, k):.2f}' for k in KEYS if k != 'ctrl'))
+    print('\nseed ごとの中央（prox / dist）と、保持の超過のうち前半が占める割合 f')
+    for i, s in enumerate(SEEDS):
+        p, d = data['prox'][i], data['dist'][i]
+        exc = med(d, 'H') - med(p, 'H')
+        f = (med(d, 'He') - med(p, 'He')) / exc if abs(exc) > 1e-9 else float('nan')
+        print(f'  {s:10s} ' + ' '.join(f'{k}={med(p, k):.3g}/{med(d, k):.3g}' for k in KEYS) + f'  H の超過={exc:.3f} f={f:.2f}')
 
 
 if __name__ == '__main__':
