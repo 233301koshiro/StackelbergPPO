@@ -1,0 +1,353 @@
+<title>知見マップ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 1 列のカード帳。上は「問いと答え」だけ、押すと開く。数値は下の図帳に集める */
+:root{
+  --bg:#f5f7f6; --surface:#ffffff; --ink:#14201e; --ink-2:#4a5855; --ink-3:#74827f; --line:#dde4e1;
+  --accent:#17687a; --accent-soft:#e2eff2;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --good:#1d7a3c; --good-soft:#e3f2e7; --bad:#b8382c; --bad-soft:#f8e5e2; --warn:#996300; --warn-soft:#f7eed9; --info:#56666a; --info-soft:#e8eded;
+  --flash:#fff3c4;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111716; --surface:#192120; --ink:#e7eeec; --ink-2:#a9b6b3; --ink-3:#7f8d8a; --line:#2b3533;
+  --accent:#62b6c8; --accent-soft:#1d3237;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#5cc27e; --good-soft:#18301f; --bad:#ef7464; --bad-soft:#3a1d19; --warn:#e2a83f; --warn-soft:#352914; --info:#a3b0b2; --info-soft:#222b2c;
+  --flash:#3d3714; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#111716; --surface:#192120; --ink:#e7eeec; --ink-2:#a9b6b3; --ink-3:#7f8d8a; --line:#2b3533;
+  --accent:#62b6c8; --accent-soft:#1d3237;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --good:#5cc27e; --good-soft:#18301f; --bad:#ef7464; --bad-soft:#3a1d19; --warn:#e2a83f; --warn-soft:#352914; --info:#a3b0b2; --info-soft:#222b2c;
+  --flash:#3d3714; color-scheme:dark;}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.7;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 64px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:760px;margin:0 auto}
+header.top{padding-block:28px 12px}
+h1{font-size:26px;font-weight:700;letter-spacing:.02em;margin:0 0 4px;text-wrap:balance}
+.lead{color:var(--ink-2);margin:0 0 14px;max-width:60ch}
+.keys{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--ink-2);align-items:center}
+.keys .k{display:inline-flex;gap:6px;align-items:center}
+.src{font-size:12px;color:var(--ink-3);margin:10px 0 0}
+nav.sec{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-bottom:1px solid var(--line);
+  display:flex;gap:4px;overflow-x:auto;padding-block:8px;margin-bottom:8px}
+nav.sec a{flex:none;font-size:13px;color:var(--ink-2);text-decoration:none;padding:4px 10px;border-radius:999px;border:1px solid transparent}
+nav.sec a:hover,nav.sec a:focus-visible{border-color:var(--line);color:var(--ink);outline:none}
+section{scroll-margin-top:56px}
+h2{font-size:13px;font-weight:500;letter-spacing:.12em;color:var(--accent);margin:28px 0 2px}
+.sub{font-size:13px;color:var(--ink-3);margin:0 0 6px}
+.card{border-top:1px solid var(--line);padding:14px 2px 12px;scroll-margin-top:60px;transition:background .6s}
+.card:last-child{border-bottom:1px solid var(--line)}
+.row1{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.q{font-size:16px;font-weight:700;margin:0;min-width:0}
+.pill{flex:none;font-size:13px;font-weight:700;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.pill.yes{color:var(--good);background:var(--good-soft)} .pill.no{color:var(--bad);background:var(--bad-soft)}
+.pill.part{color:var(--warn);background:var(--warn-soft)} .pill.info{color:var(--info);background:var(--info-soft)}
+.pill::before{margin-right:4px;font-weight:700}
+.pill.yes::before{content:"○"} .pill.no::before{content:"×"} .pill.part::before{content:"△"} .pill.info::before{content:"・"}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 8px}
+.tag{font-family:var(--f-mono);font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:0 6px}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+.acts button,.acts a{font:inherit;font-size:13px;line-height:1.4;padding:4px 10px;border-radius:6px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink-2);cursor:pointer;text-decoration:none}
+.acts .fig{color:var(--accent);border-color:var(--accent);font-family:var(--f-mono)}
+.acts button[aria-expanded="true"]{background:var(--accent-soft);color:var(--ink);border-color:var(--accent)}
+.acts button:focus-visible,.acts a:focus-visible,.term:focus-visible,.back:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.acts .faq::before{content:"？ ";color:var(--accent);font-weight:700}
+.acts .old{color:var(--ink-3)}
+.panel{margin:10px 0 2px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:14px;max-width:68ch}
+.panel p{margin:0 0 6px} .panel p:last-child{margin:0}
+.panel .from{font-size:12px;color:var(--ink-3)}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:13px}
+.term{font:inherit;color:inherit;background:none;border:0;padding:0;border-bottom:1px dashed var(--accent);cursor:help}
+#tip{position:fixed;z-index:20;max-width:300px;background:var(--ink);color:var(--bg);font-size:13px;line-height:1.6;padding:8px 10px;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,.18)}
+#tip b{display:block;margin-bottom:2px}
+.flash{background:var(--flash)}
+/* 図帳 */
+.figs{display:grid;gap:18px;margin-top:6px}
+figure{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 14px 10px;scroll-margin-top:60px;transition:background .6s;min-width:0}
+figure.flash{background:var(--flash)}
+.fhead{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+figcaption{font-weight:700;font-size:15px}
+.back{font-size:12px;color:var(--accent);text-decoration:none;white-space:nowrap}
+.how{font-size:12px;color:var(--ink-3);margin:2px 0 6px}
+.chart{overflow-x:auto}
+.chart svg{display:block;width:100%;height:auto;min-width:320px}
+.chart text{font-family:var(--f-body);fill:var(--ink-2);font-size:12px}
+.chart .lab{fill:var(--ink);font-size:13px}
+.chart .ax{stroke:var(--line);stroke-width:1}
+.chart .tk{fill:var(--ink-3);font-family:var(--f-mono);font-size:11px}
+.chart .ptitle{fill:var(--ink);font-weight:700;font-size:12px}
+.chart .hit{fill:transparent;cursor:pointer}
+.chart .ref{stroke:var(--ink-3);stroke-dasharray:4 3;stroke-width:1}
+.fnote{font-size:13px;color:var(--ink-2);margin:6px 0 0}
+table.grid{border-collapse:collapse;font-size:13px;width:100%;min-width:480px}
+table.grid th,table.grid td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:center;vertical-align:middle}
+table.grid th:first-child,table.grid td:first-child{text-align:left}
+table.grid th{font-weight:500;color:var(--ink-2);font-size:12px}
+.m-same{color:var(--good);font-weight:700} .m-rev{color:var(--bad);font-weight:700} .m-na{color:var(--ink-3)}
+@media (prefers-reduced-motion:reduce){.card,figure{transition:none}html{scroll-behavior:auto}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>知見マップ</h1>
+  <p class="lead">学習の実験で、いま何が言えて何が言えないか。1 行目は問いと答えだけ。気になったら押すと開き、数値は図で見る。</p>
+  <div class="keys" id="keys"></div>
+  <p class="src">今の物理（実在の値で取り直した結果）、2026-11-25 時点の写し。数値の正は <span class="num">docs/研究応用/執筆/知見総括表.md</span> と実験系譜。</p>
+</header>
+<nav class="sec" aria-label="節">
+  <a href="#sec-A">判定器</a><a href="#sec-B">速さ</a><a href="#sec-C">助言</a><a href="#sec-D">入力</a><a href="#sec-F">図</a>
+</nav>
+<main id="main"></main>
+<section id="sec-F"><h2>図</h2><p class="sub">点 = seed 1 本の best、帯 = その範囲。点に触れると値が出る。</p><div class="figs" id="figs"></div></section>
+</div>
+<div id="tip" hidden role="tooltip"></div>
+
+<script>
+/* ---------- 用語 ---------- */
+const G={
+ "R":"到達（Reach）。腕の先端を目標（x 0.8 m）へ運んで止める。",
+ "P":"押し（Pusher）。箱を +x へ押す。",
+ "s":"seed（乱数の種）。3 s は種を変えて 3 回学習したということ。",
+ "帯":"seed ごとの best を並べた最小〜最大の範囲。2 つの帯が重ならないときだけ順位を言う。seed を足すと重なることはある。",
+ "best":"学習の途中でいちばん良かった 1 話の報酬。R は 0 に近いほど良い（−1.85 ≒ 平均 1.85 mm 離れていた）。P は大きいほど良い（箱を遠くへ押した）。",
+ "凍結":"形の更新の歩幅を 1/10000 にして、形を初期のまま止めた条件。制御（動かし方）は普通に学習する。",
+ "腕":"手描きスケッチからパイプライン（M1〜M5）が作った、根元を固定した水平 3 関節アーム。",
+ "短腕・中腕・長腕":"腕のリンク長だけを 0.5・1.1・1.8 倍した形。全長 0.403・0.887・1.451 m。",
+ "根元重・先端重":"全長 0.887 m のまま、リンク長の配分だけ反転した 2 形。根元重 0.500 / 0.250 / 0.137 m、先端重 0.137 / 0.250 / 0.500 m。",
+ "第1層":"学習を使わない幾何の診断。届かなければ「N 倍に伸ばせ」と倍率を返す。数秒。",
+ "第2層":"学習後の形（ギア比・太さ）が探索範囲の端に張り付いていないかを見る診断。",
+ "第3層":"学習した動きを見て、ほとんど使わない関節（使用率 10 % 未満）を「固定してよい」と提案する診断。",
+ "参照の制御":"学習を使わず、決めた規則で腕を動かす制御。R では初期姿勢から逆運動学の解へ関節をまっすぐ動かす。",
+ "旧い物理":"10-13 より前の、根拠の無い物理の値（密度・トルクの上限など）で回した結果。撤回したので今は使わない。",
+ "確定エポック":"そのエポック以降、最後まで一度も最終の順位から外れない最小のエポック。",
+ "A1・B1":"手描きスケッチの名前。A1 は標準の腕、B1 は短くずんぐり、B2 は長く細い、A2 は A1 をフリーハンドで描いたもの。",
+ "縦型":"台座が立ち、鉛直面内でも曲がる 4 関節の腕。リンクの長さと向きも最適化する。"
+};
+const T=s=>s.replace(/\{([^}]+)\}/g,(m,k)=>G[k]?`<button type="button" class="term" data-t="${k}">${k}</button>`:k);
+
+/* ---------- カード ---------- */
+const SEC=[
+ {id:"A",name:"判定器",sub:"形と制御の同時最適化（co-design）は、形の良し悪しの判定に使えるか"},
+ {id:"B",name:"速さ",sub:"判定にどれだけ時間がかかるか"},
+ {id:"C",name:"助言",sub:"「どう直せばいいか」は当たるか"},
+ {id:"D",name:"入力",sub:"手描きからモデルが作れるか（学習を使わない）"}];
+const F=[
+{s:"A",id:"r1",q:"形を最適化すると性能は上がる？",v:"yes",vt:"上がる",tags:["中腕","P","3 s"],fig:"g-r1",
+ d:`<p>形の更新を止めた {凍結} と比べた。制御はどちらも学習する。</p><p>50 話を再生して箱を 0.1 m 以上動かした話：最適化 <span class="num">50・50・50</span>、凍結 <span class="num">41・29・38</span>。最適化した形は 3 s とも先端が太さの上限 0.1 m まで太った。</p><p class="from">系譜 9-351（読み 57-1・57-10）／修論 4.4.1</p>`,
+ faq:[["制御ではなく、形だけの差と言える？","言えるのは「形を最適化したかどうか」の差まで。制御は両方とも学習するが、最適化した側の制御は新しい形に合わせて学んだもの。制御を固定して形だけ変えた比較ではない。"],
+      ["形を最適化しないと押せない？","そうは言わない。{凍結} でも過半の話で箱を動かす。"]],
+ old:"rrbot（元のフレームワークにあった 2 関節の腕）の P、1 s ずつ：最適化 132.94 対 凍結 16.75（約 8 倍）。凍結の側は 100 エポックで止まり、設定にも差があった。"},
+{s:"A",id:"reach",q:"R でも学習は成り立つ？",v:"yes",vt:"成り立つ",tags:["中腕","R","3 s"],fig:"g-mat",
+ d:`<p>届く形は目標で止まる。中腕の {best} は <span class="num">−1.85〜−1.64</span>、助言で 1.99 倍に伸ばした短腕は 50 話すべて最後の誤差 1 mm 未満（図「助言 R」）。</p><p>⚠️ R で形を {凍結} する対照はしていない。形の最適化が R で効くかは未測。</p><p class="from">修論 4.4.3・4.5.4／系譜 9-304</p>`,
+ faq:[["なぜ R を確かめた？ 先行研究に無いから？","違う。単純な報酬での同時最適化が、押しだけで起きる現象でないかを見るため。R は箱との接触が無く、報酬の抜け穴が最も少ない（系譜 第2段の「次の仮説」）。"],
+      ["−1.85 はどういう値？","1 話 1000 ステップの「先端と目標の距離 [m]」の合計にマイナス。平均 1.85 mm 離れていた。目標へ寄せる間の距離も含むので、届いた後の誤差はもっと小さい。"]],
+ old:"rrbot の R（目標 1.5 m は届く範囲の外）、1 s：トポロジー自由 −0.014 対 固定 −0.067。"},
+{s:"A",id:"r2",q:"タスクが違えば、最適な形も違う？",v:"no",vt:"分かれない",tags:["A1 縦型 4 関節","R 対 P","5 s"],fig:"g-r2",
+ d:`<p>{縦型} の腕で、変えたのはタスクだけ。ギア比 4 つ・先端の太さ・リンク長の合計のどれも、5 s の {帯} が重なる。修論は「R2 は満たされなかった」と書く。</p><p class="from">系譜 9-351（読み 57-5）／修論 4.4.2</p>`,
+ faq:[["R はギア 20、P は 400 に分かれたのでは？","それは {旧い物理} の rrbot（ギアの範囲 20〜400）の結果。今は言わない。"],
+      ["傾向も無い？","帯は P の方が大きい側に寄るが、重なるので「分かれた」とは言わない。11-17 までは「リンク長の合計だけ分かれる」だったが、11-25 の取り直しで重なった。"]],
+ old:"rrbot の R 対 P、2 s：ギア比 20（下限）対 400（上限）。縦型 4 関節（9-16）、2 s：先端の太さ 0.030 対 0.100。"},
+{s:"A",id:"mat",q:"形の順位はタスクで入れ替わる？",v:"yes",vt:"入れ替わる",tags:["短腕・中腕・長腕","R・P","3 s（短腕 1 s）"],fig:"g-mat",
+ d:`<p>R は中腕 ＞ 長腕 ＞ 短腕、P は長腕 ＞ 中腕 ＞ 短腕。「長いほど良い」という 1 本の物差しではない。短腕は R で 397 mm 届かず、P で箱に触れない。</p><p class="from">系譜 9-351（読み 57-2）・9-318／修論 4.4.3.1 表 4.6</p>`,
+ faq:[["3 つの腕は何で作った？","{腕} のリンク長だけを 0.5・1.1・1.8 倍した（{短腕・中腕・長腕}）。"],
+      ["なぜ R で長腕が負ける？","伸ばした初期姿勢で、長腕の先端は目標の 0.64〜0.68 m 先にある。折りたたんで戻るまでの距離が積み上がる。"],
+      ["学習しなくても同じ順位になる？","なる。R は {参照の制御}、P は先端の最大の速さで同じ向き（図「安い方法」）。"]],
+ old:"2 s：R 中腕 −3.42 / −1.66 ＞ 長腕 −12.48 / −10.27、P 長腕 96.18〜99.37 ＞ 中腕 34.32〜44.94。"},
+{s:"A",id:"dist",q:"全長が同じで配分だけ違う形に、順位を付けられる？",v:"part",vt:"R だけ",tags:["根元重・先端重","R・P","R 3 s・P 5 s"],fig:"g-dist",
+ d:`<p>{根元重・先端重} は、{第1層} がどちらにも同じ答え（届く、余裕 10 %）を返す組。R では根元重が上で帯が離れた。P では帯が 0.09 重なった。</p><p class="from">系譜 9-333・9-351（読み 57-3）／修論 4.4.3.2</p>`,
+ faq:[["「順位を付けられる」とは？","幾何が同じ答えしか返せない 2 つの形に、学習の判定が seed によらず同じ順位を付けた、という意味。"],
+      ["R の差は大きい？","平均の距離で 0.3〜0.7 mm と小さい。{参照の制御} でも同じ向きになるので、修論は対照として扱う。"],
+      ["P は前は分けられたのでは？","11-14 までは帯が離れていた。物理の抜け穴（Bug 106・107）を直して取り直すと重なった。"]],
+ old:"2 s：R −1.65 / −1.81 ＞ −4.39 / −5.75、P 41.56〜41.77 対 27.89〜40.51（重なる）。"},
+{s:"A",id:"cheap",q:"学習なしの安い方法でも、同じ順位が出る？",v:"part",vt:"3 / 4 組で出る",tags:["上の 4 組","R・P"],fig:"g-cheap",
+ d:`<p>比べた方法：総リーチ・可操作度・先端の最大の速さ・{参照の制御}・形を {凍結} した学習。R の 2 組は参照の制御で、P の長腕対中腕は先端の最大の速さで同じ順位。P の配分の組はどの方法でも区別できない。</p><p class="from">系譜 9-334〜9-337・9-351／修論 4.4.3.2 表 4.7</p>`,
+ faq:[["では学習は要らない？","今の 4 組では、学習しないと付かない順位は無い。ただし P の順位には学習の外の正解が無い（P の参照の制御は押せない形があり比べられない）。修論 5.3 の 4 の限界。"]],
+ old:null},
+{s:"B",id:"r4",q:"何エポックで順位が決まる？",v:"part",vt:"形が違えばほぼ 30",tags:["5 組","R・P","2 s（較正）"],fig:null,
+ d:`<p>形の違う対は 15 中 14 が 30 エポック（約 1.3 時間）までに決まった（{確定エポック} は <span class="num">1〜127</span>）。乱数だけ違う対は <span class="num">22〜194</span> とばらつく。</p><p class="from">系譜 9-351（読み 57-8）／修論 4.4.4</p>`,
+ faq:[["30 エポックで足りる？","較正に使った対ではほぼ足りる。ただし較正に使っていない 7 組のうち 2 組は、30 エポック目の順位が最後と逆だった。システムは帯が重なれば「区別できない」と出す。"],
+      ["最初のころの順位は当てになる？","ならない。R の中腕対長腕（seed 1）は、0〜20 エポックの間は逆の順位だった。"]],
+ old:null},
+{s:"B",id:"time",q:"一巡にどれだけかかる？",v:"info",vt:"大半は学習",tags:["—"],fig:null,
+ d:`<p>モデル生成（M3〜M5）約 2 秒、{第1層} 数秒、三層の診断 約 3 秒、判定の学習 約 1.3 時間（30 エポック）。幾何で不適合な形は学習なしで数秒で棄却できる。</p><p class="from">修論 4.6 表 4.13</p>`,
+ faq:[],
+ old:"rrbot の P、学習済みの重みの転用（1 s ずつ）：形も 193.69・全部 210.58 ＞ 転用元 140.47 ＞ 制御のみ 93.82。長さとギア比の分解（2 s）：長さのみ 41.41 / 62.06、ギア比のみ 39.69 / 37.91。"},
+{s:"C",id:"diag",q:"診断（三層）は学習後の順位と合う？",v:"yes",vt:"合う",tags:["短腕・中腕・長腕","R・P","既存の学習"],fig:null,
+ d:`<p>「この形ではできない」とした 2 条件（R と P の短腕）は、どちらも最下位だった。中腕と長腕の上下は幾何では決まらないので、診断は順位を言わない。</p><p>⚠️ {第2層} だけで見ると、短腕のギア比は端に揃わず「範囲の内側」と出て、不適合を見逃す。</p><p class="from">系譜 9-292／修論 4.5.1</p>`,
+ faq:[["第2層は使えない？","不適合を見逃すことがある、が今の結果。適合を不適合と誤った例は見ていない。"]],
+ old:"総合判定 6 / 6 一致、第2層は両方向に誤る。"},
+{s:"C",id:"clr",q:"「N 倍に伸ばせ」に従うと届く？",v:"yes",vt:"届く",tags:["短腕・B1","R","2 s"],fig:"g-clr",
+ d:`<p>短腕は 397 mm 届かない → {第1層} の助言どおり 1.99 倍で、50 話すべて誤差 1 mm 未満。手描きの {A1・B1} の B1（11 mm 足りない）も 1.02 倍で届く。人は数値もスケッチも直していない。</p><p class="from">系譜 9-279・9-304・9-331／修論 4.5.4 表 4.11</p>`,
+ faq:[["伸ばせば届くのは当たり前では？","その通り。示したのは「倍率の値が正しい」ことで、学習の難しさの比較ではない。"],
+      ["ただのバグ探しでは？","入れ直して初めて、倍率の丸め（1.9846 を 1.98 と表示して 2 mm 足りない）が見つかった。判定が正しくても助言が使えない欠陥は、助言どおり直した形を入れ直さないと見えない（想定問答 Q83）。"]],
+ old:"短腕 −396.92 → 1.99 倍 −0.33 / −0.27。"},
+{s:"C",id:"clp",q:"P でも助言で直る？",v:"yes",vt:"押し込む距離を足せば",tags:["短腕","P","2 s"],fig:"g-clp",
+ d:`<p>2.11 倍（触れる距離だけで計算）は、箱がいちばん奥にある話で取りこぼす。押し込む 0.1 m を足した 2.36 倍で、50 話すべて箱を動かす。</p><p class="from">系譜 9-339・9-351（読み 57-6）／修論 4.5.4 表 4.12</p>`,
+ faq:[["ただのバグでは？","計算は式どおりで、欠陥は「どの距離を必要とみなすか」という仕様の側。判定は正しいので判定の確かめでは出ず、助言どおり直した形を入れ直して初めて見えた。"]],
+ old:null},
+{s:"C",id:"l2",q:"「ギア比の上限を広げよ」に従うと上がる？",v:"no",vt:"上がらない",tags:["中腕","P","3 s 対 2 s"],fig:"g-l2",
+ d:`<p>{第2層} の助言どおり上限を 150 → 300 N·m にしても、帯が重なる。300 で seed 1 はまた上限に張り付く。300 N·m は実在の部品の値ではない（UR5e の 2 倍）。</p><p class="from">系譜 9-340・9-351（読み 57-4）／修論 4.5.4</p>`,
+ faq:[["前は上がったのでは？","11-07 は 9.37〜10.44 → 11.83〜12.80 で上がって見えた。物理の抜け穴（Bug 106。速度の上限を tick の後で切っていた）が上限を広げるほど効いていた。直すと消えた。"]],
+ old:null},
+{s:"C",id:"l3",q:"「この関節は固定してよい」に従うと落ちない？",v:"part",vt:"落ちない／見落としあり",tags:["中腕・A1","R・P","3 s"],fig:"g-l3",
+ d:`<p>{第3層} が提案した中腕の関節 1（使用率 5〜8 %）は、固定しても R が落ちない。提案しなかった A1 の関節 3 は、R では固定しても落ちず（見落とし）、P では下がる（提案しなかったのは正しい）。</p><p class="from">系譜 9-317・9-318・9-334・9-351（読み 57-7）／修論 4.5.5・付録 D.5</p>`,
+ faq:[["見落としって？","閾値（使用率 10 %）が「固定してよい」と言わなかった関節を固定しても、性能が落ちなかったこと。閾値は較正していない。"],
+      ["固定した方が良い？","言わない。言えるのは「固定しても落ちない」まで。"]],
+ old:"A1 の関節 3（当時は使用率 7 % で提案が出た）、2 形態 × 1 s：R −6.30 → −5.32、P 203.40 → 179.89。"},
+{s:"C",id:"obs",q:"柱（障害物）を判定に入れられる？",v:"part",vt:"入れた／学習は届かない",tags:["A1 縦型","R","2 s"],fig:"g-obs",
+ d:`<p>{第1層} は「柱を避けて届く姿勢」を 1 つでも見つけたときだけ「ある」と言う。実物の柱では見つからない（初期の形で最も近くて 530 mm）。</p><p>柱を越えて届く長い腕から同時最適化すると、学習は形を縮めて届かなくなった。同じ腕で形を固定すると届く（最後の誤差 0.8〜1.4 mm、柱の上を越える）。</p><p class="from">系譜 9-312・9-313・9-320／修論 5.3 の 4</p>`,
+ faq:[["なぜ同時最適化で届かなくなる？","学習が形を設計の下限まで縮め、届く範囲の外へ出た（系譜 9-313）。なぜ縮めるかの仕組みは確かめていない。修論 5.3 の 4 の限界。"]],
+ old:"避けて届く姿勢 87152 個中 21244 個 → 根元のヨー関節をピッチと数えていた（Bug 83）ので取り下げ。"},
+{s:"D",id:"pipe",q:"手描きの描き分けが判定まで残る？",v:"yes",vt:"残る",tags:["A1・A2・B1・B2","R（第1層）"],fig:"g-pipe",
+ d:`<p>真横で描いた 4 枚が M7 まで通った。B1 だけが目標 0.8 m に届かず「1.02 倍に伸ばせ」と返る。</p><p class="from">系譜 9-18・9-19・9-21・9-22</p>`,
+ faq:[["同じ絵から同じ形が出る？","出ない。A1 と A2 は手描きで 1.01 対 1.01 だが、XML は 1.0102 対 1.1958 m（+18 %）。揺れは生成側（M1・M2）。判定は両方とも届く。"]],
+ old:null},
+{s:"D",id:"angle",q:"斜め（3/4）で描いても通る？",v:"no",vt:"通らない",tags:["A3","2 回"],fig:null,
+ d:`<p>真横 4 / 4 に対し、斜め 0 / 2。生成（Tripo3D）が斜めの線を奥行きと読み、腕が寝る。2 回とも同じ失敗。</p><p class="from">系譜 9-23</p>`,faq:[],old:null},
+{s:"D",id:"axes",q:"関節の軸を関節ごとに選べる？",v:"part",vt:"選べる／推定はしない",tags:["A1 縦型"],fig:null,
+ d:`<p><span class="num">--axes</span> で関節ごとに x / y / z を指定でき、Choreonoid の実走まで届く（同じ関節で x +414 mm ↔ y −414 mm）。形から軸を推す処理は無い。</p><p class="from">系譜 9-131</p>`,faq:[],old:null},
+{s:"D",id:"prune",q:"軸の候補を第1層で前もって減らせる？",v:"no",vt:"長さも最適化するなら無理",tags:["A1 縦型・81 通り","R・P","2 s"],fig:null,
+ d:`<p>長さを凍結すれば R 45 %・P 41 % を削れる。学習の設定（長さを ±0.5 m 最適化）では R 4 %・P 0 %。棄却した配置を学習させたら 2.1 / 4.0 mm まで届いた（この学習は {旧い物理}）。</p><p class="from">系譜 9-127・9-151・9-152</p>`,faq:[],old:null}
+];
+
+/* ---------- 図 ---------- */
+const C1="var(--s1)",C2="var(--s2)",C3="var(--s3)";
+const FIG=[
+{id:"g-r1",t:"形の最適化 対 凍結",how:"P、中腕、best。右ほど良い",back:"r1",
+ panels:[{min:5,max:9,rows:[["最適化",[8.63,8.38,8.46],C1],["凍結",[6.03,5.93,5.79],C2]]}],note:"帯が重ならない（隙間 2.35）"},
+{id:"g-r2",t:"タスクで形は分かれるか",how:"A1 縦型 4 関節、5 s。帯が重なれば「分かれない」",back:"r2",
+ panels:[{title:"リンク長の合計 [m]",min:0.8,max:3.4,rows:[["R",[1.066,1.145,1.831,1.158,1.158],C1],["P",[1.750,1.688,2.822,3.112,2.842],C2]]},
+         {title:"関節 4 のギア比 [N·m]",min:20,max:160,rows:[["R",[140.0,117.2,103.3,40.0,41.8],C1],["P",[148.5,149.9,115.2,148.1,150.0],C2]]}],note:"どちらも重なる（リンク長 0.14 m、ギア比 24.8）"},
+{id:"g-mat",t:"3 つの腕 × 2 タスク",how:"best。右ほど良い。R と P は報酬が違うので、同じタスクの中だけ比べる",back:"mat",
+ panels:[{title:"R（0 に近いほど目標に近い）",min:-11,max:0,rows:[["中腕",[-1.85,-1.64,-1.68],C1],["長腕",[-9.68,-9.67,-7.71],C2],["短腕",[-397.20],C3]]},
+         {title:"P（大きいほど遠くへ押した）",min:-2,max:42,rows:[["長腕",[40.31,25.27,25.15],C2],["中腕",[8.63,8.38,8.46],C1],["短腕",[-0.00],C3]]}],note:"R は中腕が上、P は長腕が上。短腕の R（−397.20）は目盛りの外"},
+{id:"g-dist",t:"配分だけ違う 2 形",how:"best。右ほど良い",back:"dist",
+ panels:[{title:"R（3 s）",min:-2.6,max:-1.5,rows:[["根元重",[-1.81,-1.91,-1.69],C1],["先端重",[-2.28,-2.18,-2.41],C2]]},
+         {title:"P（5 s）",min:7,max:9,rows:[["根元重",[8.81,7.80,8.71,8.30,7.73],C1],["先端重",[7.47,7.67,7.25,7.82,7.41],C2]]}],note:"R は離れる、P は 0.09 重なる"},
+{id:"g-cheap",t:"安い方法は同じ順位を出すか",how:"○ 同じ順位　× 逆の順位　– 区別・比較できない",back:"cheap",grid:true},
+{id:"g-clr",t:"助言で伸ばした R",how:"最後の誤差 [mm]（50 話の中央値）、対数目盛。左ほど良い",back:"clr",
+ panels:[{log:true,min:0.1,max:1000,better:"left",rows:[["短腕",[397.43],C2],["1.99 倍",[0.20,0.16],C1],["B1",[11.54,10.92],C2],["B1 の 1.02 倍",[0.16,0.22],C1]]}],note:"1.99 倍と 1.02 倍は 50 話すべて 1 mm 未満",ref:{v:1,label:"1 mm"}},
+{id:"g-clp",t:"助言で伸ばした P",how:"50 話のうち箱を 0.1 m 以上動かした話の数。右ほど良い",back:"clp",
+ panels:[{min:0,max:50,rows:[["短腕",[0],C2],["2.11 倍",[46,42],C2],["2.36 倍",[50,50],C1]]}],note:"2.11 倍は奥の箱を取りこぼす"},
+{id:"g-l2",t:"ギア比の上限を広げると",how:"P、中腕、best。右ほど良い",back:"l2",
+ panels:[{min:6.5,max:9,rows:[["上限 150",[8.63,8.38,8.46],C1],["上限 300",[6.92,8.56],C2]]}],note:"重なる（0.18）"},
+{id:"g-l3",t:"関節を固定すると",how:"best。右ほど良い",back:"l3",
+ panels:[{title:"中腕 R・関節 1（提案した）",min:-2,max:-1.3,rows:[["可動",[-1.85,-1.64,-1.68],C1],["固定",[-1.48,-1.52,-1.50],C2]]},
+         {title:"A1 R・関節 3（提案しなかった）",min:-5,max:-3,rows:[["可動",[-4.08,-3.90,-4.62],C1],["固定",[-3.21,-3.70,-3.94],C2]]},
+         {title:"A1 P・関節 3（提案しなかった）",min:30,max:58,rows:[["可動",[54.46,52.32,45.39],C1],["固定",[35.02,36.35,34.74],C2]]}],note:"中腕 R は固定しても落ちない。A1 は R で落ちず、P で下がる"},
+{id:"g-obs",t:"柱のある R",how:"best。右ほど良い",back:"obs",
+ panels:[{min:-240,max:0,rows:[["形も最適化",[-224.15,-222.20],C2],["形を固定",[-18.64,-18.00],C1]]}],note:"形を固定すれば届き、形も最適化すると届かない"},
+{id:"g-pipe",t:"手描き 4 枚の到達半径",how:"第1層が測った総リーチ [m]。点線が目標 0.8 m",back:"pipe",
+ panels:[{min:0.6,max:1.3,rows:[["B1",[0.7891],C2],["A1",[1.0102],C1],["A2",[1.1958],C1],["B2",[1.2270],C1]]}],note:"B1 だけ届かない → 1.02 倍に伸ばせ",ref:{v:0.8,label:"目標 0.8 m"}}
+];
+const GRID={cols:["総リーチ","可操作度","先端の最大速度","参照の制御","凍結の学習"],
+ rows:[["R 中腕 対 長腕","×","×","","○",""],["R 根元重 対 先端重","–","×","","○",""],["P 長腕 対 中腕","○","","○","–",""],["P 根元重 対 先端重","–","","–","–","–"]]};
+
+/* ---------- 描画 ---------- */
+const $=s=>document.querySelector(s);
+const figNo={};FIG.forEach((f,i)=>figNo[f.id]=i+1);
+const esc=s=>String(s);
+function card(f){
+  const acts=[];
+  if(f.fig) acts.push(`<a class="fig" href="#${f.fig}" data-jump="${f.fig}" data-from="${f.id}">図 ${figNo[f.fig]} ↓</a>`);
+  acts.push(`<button type="button" data-p="d">詳しく</button>`);
+  f.faq.forEach((x,i)=>acts.push(`<button type="button" class="faq" data-p="q${i}">${x[0]}</button>`));
+  if(f.old) acts.push(`<button type="button" class="old" data-p="o">旧い物理では</button>`);
+  const panels=[`<div class="panel" data-k="d" hidden>${T(f.d)}</div>`]
+   .concat(f.faq.map((x,i)=>`<div class="panel" data-k="q${i}" hidden><p>${T(x[1])}</p></div>`))
+   .concat(f.old?[`<div class="panel" data-k="o" hidden><p>${T(f.old)}</p><p class="from">撤回した結果。今は使わない</p></div>`]:[]);
+  return `<article class="card" id="${f.id}"><div class="row1"><h3 class="q">${f.q}</h3><span class="pill ${f.v}">${f.vt}</span></div>
+  <div class="tags">${f.tags.map(t=>`<span class="tag">${t}</span>`).join("")}</div>
+  <div class="acts">${acts.join("")}</div>${panels.join("")}</article>`;
+}
+$("#main").innerHTML=SEC.map(s=>`<section id="sec-${s.id}"><h2>${s.id}　${s.name}</h2><p class="sub">${s.sub}</p>${F.filter(f=>f.s===s.id).map(card).join("")}</section>`).join("");
+$("#keys").innerHTML=[["R","到達"],["P","押し"],["s","seed"],["帯","seed の範囲"],["best","1 話の最高"],["腕","パイプラインの腕"]]
+  .map(([k,v])=>`<span class="k"><button type="button" class="term" data-t="${k}">${k}</button>${v}</span>`).join("")
+  +`<span class="k"><span class="pill yes">言える</span></span><span class="k"><span class="pill part">一部</span></span><span class="k"><span class="pill no">言えない</span></span>`;
+
+const NS="http://www.w3.org/2000/svg";
+function el(n,a,p){const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e}
+function ticks(min,max,log){
+  if(log){const t=[];for(let v=Math.pow(10,Math.ceil(Math.log10(min)));v<=max;v*=10)t.push(v);return t}
+  const span=max-min,raw=span/5,mag=Math.pow(10,Math.floor(Math.log10(raw))),step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>span/s<=6);
+  const t=[];for(let v=Math.ceil(min/step)*step;v<=max+1e-9;v+=step)t.push(+v.toFixed(6));return t;
+}
+const fmt=v=>{const a=Math.abs(v);let s=a>=100?a.toFixed(0):a>=10?(+a.toFixed(1)).toString():(+a.toFixed(2)).toString();return (v<0?"−":"")+s};
+function panel(svg,p,y0,W){
+  const L=118,R=W-18,rowH=30,top=p.title?22:6;
+  const sx=v=>p.log?L+(Math.log10(v)-Math.log10(p.min))/(Math.log10(p.max)-Math.log10(p.min))*(R-L):L+(v-p.min)/(p.max-p.min)*(R-L);
+  if(p.title) el("text",{x:0,y:y0+14,class:"ptitle"},svg).textContent=p.title;
+  const h=top+p.rows.length*rowH+24, yAx=y0+top+p.rows.length*rowH+2;
+  ticks(p.min,p.max,p.log).forEach(t=>{const x=sx(t);el("line",{x1:x,x2:x,y1:y0+top,y2:yAx,class:"ax"},svg);
+    el("text",{x:x,y:yAx+14,"text-anchor":"middle",class:"tk"},svg).textContent=p.log?(t>=1?t:t.toString()):fmt(t)});
+  if(p.ref){const x=sx(p.ref.v);el("line",{x1:x,x2:x,y1:y0+top-4,y2:yAx,class:"ref"},svg);el("text",{x:x+4,y:y0+top+6,class:"tk"},svg).textContent=p.ref.label}
+  p.rows.forEach(([lab,vals,col],i)=>{
+    const cy=y0+top+i*rowH+rowH/2;
+    el("text",{x:0,y:cy+4,class:"lab"},svg).textContent=lab;
+    const inR=vals.filter(v=>v>=p.min&&v<=p.max);
+    if(inR.length>1){const a=sx(Math.min(...inR)),b=sx(Math.max(...inR));
+      el("rect",{x:a-6,y:cy-7,width:Math.max(12,b-a+12),height:14,rx:7,style:`fill:${col};fill-opacity:.18;stroke:${col};stroke-opacity:.45`},svg)}
+    vals.forEach((v,j)=>{
+      const off=v<p.min, over=v>p.max, x=off?L:over?R:sx(v);
+      let mark;
+      if(off||over){mark=el("path",{d:off?`M${x+8} ${cy-6} L${x} ${cy} L${x+8} ${cy+6} Z`:`M${x-8} ${cy-6} L${x} ${cy} L${x-8} ${cy+6} Z`,style:`fill:${col}`},svg);
+        el("text",{x:off?x+12:x-12,y:cy+4,"text-anchor":off?"start":"end",class:"tk"},svg).textContent=fmt(v)+"（目盛りの外）"}
+      else mark=el("circle",{cx:x,cy:cy,r:5,style:`fill:${col};stroke:var(--surface);stroke-width:2`},svg);
+      const hit=el("circle",{cx:x,cy:cy,r:12,class:"hit",tabindex:0,"aria-label":`${lab} seed ${j}: ${fmt(v)}`},svg);
+      hit.dataset.tip=`<b>${lab}</b>${vals.length>1?`seed ${j}：`:""}<span class="num">${fmt(v)}</span>`;
+    });
+  });
+  return h;
+}
+function drawChart(box,f){
+  const W=640;const svg=el("svg",{viewBox:`0 0 ${W} 100`,role:"img","aria-label":f.t});
+  let y=0;f.panels.forEach((p,i)=>{y+=panel(svg,p,y,W)+(i<f.panels.length-1?10:0)});
+  svg.setAttribute("viewBox",`0 0 ${W} ${y}`);box.appendChild(svg);
+}
+function drawGrid(box){
+  const m=s=>s==="○"?`<span class="m-same">○</span>`:s==="×"?`<span class="m-rev">×</span>`:s==="–"?`<span class="m-na">–</span>`:`<span class="m-na">·</span>`;
+  box.innerHTML=`<table class="grid"><thead><tr><th>組</th>${GRID.cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>${GRID.rows.map(r=>`<tr><td>${r[0]}</td>${r.slice(1).map(m).join("")}</tr>`).join("")}</tbody></table>`;
+}
+$("#figs").innerHTML=FIG.map((f,i)=>`<figure id="${f.id}"><div class="fhead"><figcaption>図 ${i+1}　${f.t}</figcaption><a class="back" href="#${f.back}" data-jump="${f.back}">↑ 問いへ戻る</a></div><p class="how">${f.how}</p><div class="chart"></div>${f.note?`<p class="fnote">${f.note}</p>`:""}</figure>`).join("");
+FIG.forEach(f=>{const box=document.querySelector(`#${f.id} .chart`);f.grid?drawGrid(box):drawChart(box,f)});
+document.querySelectorAll('#g-cheap .how').forEach(e=>e.insertAdjacentHTML("beforeend","　· 使っていない"));
+
+/* ---------- 操作 ---------- */
+let backTo={};
+function flash(t){t.classList.remove("flash");void t.offsetWidth;t.classList.add("flash");setTimeout(()=>t.classList.remove("flash"),1400)}
+function jump(id){const t=document.getElementById(id);if(!t)return;
+  const rm=matchMedia("(prefers-reduced-motion: reduce)").matches;t.scrollIntoView({behavior:rm?"auto":"smooth",block:"start"});flash(t)}
+const tip=$("#tip");let tipFor=null;
+function showTip(html,anchor){tip.innerHTML=html;tip.hidden=false;const r=anchor.getBoundingClientRect(),w=tip.offsetWidth,h=tip.offsetHeight;
+  let x=Math.min(Math.max(8,r.left+r.width/2-w/2),innerWidth-w-8),y=r.top-h-8;if(y<8)y=r.bottom+8;tip.style.left=x+"px";tip.style.top=y+"px";tipFor=anchor}
+function hideTip(){tip.hidden=true;tipFor=null}
+document.addEventListener("click",e=>{
+  const j=e.target.closest("[data-jump]");
+  if(j){e.preventDefault();const id=j.dataset.jump;if(j.dataset.from){const fig=document.getElementById(id);fig.querySelector(".back").dataset.jump=j.dataset.from;fig.querySelector(".back").setAttribute("href","#"+j.dataset.from)}jump(id);hideTip();return}
+  const term=e.target.closest(".term");
+  if(term){if(tipFor===term){hideTip();return}showTip(`<b>${term.dataset.t}</b>${G[term.dataset.t]}`,term);return}
+  const hit=e.target.closest(".hit");
+  if(hit){showTip(hit.dataset.tip,hit);return}
+  const b=e.target.closest(".acts button");
+  if(b){const c=b.closest(".card"),k=b.dataset.p,open=b.getAttribute("aria-expanded")==="true";
+    c.querySelectorAll(".acts button").forEach(x=>x.setAttribute("aria-expanded","false"));c.querySelectorAll(".panel").forEach(p=>p.hidden=true);
+    if(!open){b.setAttribute("aria-expanded","true");c.querySelector(`.panel[data-k="${k}"]`).hidden=false}hideTip();return}
+  if(!e.target.closest("#tip"))hideTip();
+});
+document.querySelectorAll(".acts button").forEach(b=>b.setAttribute("aria-expanded","false"));
+document.addEventListener("mouseover",e=>{const h=e.target.closest(".hit");if(h)showTip(h.dataset.tip,h)});
+document.addEventListener("mouseout",e=>{const h=e.target.closest(".hit");if(h&&tipFor===h)hideTip()});
+document.addEventListener("focusin",e=>{const h=e.target.closest(".hit");if(h)showTip(h.dataset.tip,h)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")hideTip()});
+addEventListener("scroll",()=>{if(!tip.hidden)hideTip()},{passive:true});
+</script>
