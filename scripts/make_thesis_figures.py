@@ -517,6 +517,16 @@ def fig_r4_settle():
     def ws(r):
         return r + '_ws' if r.endswith('_s2') and os.path.isdir(os.path.join(RUN, r + '_ws')) else r
 
+    def vp(r):
+        """押しと縦型は Bug 106・107 を直した物理の取り直し（系譜 9-351 の `_vp`）に替える。短腕は箱に触れないので元の run"""
+        if r.startswith(('tripo_pjp_', 'tripo_pjdp_', 'e2e_a1v_')) and 'short' not in r \
+                and os.path.isdir(os.path.join(RUN, r + '_vp')):
+            return r + '_vp'
+        return r
+
+    def m(runs):
+        return [vp(ws(r)) for r in runs]
+
     def settle(runs):
         ep, _, _, _, _, _ = rs.settle_epoch(runs, runs)
         return ep
@@ -527,30 +537,32 @@ def fig_r4_settle():
         last = max(set(a) & set(b))
         return (a[e] > b[e]) != (a[last] > b[last])
 
-    # 形が違う対（コホート B）: (行の名前, seed 0 の対, seed 1 の対, seed 2 の対)
+    # 形が違う対（コホート B）: (行の名前, seed 0 の対, seed 1 の対, 較正に使っていない対の並び)
+    #   押しの配分は seed 2〜4（*_s3・_s4・_s5）を持つ（系譜 9-351 の 57-8 の記録）
     B = [('到達: 中腕 対 長腕', ('tripo_pj_mid_phys', 'tripo_pj_long_phys'),
-          ('tripo_pj_mid_phys_s2', 'tripo_pj_long_phys_s2'), ('tripo_pj_mid_phys_s3', 'tripo_pj_long_phys_s3')),
+          ('tripo_pj_mid_phys_s2', 'tripo_pj_long_phys_s2'), [('tripo_pj_mid_phys_s3', 'tripo_pj_long_phys_s3')]),
          ('押し: 長腕 対 中腕', ('tripo_pjp_long_phys', 'tripo_pjp_mid_phys'),
-          ('tripo_pjp_long_phys_s2', 'tripo_pjp_mid_phys_s2'), ('tripo_pjp_long_phys_s3', 'tripo_pjp_mid_phys_s3')),
+          ('tripo_pjp_long_phys_s2', 'tripo_pjp_mid_phys_s2'), [('tripo_pjp_long_phys_s3', 'tripo_pjp_mid_phys_s3')]),
          ('到達: 根元重 対 先端重', ('tripo_pjd_prox_phys', 'tripo_pjd_dist_phys_cg'),
-          ('tripo_pjd_prox_phys_s2', 'tripo_pjd_dist_phys_cg_s2'), ('tripo_pjd_prox_phys_s3', 'tripo_pjd_dist_phys_cg_s3')),
+          ('tripo_pjd_prox_phys_s2', 'tripo_pjd_dist_phys_cg_s2'), [('tripo_pjd_prox_phys_s3', 'tripo_pjd_dist_phys_cg_s3')]),
          ('押し: 根元重 対 先端重', ('tripo_pjdp_prox_phys', 'tripo_pjdp_dist_phys_cg'),
-          ('tripo_pjdp_prox_phys_s2', 'tripo_pjdp_dist_phys_s2'), ('tripo_pjdp_prox_phys_s3', 'tripo_pjdp_dist_phys_cg_s3')),
+          ('tripo_pjdp_prox_phys_s2', 'tripo_pjdp_dist_phys_s2'),
+          [('tripo_pjdp_prox_phys_s3', 'tripo_pjdp_dist_phys_cg_s3'), ('tripo_pjdp_prox_phys_s4', 'tripo_pjdp_dist_phys_cg_s4'),
+           ('tripo_pjdp_prox_phys_s5', 'tripo_pjdp_dist_phys_cg_s5')]),
          ('到達: A1 可動 対 関節 3 固定', ('e2e_a1_reach_phys', 'e2e_a1_fix3_reach_phys'),
-          ('e2e_a1_reach_phys_s2', 'e2e_a1_fix3_reach_phys_s2'), ('e2e_a1_reach_phys_s3', 'e2e_a1_fix3_reach_phys_s3'))]
+          ('e2e_a1_reach_phys_s2', 'e2e_a1_fix3_reach_phys_s2'), [('e2e_a1_reach_phys_s3', 'e2e_a1_fix3_reach_phys_s3')])]
     SHORT = [('tripo_pj_long_phys', 'tripo_pj_short_phys_cg'), ('tripo_pj_mid_phys', 'tripo_pj_short_phys_cg'),
              ('tripo_pjp_long_phys', 'tripo_pjp_short_phys_cg'), ('tripo_pjp_mid_phys', 'tripo_pjp_short_phys_cg'),
              ('tripo_pjr199_phys', 'tripo_pj_short_phys_cg')]
     # 乱数だけ違う組（コホート A）: rank_settle の COHORTS のうち名前が「A」で始まるもの（seed 1 は *_s2_ws）
-    A = [[ws(r) for r in runs] for runs, _, name in rs.COHORTS if name.startswith('A')]
+    A = [m(runs) for runs, _, name in rs.COHORTS if name.startswith('A')]
 
     rows = []   # (名前, [(エポック, 印の種類, 第30で逆か)])
-    for name, p0, p1, p2 in B:
-        pts = [(settle(list(p0)), 'cal', wrong_at(p0)),
-               (settle([ws(r) for r in p1]), 'cal', wrong_at([ws(r) for r in p1])),
-               (settle(list(p2)), 'held', wrong_at(p2))]
+    for name, p0, p1, held in B:
+        pts = [(settle(m(p0)), 'cal', wrong_at(m(p0))), (settle(m(p1)), 'cal', wrong_at(m(p1)))]
+        pts += [(settle(m(p)), 'held', wrong_at(m(p))) for p in held]
         rows.append((name, pts))
-    rows.append(('短腕との対（5 対、seed 0）', [(settle(list(p)), 'cal', wrong_at(p)) for p in SHORT]))
+    rows.append(('短腕との対（5 対、seed 0）', [(settle(m(p)), 'cal', wrong_at(m(p))) for p in SHORT]))
     rows.append((f'乱数だけ違う組（{len(A)} 組）', [(settle(r), 'rand', False) for r in A]))
     for name, pts in rows:
         print(f'[r4] {name}: ' + ', '.join(f'{e}{"（第30で逆）" if w else ""}' for e, _, w in pts))
@@ -582,7 +594,7 @@ def fig_r4_settle():
     ax.set_ylim(ys[-1] - 0.6, ys[0] + 0.9)
     ax.set_xlabel('確定エポック（以降、最終順位から一度も外れない最小のエポック、対数軸）')
     hs = [plt.Line2D([], [], ls='', marker='o', ms=7, mfc=C_MID, mec='#1d5f8c', label='形が違う対（較正に使った seed 0・1）'),
-          plt.Line2D([], [], ls='', marker='D', ms=7.5, mfc='white', mec='#c0392b', mew=1.8, label='形が違う対（較正に使っていない seed 2）'),
+          plt.Line2D([], [], ls='', marker='D', ms=7.5, mfc='white', mec='#c0392b', mew=1.8, label='形が違う対（較正に使っていない seed 2〜4）'),
           plt.Line2D([], [], ls='', marker='o', ms=6.5, mfc='#bbbbbb', mec='#777777', label='乱数だけ違う組（同じ形・別の seed）')]
     ax.legend(handles=hs, loc='upper center', bbox_to_anchor=(0.5, -0.17), ncol=2, fontsize=9.5, frameon=False)
     fig.tight_layout()
