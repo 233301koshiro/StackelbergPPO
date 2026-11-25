@@ -70,8 +70,8 @@ USE_CHOREONOID=1 /choreonoid_ws/install/bin/choreonoid --no-window \
 **「書いたつもり」で済ませない。** `grep` で当該の語がそのファイルに入っているかを見る。
 
 ```bash
-for f in docs/進捗.md docs/研究応用/引き継ぎ_再起動後.md docs/実験一覧_詳細.md \
-         scripts/README.md; do
+for f in docs/進捗.md docs/研究応用/引き継ぎ_再起動後.md \
+         docs/研究応用/台帳/実験系譜.md scripts/README.md; do
   printf "  %-40s %s\n" "$f" "$(grep -c '<今回のキーワード>' $f)"
 done
 ```

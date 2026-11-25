@@ -257,8 +257,9 @@ def check_D(runs):
     """checkpoint がある run が台帳に載っていない"""
     # ⚠️ 2026-09-08 に 研究応用/ をサブフォルダ化した（台帳・設計・執筆・方針）。
     # パスを決め打ちすると台帳を見失い、**全 run が「記録漏れ」に見える**（実際に 39 件出た）。
-    ledgers = [os.path.join(DOC_DIR, '研究応用', '台帳', '実験系譜.md'),
-               os.path.join(DOC_DIR, '実験一覧_詳細.md')]
+    # 2026-11-25: 実験一覧_詳細.md を消した（旧い物理の run だけで 09-23 から止まっていた）。
+    # 名前がそこにしか無かった 14 本は実験系譜の表へ移した。
+    ledgers = [os.path.join(DOC_DIR, '研究応用', '台帳', '実験系譜.md')]
     text = ''
     for f in ledgers:
         if os.path.exists(f):
