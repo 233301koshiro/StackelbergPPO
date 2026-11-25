@@ -45,7 +45,6 @@ INTENTIONAL_RUNS = {
     'pusher',                    # 移行記録の当時のディレクトリ名
     'rrbot_arm2_cnoid_v1',       # 報酬設計の失敗史で言及する過去 run（タスク設計と報酬関数.md）
     'rrbot_arm_velcap_D',        # 同上
-    'rrbot_arm_reach_F2',        # 進捗.md の知見セクションで言及する過去 run
     'tripo_arm_smoke',           # パイプライン実証時のスモーク run（既に削除済み）
     'tripo_arm_v2_smoke',        # 同上
 }
