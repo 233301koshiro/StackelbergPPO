@@ -65,16 +65,16 @@ BAND_ITEMS = [
     ('57-2', 'マトリクスの押し（3 seed）長腕 対 中間', [('best', BEST, 2, '長腕', LONG, '中間', MID)],
      {'上': 'a（長腕 ＞ 中間）', '重なる': 'b（重なる）', '下': 'c（中間 ＞ 長腕）'}),
     ('57-3', '押しの配分（5 seed）根元重 対 先端重', [('best', BEST, 2, '根元重', PROX, '先端重', DIST)],
-     {'上': 'a（根元重 ＞ 先端重）', '重なる': 'b（重なる）。「のみが区別した」は取り下げ', '下': 'c（逆）。「のみが区別した」は取り下げ'}),
+     {'上': 'a（根元重 ＞ 先端重）', '重なる': 'b（重なる）。「のみが区別した」は取り下げ', '下': 'c（逆。表 4.7 を「先端重が上位」に替える）。「のみが区別した」は取り下げ'}),
     ('57-3 凍結', '押しの配分の凍結（3 seed）根元重 対 先端重', [('best', BEST, 2, '根元重 凍結', PROX_FZ, '先端重 凍結', DIST_FZ)],
      {'上': '離れる → 「形態の最適化を含む判定のみが区別した」を取り下げ', '下': '離れる → 「形態の最適化を含む判定のみが区別した」を取り下げ',
-      '重なる': '重なる → 57-3 が a なら「のみが区別した」を保つ候補'}),
+      '重なる': '重なる → 57-3 が a なら「のみが区別した」を保つ（凍結は 3 シードと添える。補い 2）'}),
     ('57-4', '修論 4.5.4 上限 300 N·m（2 seed）対 150 N·m（3 seed）', [('best', BEST, 2, '300', UB300, '150', MID)],
      {'上': 'a（「向上」を保つ）', '重なる': 'b（「向上」を取り下げる）', '下': 'b（「向上」を取り下げる）'}),
     ('57-5', 'R2 縦型（5 seed）到達 対 押し', [('関節 4 のギア比', J4, 1, '到達', REACH, '押し', PUSH),
                                           ('リンク長の合計', LSUM, 3, '到達', REACH, '押し', PUSH)], None),
     ('57-7', '修論 4.5.5 A1 の押し（3 seed）可動 対 関節 3 固定', [('best', BEST, 2, '可動', A1, '固定', FIX3)],
-     {'上': 'a（「固定すると押しの性能が低下する」を言える）', '重なる': 'b（今の書き方のまま）', '下': 'c（固定の帯が上）'}),
+     {'上': 'a（「固定すると押しの性能が低下する」を言える）', '重なる': 'b（今の書き方のまま）', '下': 'c（固定の帯が上。見落としは到達と押しの両方で生じたと書く。補い 2）'}),
 ]
 
 
@@ -130,7 +130,9 @@ def band_item(item, on, seen, show):
     for qn, key, d, la, ra, lb, rb in qs:
         A = [run_info(n) for n in vp(ra, on)]
         B = [run_info(n) for n in vp(rb, on)]
-        ba, bb = band(*A, key=key), band(*B, key=key)
+        # 補い 2（11-25）: 表示する桁に丸めた値で帯を作り、端が一致したら「重なる」（relation は端を含む区間）
+        rk = lambda x, key=key, d=d: round(key(x), d)  # noqa: E731
+        ba, bb = band(*A, key=rk), band(*B, key=rk)
         rel = relation(ba, bb)
         rels.append(rel)
         if rel is None:
@@ -164,7 +166,8 @@ def item_57_9(on, seen, show):
         if not (show and ok):
             continue
         A, B = [run_info(n) for n in vp(ra, on)], [run_info(n) for n in vp(rb, on)]
-        rb_ = relation(band(*A), band(*B))
+        r2 = lambda i: round(i['best'], 2)  # noqa: E731  補い 2: 表示の桁に丸めて比べる
+        rb_ = relation(band(*A, key=r2), band(*B, key=r2))
         if rb_ is None:
             PROBLEMS.append(f'57-9 {la} 対 {lb}: 最良値の帯が作れない')
             continue
@@ -177,8 +180,8 @@ def item_57_9(on, seen, show):
         # 11-25 まで 2 行に別々の記号を出していて、結果を見てから片方を選べた。外部の見直しの指摘）
         rels = []
         for n in (50, 20):
-            ba = band(*A, key=lambda i, n=n: last_mean(i['name'], n))
-            bb = band(*B, key=lambda i, n=n: last_mean(i['name'], n))
+            ba = band(*A, key=lambda i, n=n: round(last_mean(i['name'], n), 2))
+            bb = band(*B, key=lambda i, n=n: round(last_mean(i['name'], n), 2))
             rel = relation(ba, bb)
             rels.append(rel)
             print(f'    最後の {n} エポックの平均: {la} {fmt(ba, 2)} 対 {lb} {fmt(bb, 2)} → {la}が{rel}')
