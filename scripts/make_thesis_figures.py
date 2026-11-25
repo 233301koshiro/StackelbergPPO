@@ -831,8 +831,111 @@ def fig_learning_curves():
     return 'learning_curves.png'
 
 
+# ── 報酬の帯の幅と、収束した設計変数の seed 間の幅（2026-11-25、系譜 9-357・9-358。スライド・想定問答 Q85 用で修論には載せない） ──
+def _var_spread_morph(run):
+    """best の再生（trace/arm_trace.npz）から ギア比・半径・後方延長（関節 1〜3）を出す。後方延長はカプセルの始点の x の負の分で近似。"""
+    z = np.load(os.path.join(ROOT, 'single_run', run, 'trace', 'arm_trace.npz'), allow_pickle=True)
+    g = np.array(z['ep_gear'][0], float)[1:4]
+    r = np.array(z['ep_geom'][0], float)[1:4]
+    e = np.clip(-np.array(z['ep_cap'][0], float)[1:4, 0], 0, None)
+    raw = np.concatenate([g, r, e])
+    norm = np.concatenate([(g - 20) / 130, (r - 0.03) / 0.07, e / 0.2])
+    return raw, norm
+
+
+def fig_var_spread():
+    """左に報酬（best、3 seed の点と最小〜最大の帯）、右に設計変数 9 個の 3 seed の位置（探索範囲を下限〜上限にそろえる）。
+    結果の幅と変数の幅が対応しないこと（9-357）、到達の中腕の関節 1 は差し替えると両向きで下がること（9-358）を見せる。"""
+    CONDS = [
+        ('到達・中腕', ['tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3']),
+        ('到達・長腕', ['tripo_pj_long_phys', 'tripo_pj_long_phys_s2_ws', 'tripo_pj_long_phys_s3']),
+        ('押し・中腕', ['tripo_pjp_mid_phys_vp', 'tripo_pjp_mid_phys_s2_ws_vp', 'tripo_pjp_mid_phys_s3_vp']),
+        ('押し・長腕', ['tripo_pjp_long_phys_vp', 'tripo_pjp_long_phys_s2_ws_vp', 'tripo_pjp_long_phys_s3_vp']),
+    ]
+    SEED_C = ['#0072B2', '#D55E00', '#009E73']
+    SEED_M = ['o', 's', '^']
+    VARS = ['関節1', '関節2', '関節3'] * 3
+    GROUPS = [('ギア比\n20〜150 N·m', 20, 150), ('半径（太さ）\n0.03〜0.10 m', 0.03, 0.10), ('後方延長（近似）\n0〜0.2 m', 0.0, 0.2)]
+    morph = _var_spread_morph
+    fig = plt.figure(figsize=(11.5, 11.0))
+    gs = fig.add_gridspec(4, 2, width_ratios=[1.0, 2.5], wspace=0.18, hspace=0.95)
+    rew = {}
+    for k, (name, runs) in enumerate(CONDS):
+        rew[name] = [running_best(curve(r)[1])[-1] for r in runs]
+    xl = {}
+    for t in ('到達', '押し'):
+        v = sum([rew[n] for n in rew if n.startswith(t)], [])
+        pad = 0.12 * (max(v) - min(v))
+        xl[t] = (min(v) - pad, max(v) + pad)
+
+    for k, (name, runs) in enumerate(CONDS):
+        # 左: 報酬（best）。同じタスクの中腕と長腕は同じ横軸
+        ax = fig.add_subplot(gs[k, 0])
+        v = rew[name]
+        ax.axvspan(min(v), max(v), color='0.5', alpha=0.18, lw=0)
+        for s, x in enumerate(v):
+            ax.plot(x, 0.35 - 0.35 * s, SEED_M[s], color=SEED_C[s], ms=9, mec='white', mew=1.0, zorder=3)  # 重なる値が見えるよう seed ごとに縦をずらす
+        ax.set_xlim(*xl[name[:2]])
+        ax.set_ylim(-1, 1)
+        ax.set_yticks([])
+        ax.grid(axis='y', visible=False)
+        ax.set_title(f'{name}　報酬（best）', loc='left', fontsize=11, fontweight='bold')
+        ax.text(0.98, 0.80, f'幅 {max(v) - min(v):.2f}', transform=ax.transAxes, ha='right', fontsize=10, color='0.25')
+        if name == '押し・長腕':
+            ax.annotate('50 話の中央は 17.42\n（5 話だけ箱が 4〜19 m 滑る）', xy=(v[0], 0.35), xytext=(v[0] - 1, -0.76),
+                        ha='right', va='center', fontsize=8.5, color='0.3',
+                        arrowprops=dict(arrowstyle='-', color='0.5', lw=0.8))
+        # 右: 設計変数（探索範囲を 0〜1 にそろえた位置）
+        ax2 = fig.add_subplot(gs[k, 1])
+        data = [morph(r) for r in runs]
+        norm = np.array([d[1] for d in data])
+        raw = np.array([d[0] for d in data])
+        for j in range(9):
+            xj = j + (j // 3) * 0.6
+            lo, hi = norm[:, j].min(), norm[:, j].max()
+            ax2.plot([xj, xj], [lo, hi], color='0.55', lw=5, alpha=0.35, solid_capstyle='round', zorder=1)
+            for s in range(3):
+                ax2.plot(xj + (s - 1) * 0.16, norm[s, j], SEED_M[s], color=SEED_C[s], ms=7, mec='white', mew=0.8, zorder=3)
+            if hi - lo >= 0.45:
+                ax2.text(xj, 1.13, f'{(hi - lo) * 100:.0f} %', ha='center', fontsize=8.5, color='0.2', fontweight='bold')
+        ax2.set_ylim(-0.08, 1.25)
+        ax2.set_yticks([0, 1])
+        ax2.set_yticklabels(['下限', '上限'], fontsize=9)
+        ticks = [j + (j // 3) * 0.6 for j in range(9)]
+        ax2.set_xticks(ticks)
+        ax2.set_xticklabels(VARS, fontsize=9)  # どの行でも列の意味が分かるよう、関節名と変数名を全行に付ける
+        for g, (lab, _, _) in enumerate(GROUPS):
+            ax2.text(g * 3.6 + 1, -0.27, lab.split('\n')[0], ha='center', va='top', fontsize=9.5, fontweight='bold', color='0.25',
+                     transform=ax2.get_xaxis_transform())
+        ax2.set_xlim(-0.6, ticks[-1] + 0.6)
+        ax2.grid(axis='x', visible=False)
+        for g in range(1, 3):
+            ax2.axvline(g * 3.6 - 0.9, color='0.8', lw=0.8)
+        if k == 0:
+            for g, (lab, _, _) in enumerate(GROUPS):
+                ax2.text(g * 3.6 + 1, 1.55, lab, ha='center', va='bottom', fontsize=9.5)
+            ax2.set_title('設計変数（3 seed の収束値。縦軸は探索範囲の中の位置）', loc='left', fontsize=11, fontweight='bold', pad=46)
+        if name == '到達・中腕':
+            ax2.annotate('差し替えると両向きで\n報酬が下がる（9-358）', xy=(0, 0.5), xytext=(0.45, 0.62),
+                         fontsize=8.5, color='0.3', va='center',
+                         arrowprops=dict(arrowstyle='-', color='0.5', lw=0.8))
+
+    handles = [plt.Line2D([], [], marker=SEED_M[s], color=SEED_C[s], ls='', ms=8, label=f'seed {s}') for s in range(3)]
+    fig.legend(handles=handles, loc='lower center', ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.01))
+    fig.text(0.5, -0.04, '灰色の帯・棒 ＝ 3 seed の最小〜最大。% は探索範囲に対する幅（45 % 以上だけ表示）。'
+             '後方延長はカプセルの始点の x から出した近似。リンクの長さは設計変数ではない（スケッチで決まる）。',
+             ha='center', fontsize=8.5, color='0.35')
+    
+    out = os.path.join(os.path.dirname(OUT), 'スライド用', 'var_spread.png')
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    fig.savefig(out)
+    plt.close(fig)
+    return out
+
+
 FIGS = {'matrix': fig_matrix_reversal,
         'matrix_bands': fig_matrix_bands,
+        'var_spread': fig_var_spread,
         'curves': fig_learning_curves,
         'star': fig_target_star,
         'r4': fig_r4_settle,
