@@ -7,6 +7,7 @@
 
     python3 scripts/blind_progress.py            # 47 本の状態（未起動・学習中 第 N エポックと残り時間・完走）と目視・再生の済み
     python3 scripts/blind_progress.py --logs     # キューのログ（queue_1116*.log）と途中の見張り（midrun_check.log）の末尾、postrun_summary.log の ⛔ の行を伏せて出す
+    python3 scripts/blind_progress.py --premise  # 読み 57 の前提のうち judge が見ないもの（種・PRETICK・launch_env・凍結・check_before_conclusion の ⛔/⚠️）を 47 本ぶん（約 11 分）
     python3 scripts/blind_progress.py <run>      # その run の結論前の検査と postrun_summary.log の段を、小数・百分率・mm を伏せて出す
 
 伏せるもの: 小数（`-1.85`・`0.583`）と百分率と mm の値（到達の誤差は「誤差 80 mm」と整数で出る）。報酬・箱の移動・誤差・比はすべて小数で出るので、これで全部隠れる。
@@ -96,6 +97,47 @@ def logs(n=12):
             print('  ' + mask(line))
 
 
+def premise():
+    """読み 57 の前提のうち judge_reading57.py が見ないもの（ワーカーの種・PRETICK の行・launch_env の 2 つの直し・
+    凍結の robot_param_scale・check_before_conclusion.py の ⛔ / ⚠️）を 47 本ぶん、値を伏せて出す（11-25 追加）。
+    種と PRETICK は stdout.log から決まった文字列だけを -o 相当で抜く（キューの起動 60 秒後の確かめと同じ文字列）"""
+    import json
+    bad = 0
+    for r in RUNS:
+        d = ROOT / 'single_run' / r
+        out = (d / 'stdout.log').read_text(errors='ignore') if (d / 'stdout.log').exists() else ''
+        ov = (d / '.hydra' / 'overrides.yaml').read_text() if (d / '.hydra' / 'overrides.yaml').exists() else ''
+        m = re.search(r'^- seed=(\d+)', ov, re.M)
+        seed = int(m.group(1)) if m else 0
+        want = '[' + ', '.join(str(1000 * seed + i) for i in range(1, 5)) + ']'
+        s = re.search(r'ワーカーの乱数の種 \[[0-9, ]*\]', out)
+        # PRETICK の行は学習の stdout.log ではなくワーカーのログにだけ出る（系譜 9-351 の 11-17 追記。キューの ⛔⛔ は誤報）。
+        # 親 PID はキューのログの「<run> launched (PID N)」から取り、ワーカー 4 つすべてに行があるかを見る
+        pid = next((m.group(1) for q in sorted((ROOT / 'single_run').glob('queue_1116*.log'))
+                    for m in re.finditer(re.escape(r) + r' launched \(PID (\d+)\)', q.read_text(errors='ignore'))), None)
+        wl = sorted(Path('/tmp').glob(f'cnoid_worker_{pid}_*.log')) if pid else []
+        p = len(wl) == 4 and all(re.search(r'tick の前にトルクを絞って速度の上限を守る: [0-9]+ 関節', w.read_text(errors='ignore'))
+                                  for w in wl)
+        try:
+            env = json.loads((d / 'launch_env.json').read_text())
+            env_ok = env.get('CNOID_JOINT_MAX_VEL_PRETICK') == '1' and env.get('CNOID_CAPSULE_INERTIA_ROT') == '1'
+        except Exception:
+            env_ok = False
+        items = [('種', bool(s) and want in s.group(0)), ('PRETICK（ワーカー 4/4）', bool(p)), ('launch_env', env_ok)]
+        if 'frozen' in r:
+            items.append(('凍結 0.0001', 'robot_param_scale = 0.0001' in out))
+        cbc = subprocess.run([sys.executable, str(ROOT / 'scripts' / 'check_before_conclusion.py'), r],
+                             capture_output=True, text=True, cwd=ROOT)
+        flags = [mask(ln.strip()) for ln in (cbc.stdout + cbc.stderr).splitlines()
+                 if re.match(r'\s*(⛔|⚠️)', ln) and '結論を書く前に' not in ln]
+        ok = all(v for _, v in items)
+        bad += (not ok) or any(f.startswith('⛔') for f in flags)
+        print(f'{"✅" if ok else "⛔"} {r:44s} ' + '  '.join(f'{k}{"✅" if v else "⛔"}' for k, v in items), flush=True)
+        for f in flags:
+            print('      ' + f[:240], flush=True)
+    print(f'\n前提で ⛔ のある run: {bad} / {len(RUNS)}')
+
+
 def detail(run):
     if run not in RUNS:
         print(f'⚠️ {run} は取り直しの 47 本に無い。伏せずに見てよい run なら普段の道具で見る')
@@ -119,6 +161,8 @@ if __name__ == '__main__':
         overview()
     elif a == ['--logs']:
         logs()
+    elif a == ['--premise']:
+        premise()
     elif len(a) == 1 and not a[0].startswith('-'):
         sys.exit(detail(a[0]))
     else:
