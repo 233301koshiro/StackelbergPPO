@@ -133,6 +133,9 @@ def band(*runs, key=lambda i: i['best']):
         return None
     if any(x is None for x in v):
         return None
+    # nan・inf は比べると False になり、relation() が黙って「重なる」を返す（11-25、外部の見直しの指摘）。帯を作らない
+    if not all(np.isfinite(float(x)) for x in v):
+        return None
     return (min(v), max(v))
 
 
