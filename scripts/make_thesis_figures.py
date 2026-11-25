@@ -141,6 +141,94 @@ def fig_matrix_reversal():
     return 'matrix_reversal.png'
 
 
+# ── 図1 の帯版（2026-11-25 試作。旧 matrix_reversal.png は before として残す） ──────────
+def fig_matrix_bands():
+    """図 4.2 を、本文の主張（3 シードの範囲が重ならない）と同じ量で描く。
+
+    旧図はシード 0 の棒だけで、本文の根拠（3 シードの範囲）を見せていなかった。
+    各シードの最良エピソード報酬を点で、シード間の最小〜最大を帯で描き、中腕と長腕の帯のすき間を書く。
+    順位の入れ替わりのパネルは旧図と同じ（順位は帯の上下で決める）。
+    """
+    names = ['短腕', '中腕', '長腕']
+    reach = [['tripo_pj_short_phys_cg'],
+             ['tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'],
+             ['tripo_pj_long_phys', 'tripo_pj_long_phys_s2_ws', 'tripo_pj_long_phys_s3']]
+    # 押しの中腕・長腕は Bug 106・107 を直した物理の取り直し（系譜 9-351 の `_vp`）。短腕は箱に触れず直しが効かないので元の run
+    push = [['tripo_pjp_short_phys_cg'],
+            ['tripo_pjp_mid_phys_vp', 'tripo_pjp_mid_phys_s2_ws_vp', 'tripo_pjp_mid_phys_s3_vp'],
+            ['tripo_pjp_long_phys_vp', 'tripo_pjp_long_phys_s2_ws_vp', 'tripo_pjp_long_phys_s3_vp']]
+    cols = [C_SHORT, C_MID, C_LONG]
+    vals_r = [[running_best(curve(r)[1])[-1] for r in rs] for rs in reach]
+    vals_p = [[running_best(curve(r)[1])[-1] for r in rs] for rs in push]
+    for task, vv in (('Reach', vals_r), ('Pusher', vals_p)):
+        print(f'[matrix_bands] {task}: ' + ' / '.join(f'{n} ' + ' '.join(f'{v:.2f}' for v in x) for n, x in zip(names, vv)))
+
+    fig = plt.figure(figsize=(9.6, 3.9))
+    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 1.15, 0.85], wspace=0.50)
+    ranks = []
+    for k, (vv, title) in enumerate([(vals_r, 'Reach（目標へ到達する）'), (vals_p, 'Pusher（対象を押し出す）')]):
+        ax = fig.add_subplot(gs[k])
+        ypos = np.arange(3)[::-1]                       # 短腕を上に置く
+        lo = [min(x) for x in vv]
+        hi = [max(x) for x in vv]
+        # 横軸は線形で、中腕と長腕（3 シードの帯で比べる 2 つ）が収まる範囲。短腕が外れたら端に値を書く
+        span = max(hi[1:]) - min(lo[1:])
+        xmin = min(min(lo[1:]) - 0.18 * span, -0.04 * span if min(lo[1:]) > 0 else min(lo[1:]) - 0.18 * span)
+        xmax = max(max(hi[1:]) + 0.18 * span, 0 if max(hi[1:]) < 0 else max(hi[1:]) + 0.18 * span)
+        for i in range(3):
+            if len(vv[i]) > 1:
+                ax.barh(ypos[i], hi[i] - lo[i], left=lo[i], height=0.40, color=cols[i], alpha=0.22,
+                        edgecolor=cols[i], lw=1.2, zorder=2)
+                above = ypos[i] >= 1                    # すき間の矢印（中腕と長腕の間）にかからない側へ書く
+                ax.text((lo[i] + hi[i]) / 2, ypos[i] + (0.30 if above else -0.30), f'[{lo[i]:.2f}, {hi[i]:.2f}]',
+                        ha='center', va='bottom' if above else 'top',
+                        fontsize=9.5, color=cols[i])
+            inside = [v for v in vv[i] if xmin <= v <= xmax]
+            ax.scatter(inside, [ypos[i]] * len(inside), s=46, color=cols[i], edgecolor='white', lw=1.2, zorder=4)
+            for v in vv[i]:
+                if v < xmin:
+                    ax.annotate(f'◀ {v:.2f}（軸の外）', (xmin, ypos[i]), xytext=(4, 0), textcoords='offset points',
+                                ha='left', va='center', fontsize=10, color=cols[i])
+        ax.set_yticks(ypos)
+        ax.set_yticklabels([f'{n}\n（{len(x)} シード）' for n, x in zip(names, vv)] if k == 0 else [''] * 3, fontsize=10.5)
+        ax.set_xlim(xmin, xmax)
+        if xmin < 0 < xmax:
+            ax.axvline(0, color='#555', lw=0.9, zorder=1)
+        ax.set_title(title, fontsize=13, pad=8)
+        ax.set_xlabel('最良エピソード報酬（右ほど良い）', fontsize=11.5)
+        ax.set_ylim(-0.7, 2.7)
+        ax.grid(axis='y', alpha=0)
+        # 中腕と長腕の帯のすき間（上の帯の最小 − 下の帯の最大）。正なら重ならない
+        up, dn = (1, 2) if lo[1] > hi[2] else (2, 1)
+        gap = lo[up] - hi[dn]
+        ax.annotate('', xy=(lo[up], 0.5), xytext=(hi[dn], 0.5),
+                    arrowprops=dict(arrowstyle='<->', color='#333', lw=1.0, shrinkA=0, shrinkB=0), zorder=5)
+        ax.text((hi[dn] + lo[up]) / 2, 0.56, f'すき間 {gap:.2f}' if gap > 0 else f'重なり {-gap:.2f}',
+                ha='center', va='bottom', fontsize=10, color='#333')
+        for xx in (lo[up], hi[dn]):
+            ax.plot([xx, xx], [0.1, 0.9], color='#333', lw=0.6, ls=':', zorder=1)
+        order = sorted(range(3), key=lambda i: (lo[i], hi[i]), reverse=True)
+        ranks.append({i: r + 1 for r, i in enumerate(order)})
+
+    ax = fig.add_subplot(gs[2])
+    for i, lab in enumerate(names):
+        ax.plot([0, 1], [ranks[0][i], ranks[1][i]], '-o', color=cols[i], lw=3.0, ms=10, zorder=3)
+        ax.annotate(lab, (1, ranks[1][i]), xytext=(11, 0), textcoords='offset points',
+                    ha='left', va='center', fontsize=12, color=cols[i])
+    ax.set_xlim(-0.18, 1.62)
+    ax.set_xticks([0, 1])
+    ax.set_xticklabels(['Reach', 'Pusher'], fontsize=12)
+    ax.set_ylim(3.5, 0.5)
+    ax.set_yticks([1, 2, 3])
+    ax.set_yticklabels(['1 位', '2 位', '3 位'], fontsize=11.5)
+    ax.set_title('順位の入れ替わり', fontsize=13, pad=8)
+    ax.grid(axis='x', alpha=0)
+
+    fig.savefig(os.path.join(OUT, 'matrix_bands.png'))
+    plt.close(fig)
+    return 'matrix_bands.png'
+
+
 # ── 図2: 転用成分の分解（4.3.4.1） ────────────────────────────────────────────
 def fig_transfer_decomposition():
     spec = [('rrbot_arm_pusher_H1',    '転用元 H1',            '#7f8c8d', '--'),
@@ -745,6 +833,7 @@ def fig_learning_curves():
 
 
 FIGS = {'matrix': fig_matrix_reversal,
+        'matrix_bands': fig_matrix_bands,
         'curves': fig_learning_curves,
         'star': fig_target_star,
         'r4': fig_r4_settle,
