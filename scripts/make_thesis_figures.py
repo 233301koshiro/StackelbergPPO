@@ -80,7 +80,8 @@ def fig_matrix_reversal():
     cols = [C_SHORT, C_MID, C_LONG]
     # 実在の物理のシード 0（系譜 9-246）。短腕は Bug 72 の門を直した取り直し（9-271）
     runs_r = ['tripo_pj_short_phys_cg', 'tripo_pj_mid_phys', 'tripo_pj_long_phys']
-    runs_p = ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys', 'tripo_pjp_long_phys']
+    # 押しの中腕・長腕は Bug 106・107 を直した物理の取り直し（系譜 9-351 の `_vp`）。短腕は箱に触れず直しが効かないので元の run
+    runs_p = ['tripo_pjp_short_phys_cg', 'tripo_pjp_mid_phys_vp', 'tripo_pjp_long_phys_vp']
     best_r = [running_best(curve(r)[1])[-1] for r in runs_r]
     best_p = [running_best(curve(r)[1])[-1] for r in runs_p]
 
