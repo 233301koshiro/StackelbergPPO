@@ -182,8 +182,11 @@ def fig_matrix_bands():
                 ax.barh(ypos[i], hi[i] - lo[i], left=lo[i], height=0.40, color=cols[i], alpha=0.22,
                         edgecolor=cols[i], lw=1.2, zorder=2)
                 above = ypos[i] >= 1                    # 中腕は帯の上、長腕は帯の下に書く（間を空ける）
-                ax.text((lo[i] + hi[i]) / 2, ypos[i] + (0.30 if above else -0.30), f'[{lo[i]:.2f}, {hi[i]:.2f}]',
-                        ha='center', va='bottom' if above else 'top',
+                # 帯が右の枠の近くにあるとき（Reach の中腕）は、文字が枠にかからないよう帯の右端で右寄せにする
+                near_right = (lo[i] + hi[i]) / 2 > xmax - 0.2 * (xmax - xmin)
+                ax.text(hi[i] if near_right else (lo[i] + hi[i]) / 2, ypos[i] + (0.30 if above else -0.30),
+                        f'[{lo[i]:.2f}, {hi[i]:.2f}]',
+                        ha='right' if near_right else 'center', va='bottom' if above else 'top',
                         fontsize=9.5, color=cols[i])
             inside = [v for v in vv[i] if xmin <= v <= xmax]
             ax.scatter(inside, [ypos[i]] * len(inside), s=46, color=cols[i], edgecolor='white', lw=1.2, zorder=4)
