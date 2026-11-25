@@ -146,7 +146,7 @@ def fig_matrix_bands():
     """図 4.2 を、本文の主張（3 シードの範囲が重ならない）と同じ量で描く。
 
     旧図はシード 0 の棒だけで、本文の根拠（3 シードの範囲）を見せていなかった。
-    各シードの最良エピソード報酬を点で、シード間の最小〜最大を帯で描き、中腕と長腕の帯のすき間を書く。
+    各シードの最良エピソード報酬を点で、シード間の最小〜最大を帯で描く（11-25: すき間の矢印は外した。ユーザー「書かなくていい」）。
     順位の入れ替わりのパネルは旧図と同じ（順位は帯の上下で決める）。
     """
     names = ['短腕', '中腕', '長腕']
@@ -166,6 +166,8 @@ def fig_matrix_bands():
     fig = plt.figure(figsize=(9.6, 3.9))
     gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 1.15, 0.85], wspace=0.50)
     ranks = []
+    # 短腕（1 シード）は帯を作れないので、点に何が起きたかを書く（目視記録: 押しの短腕は箱に近づかず 5 話とも 0.00 m）
+    notes = ['目標に届かない', '箱に届かず動かせない']
     for k, (vv, title) in enumerate([(vals_r, 'Reach（目標へ到達する）'), (vals_p, 'Pusher（対象を押し出す）')]):
         ax = fig.add_subplot(gs[k])
         ypos = np.arange(3)[::-1]                       # 短腕を上に置く
@@ -179,7 +181,7 @@ def fig_matrix_bands():
             if len(vv[i]) > 1:
                 ax.barh(ypos[i], hi[i] - lo[i], left=lo[i], height=0.40, color=cols[i], alpha=0.22,
                         edgecolor=cols[i], lw=1.2, zorder=2)
-                above = ypos[i] >= 1                    # すき間の矢印（中腕と長腕の間）にかからない側へ書く
+                above = ypos[i] >= 1                    # 中腕は帯の上、長腕は帯の下に書く（間を空ける）
                 ax.text((lo[i] + hi[i]) / 2, ypos[i] + (0.30 if above else -0.30), f'[{lo[i]:.2f}, {hi[i]:.2f}]',
                         ha='center', va='bottom' if above else 'top',
                         fontsize=9.5, color=cols[i])
@@ -187,7 +189,10 @@ def fig_matrix_bands():
             ax.scatter(inside, [ypos[i]] * len(inside), s=46, color=cols[i], edgecolor='white', lw=1.2, zorder=4)
             for v in vv[i]:
                 if v < xmin:
-                    ax.annotate(f'◀ {v:.2f}（軸の外）', (xmin, ypos[i]), xytext=(4, 0), textcoords='offset points',
+                    ax.annotate(f'◀ {v:.2f}（軸の外）\n{notes[k]}', (xmin, ypos[i]), xytext=(4, 0), textcoords='offset points',
+                                ha='left', va='center', fontsize=10, color=cols[i])
+                elif len(vv[i]) == 1:
+                    ax.annotate(f'{v:.2f}\n{notes[k]}', (v, ypos[i]), xytext=(9, 0), textcoords='offset points',
                                 ha='left', va='center', fontsize=10, color=cols[i])
         ax.set_yticks(ypos)
         ax.set_yticklabels([f'{n}\n（{len(x)} シード）' for n, x in zip(names, vv)] if k == 0 else [''] * 3, fontsize=10.5)
@@ -198,15 +203,6 @@ def fig_matrix_bands():
         ax.set_xlabel('最良エピソード報酬（右ほど良い）', fontsize=11.5)
         ax.set_ylim(-0.7, 2.7)
         ax.grid(axis='y', alpha=0)
-        # 中腕と長腕の帯のすき間（上の帯の最小 − 下の帯の最大）。正なら重ならない
-        up, dn = (1, 2) if lo[1] > hi[2] else (2, 1)
-        gap = lo[up] - hi[dn]
-        ax.annotate('', xy=(lo[up], 0.5), xytext=(hi[dn], 0.5),
-                    arrowprops=dict(arrowstyle='<->', color='#333', lw=1.0, shrinkA=0, shrinkB=0), zorder=5)
-        ax.text((hi[dn] + lo[up]) / 2, 0.56, f'すき間 {gap:.2f}' if gap > 0 else f'重なり {-gap:.2f}',
-                ha='center', va='bottom', fontsize=10, color='#333')
-        for xx in (lo[up], hi[dn]):
-            ax.plot([xx, xx], [0.1, 0.9], color='#333', lw=0.6, ls=':', zorder=1)
         order = sorted(range(3), key=lambda i: (lo[i], hi[i]), reverse=True)
         ranks.append({i: r + 1 for r, i in enumerate(order)})
 
