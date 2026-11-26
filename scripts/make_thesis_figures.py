@@ -143,7 +143,7 @@ def fig_matrix_reversal():
 
 # ── 図1 の帯版（2026-11-25 試作。旧 matrix_reversal.png は before として残す） ──────────
 def fig_matrix_bands():
-    """図 4.2 を、本文の主張（3 シードの範囲が重ならない）と同じ量で描く。
+    """図 4.3（11-26 に 4.2 から繰り下げ）を、本文の主張（3 シードの範囲が重ならない）と同じ量で描く。
 
     旧図はシード 0 の棒だけで、本文の根拠（3 シードの範囲）を見せていなかった。
     各シードの最良エピソード報酬を点で、シード間の最小〜最大を帯で描く（11-25: すき間の矢印は外した。ユーザー「書かなくていい」）。
@@ -935,7 +935,101 @@ def fig_var_spread():
     return out
 
 
-FIGS = {'matrix': fig_matrix_reversal,
+
+def fig_r1r2_dots():
+    """修論 4.4.1・4.4.2 の図: 形態最適化の効果（R1）と、タスクによる収束形態（R2）のドットプロット（2026-11-26、ユーザー「ドットプロットという名前があるなら入れよう」）。
+
+    点は各シード、帯はシード間の最小〜最大（図 4.3 の帯版と同じ描き方。Cleveland のドットプロット）。
+    値は系譜 9-351 の読み 57-1・57-5 の表から写す（ここで新しい値を計算しない）。
+    (a) R1: 押し・中腕の最良エピソード報酬（形態を最適化 対 凍結、各 3 シード）
+    (b)(c) R2: 縦型 4 関節アームの収束形態（到達 対 押し、各 5 シード）のリンク長の合計と、第 4 関節のギア比
+    """
+    C1, C2 = '#2a78d6', '#eb6834'
+    panels = [
+        ('(a) 形態最適化の効果（押し）', '最良エピソード報酬（右ほど良い）',
+         [('形態を最適化', [8.63, 8.38, 8.46], C1), ('形態を凍結', [6.03, 5.93, 5.79], C2)]),
+        ('(b) 総リーチ', '総リーチ [m]',
+         [('到達', [1.066, 1.145, 1.831, 1.158, 1.158], C1), ('押し', [1.750, 1.688, 2.822, 3.112, 2.842], C2)]),
+        ('(c) 第 4 関節のギア比', 'ギア比 [N·m]',
+         [('到達', [140.0, 117.2, 103.3, 40.0, 41.8], C1), ('押し', [148.5, 149.9, 115.2, 148.1, 150.0], C2)]),
+    ]
+    # 紙面の字を 8 pt 以上に（チェックリスト 8: 紙面の pt ＝ 図中の pt × 6.3 ÷ 図の幅〔インチ〕）。幅 8.4 で 11 pt → 8.3 pt
+    fs0 = plt.rcParams['font.size']
+    plt.rcParams['font.size'] = 11
+    fig, axs = plt.subplots(1, 3, figsize=(8.4, 2.9))
+    for ax, (title, xlabel, rows) in zip(axs, panels):
+        allv = [v for _, vv, _ in rows for v in vv]
+        span = max(allv) - min(allv)
+        xmin, xmax = min(allv) - 0.15 * span, max(allv) + 0.15 * span
+        for k, (lab, vv, c) in enumerate(rows):
+            y = 1 - k
+            lo, hi = min(vv), max(vv)
+            ax.barh(y, hi - lo, left=lo, height=0.40, color=c, alpha=0.22, edgecolor=c, lw=1.2, zorder=2)
+            ax.scatter(vv, [y] * len(vv), s=46, color=c, edgecolor='white', lw=1.2, zorder=4)
+            nd = 2 if title.startswith('(a)') else 3 if title.startswith('(b)') else 1   # 表 4.5・本文と同じ桁
+            # 帯が枠の端に近いときは、数字を帯の端にそろえて枠の内側に置く（枠の線をまたがせない）
+            mid = (lo + hi) / 2
+            if mid > xmax - 0.3 * (xmax - xmin):
+                tx, ha = hi, 'right'
+            elif mid < xmin + 0.3 * (xmax - xmin):
+                tx, ha = lo, 'left'
+            else:
+                tx, ha = mid, 'center'
+            ax.text(tx, y + (0.30 if k == 0 else -0.30), f'[{lo:.{nd}f}, {hi:.{nd}f}]', ha=ha,
+                    va='bottom' if k == 0 else 'top', fontsize=11, color=c)
+        ax.set_yticks([1, 0])
+        ax.set_yticklabels([f'{lab}\n（{len(vv)} シード）' for lab, vv, _ in rows], fontsize=11)
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(-0.8, 1.8)
+        ax.set_title(title, fontsize=11.5, pad=8)
+        ax.set_xlabel(xlabel, fontsize=11)
+        ax.grid(axis='y', alpha=0)
+    fig.tight_layout(w_pad=2.0)
+    fig.savefig(os.path.join(OUT, 'r1r2_dots.png'), dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    plt.rcParams['font.size'] = fs0
+    return 'r1r2_dots.png'
+
+
+def fig_a3_fail():
+    """修論 4.6.1 の図: 斜め上方から描いた手描きスケッチ（A3）でモデル生成が止まる例（2026-11-26、ユーザー「失敗図が修論にないならいれよう」）。
+
+    (a) 手描きスケッチ `data/test/A3/sketch/A3_hand.webp`、(b) 画像整形の出力 `A3_m1.jpeg`、
+    (c)(d) 同じ入力から 2 回生成したメッシュ `data/test/A3/3D/A3.glb`・`A3_2.glb` を横から見たもの（図 4.1 (c) と同じ座標変換）。
+    腕が水平に倒れて生成され、関節マーカー（マゼンタ）がほぼ同じ高さに並ぶため、関節の高さを境界とするリンク分割が成立しない（系譜 9-23）。
+    """
+    from PIL import Image
+    sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+    import glb_to_links as G
+    D = os.path.join(ROOT, 'data/test/A3')
+    fs0 = plt.rcParams['font.size']
+    plt.rcParams['font.size'] = 11      # 幅 8.4 インチで紙面 8.3 pt（チェックリスト 8）
+    sketch = Image.open(os.path.join(D, 'sketch/A3_hand.webp')).convert('RGB')
+    m1 = Image.open(os.path.join(D, 'sketch/A3_m1.jpeg')).convert('RGB')
+    meshes = []
+    for f in ('A3.glb', 'A3_2.glb'):
+        m = G._apply_yup_zup(G._load_concat(os.path.join(D, '3D', f)))
+        V = np.asarray(m.vertices); C = np.asarray(m.visual.vertex_colors[:, :3]) / 255
+        idx = np.random.default_rng(0).choice(len(V), min(30000, len(V)), replace=False)
+        k = 0 if np.ptp(V[:, 0]) >= np.ptp(V[:, 1]) else 1
+        meshes.append((V, C, idx, k))
+    ratios = [sketch.width / sketch.height, m1.width / m1.height, 1.0, 1.0]
+    fig, ax = plt.subplots(1, 4, figsize=(8.4, 2.7), gridspec_kw={'width_ratios': ratios})
+    for a, im, t in ((ax[0], sketch, '(a) 手描き\nスケッチ'), (ax[1], m1, '(b) 画像整形の\n出力（Gemini）')):
+        a.imshow(im); a.set_axis_off(); a.set_title(t)
+    for a, (V, C, idx, k), t in ((ax[2], meshes[0], '(c) 生成メッシュ\n（1 回目、横から）'), (ax[3], meshes[1], '(d) 生成メッシュ\n（2 回目、横から）')):
+        a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.25)
+        a.set_aspect('equal'); a.set_xlabel('横 [m]'); a.set_ylabel('高さ [m]'); a.set_title(t)
+    for a in ax:
+        a.set_anchor('N')
+    fig.tight_layout(w_pad=1.5)
+    out = os.path.join(OUT, 'a3_fail.png')
+    fig.savefig(out, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    plt.rcParams['font.size'] = fs0
+    return 'a3_fail.png'
+
+FIGS = {'matrix': fig_matrix_reversal, 'a3fail': fig_a3_fail, 'r1r2': fig_r1r2_dots,
         'matrix_bands': fig_matrix_bands,
         'var_spread': fig_var_spread,
         'curves': fig_learning_curves,
