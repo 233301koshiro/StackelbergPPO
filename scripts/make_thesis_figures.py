@@ -147,7 +147,9 @@ def fig_matrix_bands():
 
     旧図はシード 0 の棒だけで、本文の根拠（3 シードの範囲）を見せていなかった。
     各シードの最良エピソード報酬を点で、シード間の最小〜最大を帯で描く（11-25: すき間の矢印は外した。ユーザー「書かなくていい」）。
-    順位の入れ替わりのパネルは旧図と同じ（順位は帯の上下で決める）。
+    11-27: 順位の入れ替わりのパネルを外した（ユーザー「2タスクしかやってないし、短腕はずっと最下位…ただ1つの事実を示すだけなのに
+    わざわざグラフにする必要ある？」）。入れ替わりは本文で言い、2 つのドットプロットの並びで読める。左右のパネルは連続していないので、
+    右のパネルにも縦軸の名前（短腕〔1 シード〕など）を付ける（ユーザー「横軸の情報を乗せ直すべき」）。
     """
     names = ['短腕', '中腕', '長腕']
     reach = [['tripo_pj_short_phys_cg'],
@@ -163,9 +165,8 @@ def fig_matrix_bands():
     for task, vv in (('Reach', vals_r), ('Pusher', vals_p)):
         print(f'[matrix_bands] {task}: ' + ' / '.join(f'{n} ' + ' '.join(f'{v:.2f}' for v in x) for n, x in zip(names, vv)))
 
-    fig = plt.figure(figsize=(9.6, 3.9))
-    gs = fig.add_gridspec(1, 3, width_ratios=[1.15, 1.15, 0.85], wspace=0.50)
-    ranks = []
+    fig = plt.figure(figsize=(8.4, 3.6))
+    gs = fig.add_gridspec(1, 2, wspace=0.42)
     # 短腕（1 シード）は帯を作れないので、点に何が起きたかを書く（目視記録: 押しの短腕は箱に近づかず 5 話とも 0.00 m）
     notes = ['目標に届かない', '箱に届かず動かせない']
     for k, (vv, title) in enumerate([(vals_r, 'Reach（目標へ到達する）'), (vals_p, 'Pusher（対象を押し出す）')]):
@@ -198,7 +199,7 @@ def fig_matrix_bands():
                     ax.annotate(f'{v:.2f}\n{notes[k]}', (v, ypos[i]), xytext=(9, 0), textcoords='offset points',
                                 ha='left', va='center', fontsize=10, color=cols[i])
         ax.set_yticks(ypos)
-        ax.set_yticklabels([f'{n}\n（{len(x)} シード）' for n, x in zip(names, vv)] if k == 0 else [''] * 3, fontsize=10.5)
+        ax.set_yticklabels([f'{n}\n（{len(x)} シード）' for n, x in zip(names, vv)], fontsize=10.5)
         ax.set_xlim(xmin, xmax)
         if xmin < 0 < xmax:
             ax.axvline(0, color='#555', lw=0.9, zorder=1)
@@ -206,22 +207,6 @@ def fig_matrix_bands():
         ax.set_xlabel('最良エピソード報酬（右ほど良い）', fontsize=11.5)
         ax.set_ylim(-0.7, 2.7)
         ax.grid(axis='y', alpha=0)
-        order = sorted(range(3), key=lambda i: (lo[i], hi[i]), reverse=True)
-        ranks.append({i: r + 1 for r, i in enumerate(order)})
-
-    ax = fig.add_subplot(gs[2])
-    for i, lab in enumerate(names):
-        ax.plot([0, 1], [ranks[0][i], ranks[1][i]], '-o', color=cols[i], lw=3.0, ms=10, zorder=3)
-        ax.annotate(lab, (1, ranks[1][i]), xytext=(11, 0), textcoords='offset points',
-                    ha='left', va='center', fontsize=12, color=cols[i])
-    ax.set_xlim(-0.18, 1.62)
-    ax.set_xticks([0, 1])
-    ax.set_xticklabels(['Reach', 'Pusher'], fontsize=12)
-    ax.set_ylim(3.5, 0.5)
-    ax.set_yticks([1, 2, 3])
-    ax.set_yticklabels(['1 位', '2 位', '3 位'], fontsize=11.5)
-    ax.set_title('順位の入れ替わり', fontsize=13, pad=8)
-    ax.grid(axis='x', alpha=0)
 
     fig.savefig(os.path.join(OUT, 'matrix_bands.png'))
     plt.close(fig)
