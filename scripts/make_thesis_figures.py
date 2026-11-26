@@ -1076,6 +1076,18 @@ def fig_joint_modes():
         m = ((p2[0] + q2[0]) / 2, (p2[1] + q2[1]) / 2)
         a.text(m[0] + kw.pop('dx', 0), m[1] + kw.pop('dy', 0), text, color='#1f4e79', zorder=z, **kw)
 
+    def thick(a, p, q, half, xytext, text, **kw):
+        """太さの両矢印: リンク p〜q の中点で、軸に垂直にリンクを横切る（half はリンクの見かけの半幅より少し大きく、データ座標）。
+        矢印の外側の端から文字へ引き出し線を引く。"""
+        m = np.array([(p[0] + q[0]) / 2, (p[1] + q[1]) / 2])
+        d = np.array([q[0] - p[0], q[1] - p[1]]); d = d / np.linalg.norm(d)
+        n = np.array([-d[1], d[0]])
+        e0, e1 = m - n * half, m + n * half
+        a.annotate('', xy=tuple(e1), xytext=tuple(e0), arrowprops=dict(arrowstyle='<->', color='#1f4e79', lw=1.4,
+                   shrinkA=0, shrinkB=0, mutation_scale=10), zorder=12)
+        end = e0 if np.dot(np.array(xytext) - m, -n) > 0 else e1
+        callout(a, tuple(end), xytext, text, **kw)
+
     def callout(a, xy, xytext, text, **kw):
         a.annotate(text, xy=xy, xytext=xytext, color='#1f4e79', zorder=11,
                    arrowprops=dict(arrowstyle='-', color='#1f4e79', lw=1.0), **kw)
@@ -1100,7 +1112,7 @@ def fig_joint_modes():
         a.text(J[i][0] + 0.12, J[i][1] + 0.62, f'j{i + 1}', ha='center', va='bottom')
     callout(a, (J[0][0] - 0.38, J[0][1] + 0.1), (-1.15, 1.75), 'ギア比 g\n（各関節）', ha='left', va='center')
     m1 = ((J[0][0] + J[1][0]) / 2, (J[0][1] + J[1][1]) / 2)
-    callout(a, (m1[0], m1[1] - 0.06), (m1[0] + 0.2, -0.45), '太さ r（各リンク）', ha='left', va='top')
+    thick(a, J[0], J[1], 0.17, (m1[0] + 0.2, -0.45), '太さ r（各リンク）', ha='left', va='top')
     dim(a, J[2], J[3], 'リンク長 l（設定による）', (0.15, -0.4), ha='center', va='top', dy=-0.2)
     a.set_xlim(-1.3, 4.6); a.set_ylim(-0.75, 2.7)
 
@@ -1126,7 +1138,7 @@ def fig_joint_modes():
         a.text(c[0] - 0.36, c[1] + 0.2, f'j{i + 2}', ha='right', va='bottom')
     callout(a, (J[2][0] + 0.2, J[2][1] + 0.2), (2.35, 2.45), 'ギア比 g', ha='left', va='center')
     m1 = ((J[2][0] + J[3][0]) / 2, (J[2][1] + J[3][1]) / 2)
-    callout(a, (m1[0] + 0.05, m1[1] - 0.05), (2.55, 0.55), '太さ r', ha='left', va='center')
+    thick(a, J[2], J[3], 0.13, (2.55, 0.55), '太さ r', ha='left', va='center')
     dim(a, J[1], J[2], 'リンク長 l', (0.0, 0.42), ha='center', va='bottom', dy=0.05)
     a.set_xlim(-1.0, 3.3); a.set_ylim(-0.3, 2.7)
 
