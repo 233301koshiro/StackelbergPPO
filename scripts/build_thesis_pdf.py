@@ -760,6 +760,18 @@ def md_to_latex_body(md_text: str, unnumbered: bool = False,
             out.append(r'\end{itemize}')
             continue
 
+        # (i) (ii) … の列挙。行頭の記号をそのまま印字し、1 項目を 1 行にする（2026-11-26、ユーザー「①とか(i),(ii)とか書くときは改行してあげたほうが良い」。
+        # それまでは文中に (i)〜(iii) を続けて書いていた。判定 md の型 77）
+        _ROMAN = r'^\((?:i|ii|iii|iv|v|vi|vii|viii|ix|x)\)\s+'
+        if re.match(_ROMAN, line):
+            out.append(r'\begin{itemize}')
+            while i < len(lines) and re.match(_ROMAN, lines[i]):
+                lab = re.match(r'^(\([ivx]+\))', lines[i]).group(1)
+                out.append(r'  \item[%s] ' % lab + md_inline(re.sub(_ROMAN, '', lines[i])))
+                i += 1
+            out.append(r'\end{itemize}')
+            continue
+
         # 番号付きリスト。番号は md の数字をそのまま印字する（見出しと同じく md が正）。
         # 2026-11-05 まで LaTeX に 1 から振り直させており、空行や注記で切れたリストが毎回 1 に戻っていた
         # （5.3 節の課題が 1, 1, 2, … と印字され、本文の「5.3 節の 6」が別の項を指していた。参考文献は全件が 1）

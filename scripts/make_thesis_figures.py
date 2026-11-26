@@ -569,7 +569,9 @@ def fig_arm_forms():
     ratios = [sketch.width / sketch.height, m1.width / m1.height, 0.40]
     fig, ax = plt.subplots(1, 3, figsize=(7.4, right.height / 200), gridspec_kw={'width_ratios': ratios})
     # 題は枠の幅に収まる長さで折る（11-19、ユーザー「（横から）という文字が (b) まで伸びている」）
-    for a, im, t in ((ax[0], sketch, '(a) 手描きスケッチ'), (ax[1], m1, '(b) M1 の出力\n（Gemini）')):
+    # (a) だけ題が 1 行だと、題と絵が (b)〜(d) より下にずれる（11-26、ユーザー「(a)と(b)~(d)の高さ位置がズレている」）。題はすべて 2 行にそろえる。
+    # (b) は「M1」と書かない（予備審査論文は工程を ①〜④ の段の名前で呼び、M 番号を使わない。11-26 ユーザー）
+    for a, im, t in ((ax[0], sketch, '(a) 手描き\nスケッチ'), (ax[1], m1, '(b) 画像整形の\n出力（Gemini）')):
         a.imshow(im); a.set_axis_off(); a.set_title(t, fontsize=11 * FS)
     a = ax[2]
     a.scatter(V[idx, k], V[idx, 2], c=C[idx], s=0.25)
