@@ -1030,7 +1030,10 @@ def fig_a3_fail():
     return 'a3_fail.png'
 
 def fig_joint_modes():
-    """新方針の予備審査資料 2.3 の図: 関節軸の 2 つのモード（2026-11-27、ユーザー「文字で言うと頭に入ってこないから…回転軸の円形の矢印がはいったやつ」）。
+    """新方針の予備審査資料 2.4 の図 4: 関節軸の 2 つのモードと設計変数（2026-11-27、ユーザー「文字で言うと頭に入ってこないから…回転軸の円形の矢印がはいったやつ」
+    →「後段で紹介するの設計変数も図の中に入れたら」「地面から15cmとかも」）。
+    設計変数（ギア比 g・太さ r・リンク長 l〔設定による〕）を寸法線と引き出し線で描き込む。床からの 0.15 m は評価に用いた平面の腕の値
+    （tripo_arm_v2c_pj_*_phys_arm171.xml・e2e_a1_phys_arm171.xml の body "0" の z、修論 4.1）。縦型（e2e_a1v）の根元は床から 0.02 m で、柱の長さはスケッチで決まるので数字を描かない。
 
     (a) 平面モード: 全関節がヨー軸（鉛直軸まわり）。腕は水平面内で動く。斜め上から見た図。
     (b) 縦型モード: 根元に旋回関節（ヨー）を 1 つ足し、それ以降の関節はピッチ軸（水平軸まわり）で鉛直面内に回る（4 関節）。横から見た図。
@@ -1066,13 +1069,27 @@ def fig_joint_modes():
     for a in ax:
         a.set_aspect('equal'); a.set_axis_off()
 
+    def dim(a, p, q, text, off, z=10, **kw):
+        """寸法線: p〜q を off だけずらした位置に両矢印を引き、中央に文字。"""
+        p2, q2 = (p[0] + off[0], p[1] + off[1]), (q[0] + off[0], q[1] + off[1])
+        a.annotate('', xy=q2, xytext=p2, arrowprops=dict(arrowstyle='<->', color='#1f4e79', lw=1.3), zorder=z)
+        m = ((p2[0] + q2[0]) / 2, (p2[1] + q2[1]) / 2)
+        a.text(m[0] + kw.pop('dx', 0), m[1] + kw.pop('dy', 0), text, color='#1f4e79', zorder=z, **kw)
+
+    def callout(a, xy, xytext, text, **kw):
+        a.annotate(text, xy=xy, xytext=xytext, color='#1f4e79', zorder=11,
+                   arrowprops=dict(arrowstyle='-', color='#1f4e79', lw=1.0), **kw)
+
     # (a) 平面モード: 斜め上から。P(x, y) = (x + 0.55 y, 0.45 y) で水平面を潰して描く。腕の高さに薄い板を置いて水平面を示す
     a = ax[0]
     P = lambda x, y, z=0.0: (x + 0.55 * y, 0.45 * y + z)
-    H = 0.55                                  # 腕の高さ（台座の上面）
+    H = 0.55                                  # 腕の高さ（床から 0.15 m。XML の body "0" の z。模式図なので縮尺は合わせない）
+    a.plot([-1.0, 4.4], [0, 0], color='#7f7f7f', lw=2, zorder=0)
+    a.text(4.4, -0.06, '床', ha='right', va='top', color='#555555')
     plane = [P(-0.6, -0.7, H), P(3.4, -0.7, H), P(3.4, 2.2, H), P(-0.6, 2.2, H)]
     a.add_patch(Polygon(plane, closed=True, facecolor='#dfe9f5', edgecolor='#9fb6d0', lw=1, zorder=0))
-    box(a, -0.35, 0.0, 0.7, H, z=0.5)
+    box(a, -0.25, 0.0, 0.5, H, z=0.5)
+    dim(a, (-0.25, 0.0), (-0.25, H), '床から\n0.15 m', (-0.2, 0), ha='right', va='center', dx=-0.08)
     pts = [(0, 0), (1.3, -0.3), (2.0, 1.2), (3.0, 1.6)]
     J = [P(x, y, H) for x, y in pts]
     for i in range(3):
@@ -1081,18 +1098,24 @@ def fig_joint_modes():
         a.plot([J[i][0], J[i][0]], [J[i][1] - 0.5, J[i][1] + 0.6], ls='--', color='#333333', lw=1, zorder=6)
         ring(a, J[i], 0.42, 0.17, YAW, 200, 520, 7, 2)
         a.text(J[i][0] + 0.12, J[i][1] + 0.62, f'j{i + 1}', ha='center', va='bottom')
-    a.set_xlim(-1.2, 4.8); a.set_ylim(-0.2, 2.4)
+    callout(a, (J[0][0] - 0.38, J[0][1] + 0.1), (-1.15, 1.75), 'ギア比 g\n（各関節）', ha='left', va='center')
+    m1 = ((J[0][0] + J[1][0]) / 2, (J[0][1] + J[1][1]) / 2)
+    callout(a, (m1[0], m1[1] - 0.06), (m1[0] + 0.2, -0.45), '太さ r（各リンク）', ha='left', va='top')
+    dim(a, J[2], J[3], 'リンク長 l（設定による）', (0.15, -0.4), ha='center', va='top', dy=-0.2)
+    a.set_xlim(-1.3, 4.6); a.set_ylim(-0.75, 2.7)
 
     # (b) 縦型モード: 横から。根元の旋回（j1）＋鉛直面内の 3 関節（j2〜j4）
     a = ax[1]
-    box(a, -0.4, 0.0, 0.8, 0.4)
-    J = [(0.0, 1.15), (0.85, 2.0), (1.95, 1.85), (2.65, 1.2)]
-    link(a, (0.0, 0.4), J[0], w=16)
+    a.plot([-1.0, 3.1], [0, 0], color='#7f7f7f', lw=2, zorder=0)
+    a.text(3.1, -0.06, '床', ha='right', va='top', color='#555555')
+    box(a, -0.4, 0.0, 0.8, 0.25)
+    J = [(0.0, 1.0), (0.85, 1.85), (1.95, 1.7), (2.65, 1.05)]
+    link(a, (0.0, 0.25), J[0], w=16)
     for i in range(3):
         link(a, J[i], J[i + 1])
-    a.plot([0, 0], [0.1, 2.35], ls='--', color='#333333', lw=1, zorder=6)
-    ring(a, (0.0, 0.72), 0.5, 0.15, YAW, 200, 520, 7, 1)
-    a.text(0.62, 0.62, 'j1（旋回）', ha='left', va='center')
+    a.plot([0, 0], [0.05, 2.2], ls='--', color='#333333', lw=1, zorder=6)
+    ring(a, (0.0, 0.55), 0.5, 0.15, YAW, 200, 520, 7, 1)
+    a.text(0.6, 0.4, 'j1（旋回）', ha='left', va='center')
     for i, c in enumerate(J[:3]):
         t = np.radians(np.linspace(40, 330, 200))
         r = 0.27
@@ -1101,7 +1124,11 @@ def fig_joint_modes():
         a.add_patch(FancyArrowPatch((x[-6], y[-6]), (x[-1], y[-1]), arrowstyle='-|>', mutation_scale=22, color=PITCH, lw=0, zorder=8))
         a.plot(*c, 'o', color='#333333', ms=4, zorder=9)
         a.text(c[0] - 0.36, c[1] + 0.2, f'j{i + 2}', ha='right', va='bottom')
-    a.set_xlim(-1.0, 3.1); a.set_ylim(-0.1, 2.5)
+    callout(a, (J[2][0] + 0.2, J[2][1] + 0.2), (2.35, 2.45), 'ギア比 g', ha='left', va='center')
+    m1 = ((J[2][0] + J[3][0]) / 2, (J[2][1] + J[3][1]) / 2)
+    callout(a, (m1[0] + 0.05, m1[1] - 0.05), (2.55, 0.55), '太さ r', ha='left', va='center')
+    dim(a, J[1], J[2], 'リンク長 l', (0.0, 0.42), ha='center', va='bottom', dy=0.05)
+    a.set_xlim(-1.0, 3.3); a.set_ylim(-0.3, 2.7)
 
     fig.text(0.27, 0.97, '(a) 平面モード\n全関節が鉛直軸まわり', ha='center', va='top')
     fig.text(0.75, 0.97, '(b) 縦型モード\n根元は鉛直軸まわり、以降は水平軸まわり', ha='center', va='top')
