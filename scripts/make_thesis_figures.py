@@ -7,7 +7,7 @@
   ②台帳（第4章 表4.5）の確定値をこのファイル内に明示的に書き、出典をコメントで残す
 - 図を更新したら `python3 scripts/build_thesis_pdf.py` を走らせる
 
-出力: docs/研究応用/執筆/使えそうな画像データ/修論/*.png（2026-11-19 までは figures/）。`modes`（関節軸の 2 つのモード）だけは新方針の予備審査資料の図で、予備審査資料/joint_modes.png へ出す
+出力: docs/研究応用/執筆/使えそうな画像データ/修論/*.png（2026-11-19 までは figures/）
 使い方: python3 scripts/make_thesis_figures.py [図名 ...]（省略時は全部）
 """
 import os
@@ -143,7 +143,7 @@ def fig_matrix_reversal():
 
 # ── 図1 の帯版（2026-11-25 試作。旧 matrix_reversal.png は before として残す） ──────────
 def fig_matrix_bands():
-    """図 4.3（11-26 に 4.2 から繰り下げ）を、本文の主張（3 シードの範囲が重ならない）と同じ量で描く。
+    """図 4.4（11-26 に 4.2 から 4.3、11-27 に 4.4 へ繰り下げ）を、本文の主張（3 シードの範囲が重ならない）と同じ量で描く。
 
     旧図はシード 0 の棒だけで、本文の根拠（3 シードの範囲）を見せていなかった。
     各シードの最良エピソード報酬を点で、シード間の最小〜最大を帯で描く（11-25: すき間の矢印は外した。ユーザー「書かなくていい」）。
@@ -939,7 +939,7 @@ def fig_var_spread():
 def fig_r1r2_dots():
     """修論 4.4.1・4.4.2 の図: 形態最適化の効果（R1）と、タスクによる収束形態（R2）のドットプロット（2026-11-26、ユーザー「ドットプロットという名前があるなら入れよう」）。
 
-    点は各シード、帯はシード間の最小〜最大（図 4.3 の帯版と同じ描き方。Cleveland のドットプロット）。
+    点は各シード、帯はシード間の最小〜最大（図 4.4 の帯版と同じ描き方。Cleveland のドットプロット）。
     値は系譜 9-351 の読み 57-1・57-5 の表から写す（ここで新しい値を計算しない）。
     (a) R1: 押し・中腕の最良エピソード報酬（形態を最適化 対 凍結、各 3 シード）
     (b)(c) R2: 縦型 4 関節アームの収束形態（到達 対 押し、各 5 シード）のリンク長の合計と、第 4 関節のギア比
@@ -1030,7 +1030,7 @@ def fig_a3_fail():
     return 'a3_fail.png'
 
 def fig_joint_modes():
-    """新方針の予備審査資料 2.4 の図 4: 関節軸の 2 つのモードと設計変数（2026-11-27、ユーザー「文字で言うと頭に入ってこないから…回転軸の円形の矢印がはいったやつ」
+    """修論 図 4.2・新方針の予備審査資料 図 4: 関節軸の 2 つのモードと設計変数（2026-11-27、ユーザー「文字で言うと頭に入ってこないから…回転軸の円形の矢印がはいったやつ」
     →「後段で紹介するの設計変数も図の中に入れたら」「地面から15cmとかも」）。
     設計変数（ギア比 g・太さ r、縦型だけリンク長 l）を寸法線と引き出し線で描き込む。リンク長を最適化するのは縦型アームだけ
     （修論 表 4.2 の「骨のベクトル（縦型アームのみ）」。平面の比較では長さはスケッチのまま）。11-27 に (a) のリンク長を外した。床からの 0.15 m は評価に用いた平面の腕の値
@@ -1040,7 +1040,7 @@ def fig_joint_modes():
     (b) 縦型モード: 根元に旋回関節（ヨー）を 1 つ足し、それ以降の関節はピッチ軸（水平軸まわり）で鉛直面内に回る（4 関節）。横から見た図。
     関節の構成は修論 3.10（`mesh_to_params.py` の既定の軸の割り当て）に合わせた模式図で、長さ・角度は実際のモデルの値ではない。
     黄は鉛直軸まわり、橙は水平軸まわりの回転（ユーザーが示した見本の色に合わせた）。
-    出力は予備審査資料のフォルダ（使えそうな画像データ/予備審査資料/joint_modes.png）。
+    修論 4.1.1 の図 4.2 と新方針の資料の図 4 で同じ画像を使う（11-27 ユーザー「修論に入れてないの？」→ 表 4.2 の後）。出力は 修論/joint_modes.png。
     """
     from matplotlib.patches import FancyArrowPatch, Polygon
     YAW, PITCH, LINK, EDGE = '#f1c40f', '#e67e22', '#bdbdbd', '#555555'
@@ -1148,12 +1148,10 @@ def fig_joint_modes():
     fig.legend(handles=[Line2D([], [], color=YAW, lw=4, label='鉛直軸まわりの回転'),
                         Line2D([], [], color=PITCH, lw=4, label='水平軸まわりの回転')],
                loc='lower center', ncol=2, frameon=False, bbox_to_anchor=(0.5, -0.02))
-    out_dir = os.path.join(os.path.dirname(OUT), '予備審査資料')
-    os.makedirs(out_dir, exist_ok=True)
-    fig.savefig(os.path.join(out_dir, 'joint_modes.png'), dpi=200, bbox_inches='tight')
+    fig.savefig(os.path.join(OUT, 'joint_modes.png'), dpi=200, bbox_inches='tight')
     plt.close(fig)
     plt.rcParams['font.size'] = fs0
-    return '../予備審査資料/joint_modes.png'
+    return 'joint_modes.png'
 
 
 FIGS = {'matrix': fig_matrix_reversal, 'a3fail': fig_a3_fail, 'r1r2': fig_r1r2_dots,
