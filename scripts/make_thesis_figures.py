@@ -7,7 +7,7 @@
   ②台帳（第4章 表4.5）の確定値をこのファイル内に明示的に書き、出典をコメントで残す
 - 図を更新したら `python3 scripts/build_thesis_pdf.py` を走らせる
 
-出力: docs/研究応用/執筆/使えそうな画像データ/修論/*.png（2026-11-19 までは figures/）
+出力: docs/研究応用/執筆/使えそうな画像データ/修論/*.png（2026-11-19 までは figures/）。`modes`（関節軸の 2 つのモード）だけは新方針の予備審査資料の図で、予備審査資料/joint_modes.png へ出す
 使い方: python3 scripts/make_thesis_figures.py [図名 ...]（省略時は全部）
 """
 import os
@@ -1029,7 +1029,96 @@ def fig_a3_fail():
     plt.rcParams['font.size'] = fs0
     return 'a3_fail.png'
 
+def fig_joint_modes():
+    """新方針の予備審査資料 2.3 の図: 関節軸の 2 つのモード（2026-11-27、ユーザー「文字で言うと頭に入ってこないから…回転軸の円形の矢印がはいったやつ」）。
+
+    (a) 平面モード: 全関節がヨー軸（鉛直軸まわり）。腕は水平面内で動く。斜め上から見た図。
+    (b) 縦型モード: 根元に旋回関節（ヨー）を 1 つ足し、それ以降の関節はピッチ軸（水平軸まわり）で鉛直面内に回る（4 関節）。横から見た図。
+    関節の構成は修論 3.10（`mesh_to_params.py` の既定の軸の割り当て）に合わせた模式図で、長さ・角度は実際のモデルの値ではない。
+    黄は鉛直軸まわり、橙は水平軸まわりの回転（ユーザーが示した見本の色に合わせた）。
+    出力は予備審査資料のフォルダ（使えそうな画像データ/予備審査資料/joint_modes.png）。
+    """
+    from matplotlib.patches import FancyArrowPatch, Polygon
+    YAW, PITCH, LINK, EDGE = '#f1c40f', '#e67e22', '#bdbdbd', '#555555'
+    fs0 = plt.rcParams['font.size']
+    plt.rcParams['font.size'] = 11      # 幅 8.4 インチで紙面 8.3 pt（チェックリスト 8）
+
+    def link(a, p, q, w=11, z=3):
+        a.plot([p[0], q[0]], [p[1], q[1]], color=EDGE, lw=w + 2.5, solid_capstyle='round', zorder=z)
+        a.plot([p[0], q[0]], [p[1], q[1]], color=LINK, lw=w, solid_capstyle='round', zorder=z + 0.1)
+
+    def box(a, x0, y0, w, h, z=2):
+        a.add_patch(Rectangle((x0, y0), w, h, facecolor='#9e9e9e', edgecolor=EDGE, lw=1.5, zorder=z))
+
+    def ring(a, c, rx, ry, color, t0, t1, z_front, z_back):
+        """楕円の矢印。奥側（上半分）はリンクの後ろ、手前側（下半分）は前に描く。t は度で、t1 で矢じり。"""
+        t = np.radians(np.linspace(t0, t1, 200))
+        x, y = c[0] + rx * np.cos(t), c[1] + ry * np.sin(t)
+        back = np.sin(t) > 0
+        for m, z in ((back, z_back), (~back, z_front)):
+            xs, ys = np.where(m, x, np.nan), np.where(m, y, np.nan)
+            a.plot(xs, ys, color=color, lw=4, solid_capstyle='butt', zorder=z)
+        a.add_patch(FancyArrowPatch((x[-6], y[-6]), (x[-1], y[-1]), arrowstyle='-|>', mutation_scale=22,
+                                    color=color, lw=0, zorder=z_front if np.sin(t[-1]) <= 0 else z_back))
+
+    fig, ax = plt.subplots(1, 2, figsize=(8.4, 3.6))
+    fig.subplots_adjust(left=0.01, right=0.99, top=0.84, bottom=0.1, wspace=0.05)
+    for a in ax:
+        a.set_aspect('equal'); a.set_axis_off()
+
+    # (a) 平面モード: 斜め上から。P(x, y) = (x + 0.55 y, 0.45 y) で水平面を潰して描く。腕の高さに薄い板を置いて水平面を示す
+    a = ax[0]
+    P = lambda x, y, z=0.0: (x + 0.55 * y, 0.45 * y + z)
+    H = 0.55                                  # 腕の高さ（台座の上面）
+    plane = [P(-0.6, -0.7, H), P(3.4, -0.7, H), P(3.4, 2.2, H), P(-0.6, 2.2, H)]
+    a.add_patch(Polygon(plane, closed=True, facecolor='#dfe9f5', edgecolor='#9fb6d0', lw=1, zorder=0))
+    box(a, -0.35, 0.0, 0.7, H, z=0.5)
+    pts = [(0, 0), (1.3, -0.3), (2.0, 1.2), (3.0, 1.6)]
+    J = [P(x, y, H) for x, y in pts]
+    for i in range(3):
+        link(a, J[i], J[i + 1])
+    for i in range(3):
+        a.plot([J[i][0], J[i][0]], [J[i][1] - 0.5, J[i][1] + 0.6], ls='--', color='#333333', lw=1, zorder=6)
+        ring(a, J[i], 0.42, 0.17, YAW, 200, 520, 7, 2)
+        a.text(J[i][0] + 0.12, J[i][1] + 0.62, f'j{i + 1}', ha='center', va='bottom')
+    a.set_xlim(-1.2, 4.8); a.set_ylim(-0.2, 2.4)
+
+    # (b) 縦型モード: 横から。根元の旋回（j1）＋鉛直面内の 3 関節（j2〜j4）
+    a = ax[1]
+    box(a, -0.4, 0.0, 0.8, 0.4)
+    J = [(0.0, 1.15), (0.85, 2.0), (1.95, 1.85), (2.65, 1.2)]
+    link(a, (0.0, 0.4), J[0], w=16)
+    for i in range(3):
+        link(a, J[i], J[i + 1])
+    a.plot([0, 0], [0.1, 2.35], ls='--', color='#333333', lw=1, zorder=6)
+    ring(a, (0.0, 0.72), 0.5, 0.15, YAW, 200, 520, 7, 1)
+    a.text(0.62, 0.62, 'j1（旋回）', ha='left', va='center')
+    for i, c in enumerate(J[:3]):
+        t = np.radians(np.linspace(40, 330, 200))
+        r = 0.27
+        x, y = c[0] + r * np.cos(t), c[1] + r * np.sin(t)
+        a.plot(x, y, color=PITCH, lw=4, zorder=8)
+        a.add_patch(FancyArrowPatch((x[-6], y[-6]), (x[-1], y[-1]), arrowstyle='-|>', mutation_scale=22, color=PITCH, lw=0, zorder=8))
+        a.plot(*c, 'o', color='#333333', ms=4, zorder=9)
+        a.text(c[0] - 0.36, c[1] + 0.2, f'j{i + 2}', ha='right', va='bottom')
+    a.set_xlim(-1.0, 3.1); a.set_ylim(-0.1, 2.5)
+
+    fig.text(0.27, 0.97, '(a) 平面モード\n全関節が鉛直軸まわり', ha='center', va='top')
+    fig.text(0.75, 0.97, '(b) 縦型モード\n根元は鉛直軸まわり、以降は水平軸まわり', ha='center', va='top')
+    from matplotlib.lines import Line2D
+    fig.legend(handles=[Line2D([], [], color=YAW, lw=4, label='鉛直軸まわりの回転'),
+                        Line2D([], [], color=PITCH, lw=4, label='水平軸まわりの回転')],
+               loc='lower center', ncol=2, frameon=False, bbox_to_anchor=(0.5, -0.02))
+    out_dir = os.path.join(os.path.dirname(OUT), '予備審査資料')
+    os.makedirs(out_dir, exist_ok=True)
+    fig.savefig(os.path.join(out_dir, 'joint_modes.png'), dpi=200, bbox_inches='tight')
+    plt.close(fig)
+    plt.rcParams['font.size'] = fs0
+    return '../予備審査資料/joint_modes.png'
+
+
 FIGS = {'matrix': fig_matrix_reversal, 'a3fail': fig_a3_fail, 'r1r2': fig_r1r2_dots,
+        'modes': fig_joint_modes,
         'matrix_bands': fig_matrix_bands,
         'var_spread': fig_var_spread,
         'curves': fig_learning_curves,
