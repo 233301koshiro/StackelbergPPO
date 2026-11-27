@@ -176,6 +176,12 @@ for k in range(N_EP):
                 # ⭐ 9-361: ギア比と、シミュレータに読み込まれた回転子の慣性（armature）を関節ごとに出す（cfg の armature_ref_gear が効いたかを確かめる）
                 _arm = getattr(env._world, '_joint_armatures', {})
                 print('[trace] ⭐ 実行時のギア比と回転子の慣性: ' + ', '.join(f"{jn}: gear {float(a['gear']):.1f} armature {_arm.get(jn, float('nan')):.4f}" for jn, a in env._world.actuators_map.items()), flush=True)
+                # ⭐ 9-366: シミュレータに読み込まれたリンクごとの質量と重心（先端の荷物 `robot.payload_mass` が効いたかを確かめる）
+                _ab = getattr(env._world, '_arm_body', None)
+                if _ab is not None:
+                    print('[trace] ⭐ 実行時のリンクの質量 [kg]・重心（リンク座標）: ' + ', '.join(
+                        f"{_ab.link(_k).name}: {_ab.link(_k).m:.4f} c {np.round(np.asarray(_ab.link(_k).c, dtype=float), 4).tolist()}"
+                        for _k in range(_ab.numLinks)), flush=True)
         if in_exec and init is None:
             try:
                 _nm = [b.name for b in env.robot.bodies]

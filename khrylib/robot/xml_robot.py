@@ -447,10 +447,20 @@ class Body:
         質量は body 原点（＝関節位置）に置く。pos は body ローカル。
         """
         m_add = sum(j.actuator.joint_mass() for j in self.joints if j.actuator is not None)
+        # ⭐ 系譜 9-366（2026-11-27 夜）: 先端の荷物。`robot.payload_mass` [kg]（起動行 `+robot.payload_mass=10`）を、
+        #   子を持たない body（腕の先端のリンク）のカプセルの先端（g.end）に点質量で置く。既定 0 で既存の run は変わらない。
+        #   太さ・後方延長が変わっても毎回カプセルの質量から計算し直すので、設計変数の効きは残る。
+        m_pay = float(self.robot.cfg.get('payload_mass', 0.0) or 0.0) if len(self.child) == 0 else 0.0
         node = self.node.find('inertial')
-        if m_add <= 0:
+        if m_add <= 0 and m_pay <= 0:
             return
-        parts = [(m_add, np.zeros(3), np.zeros((3, 3)))]        # (mass, center, inertia about own center)
+        parts = []                                                # (mass, center, inertia about own center)
+        if m_add > 0:
+            parts.append((m_add, np.zeros(3), np.zeros((3, 3))))
+        if m_pay > 0:
+            caps = [g for g in self.geoms if g.type == 'capsule']
+            tip = (caps[0].end - self.pos) if caps else np.zeros(3)
+            parts.append((m_pay, np.asarray(tip, float), np.zeros((3, 3))))
         for g in self.geoms:
             rho = float(g.node.attrib.get('density', self.robot.geom_density))
             r = float(g.size[0])
