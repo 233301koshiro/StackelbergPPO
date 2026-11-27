@@ -172,6 +172,10 @@ for k in range(N_EP):
             print(f'[trace] ⭐ ギア比を差し替えた: {[round(a["gear"],1) for a in _am.values()]}', flush=True)
         if in_exec and gear_eff is None:
             gear_eff = [float(a['gear']) for a in env._world.actuators_map.values()]
+            if k == 0:
+                # ⭐ 9-361: ギア比と、シミュレータに読み込まれた回転子の慣性（armature）を関節ごとに出す（cfg の armature_ref_gear が効いたかを確かめる）
+                _arm = getattr(env._world, '_joint_armatures', {})
+                print('[trace] ⭐ 実行時のギア比と回転子の慣性: ' + ', '.join(f"{jn}: gear {float(a['gear']):.1f} armature {_arm.get(jn, float('nan')):.4f}" for jn, a in env._world.actuators_map.items()), flush=True)
         if in_exec and init is None:
             try:
                 _nm = [b.name for b in env.robot.bodies]

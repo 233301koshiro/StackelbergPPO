@@ -1,0 +1,68 @@
+# pusher_gearonly_real: 実寸の物理でリンク長を凍結し、ギア比だけ最適化する（実験系譜 9-160）。
+#   ⚠️ **pusher_gearonly との差はギア上限（400 → 150）のみ。**密度は XML 側（*_real）。
+
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 4
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  
+  # M2 ablation (2026-07-15): bone_offset を設計変数から外す（リンク長 0.30/0.25 で凍結）。
+  # gear のみの貢献度を分離する
+  body_params: {}
+
+  joint_params: {}
+
+  geom_params:
+    size:
+      lb: 0.03
+      ub: 0.10
+    ext_start:
+      lb: 0.0
+      ub: 0.2
+
+  actuator_params:
+    gear:
+      # ⭐⭐ 9-160: この形態で導出した実在アクチュエータの範囲。
+      #   ⚠️ **9-129 の 25〜150 は e2e_a1v 用の値なので流用しない。**形態ごとに計算する。
+      #   実効密度 294.2（アルミ・肉厚 2 mm。半径 0.032〜0.045 m の薄肉パイプ）→ 腕 1.311 kg
+      #   根元の自重トルク 4.84 ＋ 押しトルク 11.74（cube 2.7 kg・μ=0.5・腕 0.887 m）＝ **16.58 N·m**
+      #   ⭐ 下限 = 必要トルクの 1.25 倍 = 20.7 → **20**（旧と同じ）
+      #   ⭐ 上限 = **UR5e の関節トルク 150 N·m**（9-129 と同じ機体）
+      # ⭐⭐ したがって旧条件との差は **上限 400 → 150 の 1 変数のみ**。
+      lb: 20
+      ub: 150
+      # ⭐ 9-361（2026-11-27、ユーザー「修論に書いて実験をやろう」「回転子の慣性 ∝ ギア比²」）: ギア比に動力学の費用を付ける。
+      #   同じモータで減速比だけを変える想定で、反射慣性 ＝ 1.71 ×（ギア比 / 150）²。1.71 kg·m² は UR5e の関節 1〜3 の
+      #   モーター＋減速機（ギア比 150 のとき）なので、ギア比 150 の形は元の cfg とまったく同じ物理。下限は 0.05（発散止め、xml_robot.py の既定）。
+      #   元の cfg との差はこの 3 行だけ（xml_robot.py の Actuator._sync_armature、9-81 の段1a と同じ仕組み）。
+      armature_ref_gear: 150
+      armature_base: 1.71
+      armature_floor: 0.05
+  
+
