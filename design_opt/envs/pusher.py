@@ -1361,6 +1361,14 @@ class PusherEnv(MujocoEnv, utils.EzPickle):
             extra = self.np_random.uniform(-cube_y_noise, cube_y_noise) if add_noise else 0.0
             qpos[cube_y_idx] = float(self.init_qpos[cube_y_idx]) + extra
 
+        # ⭐ 系譜 9-363（2026-11-27、読み 64）: 箱を根元から延びる x 軸の外へ固定でずらす [m]。
+        #   根元重と先端重はリンクの順序を逆にした形で、箱が軸上だと先端の最大の速さが点対称で一致する。
+        #   軸から外して、配分の差が判定に現れるかを見る。上の reset のゆらぎ（±0.1）には足すだけで、乱数の引き方は変えない。
+        #   ⚠️ 既定 0.0（指定なし）では何もしない＝既存の run と同じ
+        cube_y_offset = float(self.env_specs.get('cube_y_offset', 0.0))
+        if cube_y_offset != 0.0:
+            qpos[self.model.nq - 1] += cube_y_offset
+
         # Safe initial arm pose: set shoulder to π/2 so arm points in +y direction.
         # Prevents penetration-impulse exploit when morphology optimizer grows arm toward
         # +x (cube direction): at qpos[0]=π/2 the arm always starts pointing away from cube,
