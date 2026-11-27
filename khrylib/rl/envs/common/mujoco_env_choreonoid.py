@@ -404,6 +404,14 @@ def mujoco_xml_to_body(xml_str: str):
             diff   = p1 - p0
             length = float(np.linalg.norm(diff))
             radius = float(geom_el.get('size', '0.08'))
+            if _PIPE_WALL > 0:      # 9-362: いまの半径から薄肉パイプの実効密度
+                xml_density = geom_density
+                geom_density = _PIPE_RHO * (1.0 - (1.0 - _PIPE_WALL / radius) ** 2) if _PIPE_WALL < radius else _PIPE_RHO
+                _k = (round(radius, 5), round(length, 4))
+                if len(_PIPE_SAID) < 12 and _k not in _PIPE_SAID:
+                    _PIPE_SAID.add(_k)
+                    print(f'[pipe] カプセル r {radius:.4f} m・長さ {length:.4f} m: 実効密度 {geom_density:.1f} kg/m³'
+                          f'（ρ {_PIPE_RHO:.0f}・肉厚 {_PIPE_WALL * 1000:.1f} mm。XML の値 {xml_density:.1f} は使わない）', flush=True)
             m, Iperp, Iaxial = capsule_inertia(length, radius, geom_density)
             rot_axis, rot_angle = rot_y_to_vec(diff)
             return dict(type='capsule', material=_mat, center=center.tolist(), length=length,
@@ -1012,6 +1020,14 @@ _TS_SAID = False
 _CUBE_SPRING_K = float(os.environ.get('CNOID_CUBE_SPRING_K') or 0.0)
 _CUBE_SPRING_JOINT = {'x': 'cube_slide', 'y': 'cube_slide2'}[(os.environ.get('CNOID_CUBE_SPRING_AXIS') or 'y').strip().lower()]
 _SPRING_SAID = False
+# ⭐ 9-362（2026-11-27、ユーザー「これをしたほうがいいならやって」）: `CNOID_PIPE_WALL`（肉厚 m、例 0.002）を与えると、カプセルの密度を
+#   **そのリンクのいまの半径** r から薄肉パイプの実効密度 ρ(1 − (1 − t/r)²) で計算する（ρ は `CNOID_PIPE_RHO`、既定 2700 kg/m³ ＝ アルミ A6061）。
+#   ⛔ 従来（未設定）は XML の default の density（`make_realistic_density_xml.py` が**初期の半径の平均**から 1 回だけ出した値）を全リンク・全設計に使う。
+#     太さを学習すると質量が r² で増え、肉厚 2 mm のパイプ（質量 ∝ ほぼ r）と食い違う（r 0.10 m で約 2.7 倍重い）。
+#   式は 9-126・9-246 と同じで、評価する半径だけが違う。慣性の式（Bug 110）は変えない。カプセル以外（台座の球・箱）には効かない。
+_PIPE_WALL = float(os.environ.get('CNOID_PIPE_WALL') or 0.0)
+_PIPE_RHO = float(os.environ.get('CNOID_PIPE_RHO') or 2700.0)
+_PIPE_SAID = set()
 
 class ChoreonoidSimWorld:
     def __init__(self):

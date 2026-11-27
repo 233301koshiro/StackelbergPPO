@@ -481,11 +481,12 @@ COMPARISONS = [
     # ⭐ 9-343（11-06）: 軸6 L-4 の取り直し、制御コスト 0.04 → 0.16（Bug 94。queue_ra15_cc016.sh、ブランチ）
     ('軸6 L-4 取り直し β 対 α・制御コスト 0.16（9-343 ㊾）', ['ra15_pusher_beta_cc016', 'ra15_pusher_alpha_cc016'], {'robot_param_scale'}),
     ('軸6 L-4 β の制御コスト 0.16 対 0.04（9-343）', ['ra15_pusher_beta_cc016', 'ra15_pusher_beta'], {'reward_specs.ctrl_cost_coeff'}),
-    # ⭐ 9-362（11-27）: 太さと後方延長の範囲をリンクの設計長に比例させた cfg（*_sc）と元の絶対値の範囲（queue_1127b_scaled_range.sh）
-    ('範囲の比例 対 絶対値 押し 中腕（9-362）', ['tripo_pjp_mid_phys_vp_sc', 'tripo_pjp_mid_phys_vp'], {'cfg'}),
-    ('範囲の比例 対 絶対値 押し 長腕（9-362）', ['tripo_pjp_long_phys_vp_sc', 'tripo_pjp_long_phys_vp'], {'cfg'}),
-    ('範囲の比例 対 絶対値 到達 中腕（9-362）', ['tripo_pj_mid_phys_sc', 'tripo_pj_mid_phys'], {'cfg'}),
-    ('範囲の比例 対 絶対値 到達 長腕（9-362）', ['tripo_pj_long_phys_sc', 'tripo_pj_long_phys'], {'cfg'}),
+    # ⭐ 9-362（11-27）: 実在に近づけた設計空間（cfg *_nx: 後方延長なし・太さを設計長に比例。起動行に CNOID_PIPE_WALL=0.002）と元（queue_1127b_scaled_range.sh）。
+    #   起動行で違うのは cfg だけ（CNOID_PIPE_WALL は launch_env.json の側）
+    ('設計空間の直し 対 元 押し 中腕（9-362）', ['tripo_pjp_mid_phys_vp_nx', 'tripo_pjp_mid_phys_vp'], {'cfg'}),
+    ('設計空間の直し 対 元 押し 長腕（9-362）', ['tripo_pjp_long_phys_vp_nx', 'tripo_pjp_long_phys_vp'], {'cfg'}),
+    ('設計空間の直し 対 元 到達 中腕（9-362）', ['tripo_pj_mid_phys_nx', 'tripo_pj_mid_phys'], {'cfg'}),
+    ('設計空間の直し 対 元 到達 長腕（9-362）', ['tripo_pj_long_phys_nx', 'tripo_pj_long_phys'], {'cfg'}),
 ]
 # 到達 対 押しでも同じでなければならないキー
 COMMON = {'reward_specs.ctrl_cost_coeff', 'fix_base', 'robot_param_scale', 'fix_skeleton',
