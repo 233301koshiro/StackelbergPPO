@@ -965,6 +965,415 @@ def layer1(geo, task, target, length_frozen=True, spread_y=0.0, offset_half=OFFS
     return findings, fatal
 
 
+# ---------------------------------------------------------------------------
+# ⭐ 9-368（2026-11-28、重大な指摘_20261127 の ③④、ユーザー「第一層のギア比棄却を開発する」）:
+#   第1層の静力学 — 関節トルクの上限（この実験系では ギア比 = 上限トルク [N·m]）で、目標でタスクの荷重を支えられるか。
+#   長さの棄却と同じく「設計空間のどの形でも支えられないときだけ棄却」（11-26 の第1層の定義）。
+#   ⭐ トルクを 2 つに分ける（11-28 ユーザー決定「荷重だけで判定」）:
+#     ① タスクの荷重（先端の荷物の重さ・ばねで引き戻される箱を押す力）: タスクが決めた点（目標・箱の面）に掛かる。
+#        位置が形によらない関節（根元の関節・台座を固定したときの肩）では、どの形でも同じトルクになる → 棄却の側が確実。
+#     ② リンクの自重: 形で変わる。長さが固定の設定（かつ後方延長が設計変数でない）だけ、逆運動学の全解について入れる。
+#        長さも最適化する設定では、描いた形の値を参考に出すだけ。
+#   ⚠️ 残る仮定（出力にも書く）: 腕の一部を関節の後ろへ回して自重で釣り合わせる形は考えない。ばねの箱は押す面の 1 点で押す
+#     （箱をつかむ・挟むは考えない）。
+#   ⚠️ 水平の押しは、箱が床と擦れない（Bug 108）ので静力学で要るトルクが無く、この検査は何も棄却しない。
+# ---------------------------------------------------------------------------
+G0 = 9.81
+STATIC_MU = 0.5          # Choreonoid（AIST）の材質の表の既定の摩擦。XML の geom の friction は変換器が読まない。CNOID_FRICTION で全体を変える
+STATIC_GEAR_UB = 150.0   # --xml だけで回すときの既定の上限（今の実在の cfg の上限 150 = UR5e、9-129）
+STATIC_PIPE_RHO = 2700.0  # CNOID_PIPE_WALL のときの材料の密度（mujoco_env_choreonoid.py の _PIPE_RHO と同じ既定）
+STATIC_NPHI = 3600       # 逆運動学の 1 つの自由度（最後のリンクの向き）の刻みの数
+
+
+def _vec(s, n=3):
+    return np.array([float(x) for x in (s or ' '.join(['0'] * n)).split()], dtype=float)
+
+
+def parse_statics_chain(xml_path):
+    """静力学に要る腕の連鎖を XML から読む（parse_arm_xml と同じ辿り方。Choreonoid 不要）。
+
+    返す: dict(base, joints=[dict(name, pos, axis, range, child_pos, cap_s, cap_e, radius, density)], gears={関節名: gear}, ok, why)
+      pos・axis は根の座標でゼロ姿勢のとき（この repo の XML は body に回転を持たない）。
+    """
+    root = ET.parse(xml_path).getroot()
+    dg = root.find('default/geom')
+    rho_def = float(dg.get('density', 1000.0)) if dg is not None else 1000.0
+    wb = root.find('worldbody')
+    arm_root = next((b for b in wb.findall('body') if b.get('name') != 'cube'), None)   # parse_arm_xml と同じ（最初の body）
+    if arm_root is None:
+        return dict(base=np.zeros(3), joints=[], gears={}, ok=False, why='腕の body が見つからない')
+    gears = {m.get('joint'): float(m.get('gear', 1.0)) for m in root.findall('actuator/motor')}
+    out = dict(base=_vec(arm_root.get('pos')), joints=[], gears=gears, ok=True, why='')
+    node, origin = arm_root, _vec(arm_root.get('pos'))
+    while True:
+        child = node.find('body')
+        if child is None:
+            break
+        if child.get('quat') or child.get('euler') or child.get('axisangle'):
+            out.update(ok=False, why=f'body `{child.get("name")}` が回転を持つ（この検査はゼロ姿勢で回転の無い連鎖だけを扱う）')
+            return out
+        origin = origin + _vec(child.get('pos'))
+        j = child.find('joint')
+        g = child.find('geom')
+        if j is None or g is None or g.get('type') != 'capsule':
+            node = child
+            continue
+        ft = _vec(g.get('fromto'), 6)
+        nxt = child.find('body')
+        rg = j.get('range')
+        out['joints'].append(dict(
+            name=j.get('name'), pos=origin.copy(), axis=_vec(j.get('axis', '0 0 1')) / np.linalg.norm(_vec(j.get('axis', '0 0 1'))),
+            range=np.radians([float(x) for x in rg.split()]) if rg else np.array([-np.pi, np.pi]),
+            child_pos=_vec(nxt.get('pos')) if nxt is not None else ft[3:6].copy(),   # 最後のリンクは骨の先（= 先端・荷物の位置）
+            cap_s=ft[0:3], cap_e=ft[3:6], radius=float(g.get('size').split()[0]),
+            density=float(g.get('density', rho_def))))
+        node = child
+    return out
+
+
+def _radius_interval(jt, size_spec):
+    """設計空間でのカプセル半径の範囲。size_spec: None（設計変数でない）/ dict(lb, ub, bone_frac, rel)。"""
+    r = jt['radius']
+    if not size_spec:
+        return r, r
+    fr = size_spec.get('bone_frac')
+    if fr is not None:
+        L = float(np.linalg.norm(jt['cap_e'] - jt['cap_s']))
+        return float(fr[0]) * L, float(fr[1]) * L
+    lb, ub = float(size_spec.get('lb', r)), float(size_spec.get('ub', r))
+    if size_spec.get('rel'):
+        lb, ub = r + lb, r + ub
+    return max(lb, 1e-4), max(ub, 1e-4)
+
+
+def _capsule_mass(jt, r, pipe_wall=0.0, pipe_rho=STATIC_PIPE_RHO):
+    L = float(np.linalg.norm(jt['cap_e'] - jt['cap_s']))
+    rho = (pipe_rho * (1.0 - (1.0 - pipe_wall / r) ** 2) if pipe_wall < r else pipe_rho) if pipe_wall > 0 else jt['density']
+    return rho * (math.pi * r * r * L + 4.0 / 3.0 * math.pi * r ** 3)
+
+
+def _rot(axis, ang):
+    """軸 axis まわりに ang [rad] 回す回転行列（ロドリゲス）。ang は配列でもよい → (..., 3, 3)。"""
+    a = np.asarray(axis, float)
+    ang = np.asarray(ang, float)
+    K = np.array([[0, -a[2], a[1]], [a[2], 0, -a[0]], [-a[1], a[0], 0]])
+    s, c = np.sin(ang)[..., None, None], np.cos(ang)[..., None, None]
+    return np.eye(3) + s * K + (1 - c) * (K @ K)
+
+
+def _yaw_solutions(a0, p_rot, a_s_local, p_s, T, n=7200):
+    """根元の関節（軸 a0、位置 p_rot）をいくつ回すと、肩の関節の軸 a_s が肩→目標の向きと直交する（＝目標が腕の面に入る）か。"""
+    psi = np.linspace(-np.pi, np.pi, n, endpoint=False)
+    R = _rot(a0, psi)
+    a_s = R @ a_s_local
+    ps = p_rot + (R @ (p_s - p_rot)[:, None])[..., 0]
+    f = np.einsum('ni,ni->n', a_s, T[None, :] - ps)
+    sols = []
+    for i in range(n):
+        f0, f1 = f[i], f[(i + 1) % n]
+        if f0 == 0 or f0 * f1 < 0:
+            t = f0 / (f0 - f1) if f0 != f1 else 0.0
+            sols.append(float(psi[i] + t * (2 * np.pi / n)))
+    if np.all(np.abs(f) < 1e-12):    # 目標が根元の軸の上（どの向きでも面に入る）
+        sols = list(psi[::max(1, n // 72)])
+    return sols
+
+
+def _planar_ik(vecs_xz, theta0, rngs, tx, tz, nphi=STATIC_NPHI):
+    """面の中の連鎖（2 本か 3 本）で、先端が (tx, tz) に来る関節角の全解を返す。角は +z から +x へ測る。可動域の外は捨てる。
+
+    vecs_xz: 各リンクのゼロ姿勢での骨の長さ（運動学の長さ）、theta0: ゼロ姿勢での骨の向き（その body の座標で）。
+    返す: (N, n) の関節角。nphi の刻みに由来する取りこぼしの幅（rad）も返す。
+    """
+    L = np.asarray(vecs_xz, float)
+    n = len(L)
+    sols = []
+    if n == 3:
+        phis = np.linspace(-np.pi, np.pi, nphi, endpoint=False)
+        cand_phi = phis
+    elif n == 2:
+        cand_phi = [None]
+    else:
+        return np.zeros((0, n)), None
+    for phi in cand_phi:
+        if n == 3:
+            wx, wz = tx - L[2] * np.sin(phi), tz - L[2] * np.cos(phi)
+        else:
+            wx, wz = tx, tz
+        d2 = wx * wx + wz * wz
+        c = (d2 - L[0] ** 2 - L[1] ** 2) / (2 * L[0] * L[1])
+        if abs(c) > 1:
+            continue
+        for s in (1.0, -1.0):
+            b = s * np.arccos(c)                       # 2 本目の絶対角 − 1 本目の絶対角
+            a1 = np.arctan2(wx, wz) - np.arctan2(L[1] * np.sin(b), L[0] + L[1] * np.cos(b))
+            absang = [a1, a1 + b] + ([phi] if n == 3 else [])
+            # 絶対角（骨の向き）→ 関節角: q_i = (abs_i − θ0_i) − (abs_{i−1} − θ0_{i−1})
+            q, prev = [], 0.0
+            for i in range(n):
+                cur = absang[i] - theta0[i]
+                q.append(cur - prev)
+                prev = cur
+            q = (np.array(q) + np.pi) % (2 * np.pi) - np.pi
+            if all(rngs[i][0] - 1e-9 <= q[i] <= rngs[i][1] + 1e-9 for i in range(n)):
+                sols.append(q)
+    step = (2 * np.pi / nphi) if n == 3 else 0.0
+    return (np.array(sols) if sols else np.zeros((0, n))), step
+
+
+def layer1_statics(chain, task, target, *, length_frozen, fix_base, gear_ub, gear_fixed=False, size_spec=None,
+                   ext_free=False, offset_type=None, payload=0.0, spring=None, mu=STATIC_MU,
+                   pipe_wall=0.0, pipe_rho=STATIC_PIPE_RHO, nphi=STATIC_NPHI):
+    """第1層の静力学（9-368）。(所見リスト, 致命的か, 詳細 dict) を返す。
+
+    spring: None か dict(k, axis('x'|'y'), target(2,), cube_pos(3,), half, noise)。payload: 先端の荷物 [kg]（到達）。
+    gear_fixed: ギア比が設計変数でない（軸6）なら XML の gear を各関節の上限に使う。
+    """
+    F, fatal, info = [], False, {}
+    if not chain.get('ok', True):
+        F.append(('info', f'静力学の検査は対象外です: {chain["why"]}'))
+        return F, False, info
+    J = chain['joints']
+    if not J:
+        F.append(('info', '静力学の検査は対象外です（関節つきのカプセルの連鎖が見つからない）'))
+        return F, False, info
+    lim = np.array([chain['gears'].get(j['name'], gear_ub) if gear_fixed else gear_ub for j in J], float)
+    lim_txt = ('XML の gear（' + '・'.join(f'{l:g}' for l in lim) + ' N·m）') if gear_fixed else f'ギア比の上限 {gear_ub:g} N·m'
+    loads = []
+    if payload > 0 and task == 'reach':
+        loads.append(f'先端の荷物 {payload:g} kg')
+    if spring and spring.get('k', 0) > 0:
+        loads.append(f'ばねの箱 k {spring["k"]:g} N/m（{spring["axis"]} 向き）')
+    zdown = np.array([0.0, 0.0, -1.0])
+
+    # --- 位置が形によらない関節を決める ---------------------------------------------------
+    j0 = J[0]
+    p0, a0 = j0['pos'], j0['axis']
+    lv0 = j0['child_pos']
+    pillar = (len(J) >= 2 and np.linalg.norm(lv0) > 1e-9 and abs(float(np.dot(lv0 / np.linalg.norm(lv0), a0))) > 0.99)
+    a_s_loc = J[1]['axis'] if len(J) >= 2 else None
+    planar_sub = bool(pillar and all(abs(float(np.dot(j['axis'], a_s_loc))) > 0.999 for j in J[1:])
+                      and all(abs(float(np.dot(j['child_pos'], a_s_loc))) < 1e-6 for j in J[1:]))
+    if planar_sub and not length_frozen and offset_type is not None:
+        # 長さも最適化するときは、骨のずれが肩の軸に直交する面の中に留まるか（'xz' なら面の法線は y）
+        normal = {'xz': np.array([0, 1.0, 0]), 'xy': np.array([0, 0, 1.0])}.get(offset_type)
+        planar_sub = normal is not None and abs(float(np.dot(normal, a_s_loc))) > 0.999
+    shoulder_fixed = planar_sub and (length_frozen or fix_base)
+    p_s = p0 + lv0 if pillar else None
+
+    T = np.asarray(target, float) if target is not None else None
+    detail = []                                  # (関節名, 要るトルクの下界, 上限, 説明)
+
+    # --- ① タスクの荷重: 荷物（到達） -------------------------------------------------------
+    payload_ok = payload > 0 and task == 'reach' and T is not None
+    pay_arm = None
+    if payload_ok:
+        Wp = payload * G0
+        # 根元の関節: 荷物の重さのモーメント（鉛直の軸なら 0）
+        tau0 = abs(float(np.dot(a0, np.cross(T - p0, Wp * zdown))))
+        if shoulder_fixed:
+            sols = _yaw_solutions(a0, p0, a_s_loc, p_s, T)
+            if sols:
+                vals = []
+                for psi in sols:
+                    a_s = _rot(a0, psi) @ a_s_loc
+                    ps = p0 + _rot(a0, psi) @ (p_s - p0)
+                    vals.append(abs(float(np.dot(a_s, np.cross(T - ps, Wp * zdown)))))
+                tau_s = min(vals)
+                pay_arm = tau_s / Wp
+                detail.append((J[1]['name'], tau_s, lim[1], f'荷物 {payload:g} kg × g × 肩から目標までの水平距離 {pay_arm:.3f} m'))
+        if tau0 > 1e-9:
+            detail.append((j0['name'], tau0, lim[0], f'荷物の重さの、根元の関節まわりのモーメント'))
+
+    # --- ① タスクの荷重: ばねの箱（根元の関節だけ。押す点は箱の面の上、腕のどこで押してもよい） ---------------
+    spring_res = None
+    if spring and spring.get('k', 0) > 0:
+        ax = 0 if spring['axis'] == 'x' else 1
+        cpos, half = np.asarray(spring['cube_pos'], float), float(spring['half'])
+        tgt = np.asarray(spring['target'], float)
+        n_dir = np.zeros(3); n_dir[ax] = 1.0
+        init = float(cpos[ax])
+        # 押す面: 目標にいる箱の、ばねに逆らって押す側の面（n_dir の負の側）。面の上の点を格子で振る
+        oth = 1 - ax
+        g = np.linspace(-half, half, 61)
+        zs = np.linspace(cpos[2] - half, cpos[2] + half, 21)
+        C = np.zeros((len(g) * len(zs), 3))
+        k_ = 0
+        for u in g:
+            for z in zs:
+                c = np.zeros(3)
+                c[ax] = tgt[ax] - half
+                c[oth] = tgt[oth] + u
+                c[2] = z
+                C[k_] = c; k_ += 1
+        r = C - p0
+        A = np.einsum('i,ni->n', a0, np.cross(r, n_dir[None, :]))          # 押す向きの力 1 N あたりのモーメント
+        P = np.cross(a0[None, :], r)                                        # a0 × r の、面の中の成分が摩擦で打ち消せる量
+        Pt = np.linalg.norm(P - np.outer(P @ n_dir, n_dir), axis=1)
+        per_N = np.maximum(0.0, np.abs(A) - mu * Pt)                       # 1 N あたりの最小の |τ|（摩擦の向きを最も有利に）
+        best_per_N = float(per_N.min())
+        worst_per_N = float((np.abs(A) + mu * Pt).max())
+        noise = float(spring.get('noise', 0.0))
+        us = np.linspace(-noise, noise, 201) if noise > 0 else np.array([0.0])
+        disp = tgt[ax] - (init + us)                                        # 目標までのばねの伸び（自然長は各話の初期位置）
+        Fn = spring['k'] * np.maximum(disp, 0.0)
+        tau_min = Fn * best_per_N                                           # 各話の、最も有利な押し方での要るトルク
+        frac_fail = float(np.mean(tau_min > lim[0] + 1e-9))
+        spring_res = dict(tau_min_ep=tau_min, frac_fail=frac_fail, best_per_N=best_per_N, worst_per_N=worst_per_N,
+                          disp=disp, Fn=Fn)
+        info['spring'] = spring_res
+
+    # --- ② リンクの自重（長さが固定・後方延長が設計変数でない・面の中の連鎖が 2〜3 本のときだけ） -----------------
+    exact = None
+    if (length_frozen and not ext_free and planar_sub and T is not None and task == 'reach'
+            and abs(float(np.dot(a0, zdown))) > 0.999 and abs(float(np.dot(a_s_loc, zdown))) < 1e-6 and len(J) - 1 in (2, 3)):
+        sols_psi = _yaw_solutions(a0, p0, a_s_loc, p_s, T)
+        Jp = J[1:]
+        e_z = np.array([0.0, 0.0, 1.0])
+        e_x = np.cross(a_s_loc, e_z)
+        Lk = [float(np.linalg.norm(j['child_pos'])) for j in Jp]
+        th0 = [float(np.arctan2(np.dot(j['child_pos'], e_x), np.dot(j['child_pos'], e_z))) for j in Jp]
+        rngs = [j['range'] for j in Jp]
+        m_lo, m_hi = [], []
+        for j in Jp:
+            r_lo, r_hi = _radius_interval(j, size_spec)
+            m_lo.append(_capsule_mass(j, r_lo, pipe_wall, pipe_rho)); m_hi.append(_capsule_mass(j, r_hi, pipe_wall, pipe_rho))
+        m_lo, m_hi = np.array(m_lo), np.array(m_hi)
+        best = None
+        for psi in sols_psi:
+            R = _rot(a0, psi)
+            ps = p0 + R @ (p_s - p0)
+            a_s = R @ a_s_loc
+            ex_w = np.cross(a_s, e_z)                              # 回した後の面の水平の向き
+            tx, tz = float(np.dot(T - ps, ex_w)), float(T[2] - ps[2])
+            Q, step = _planar_ik(Lk, th0, rngs, tx, tz, nphi)
+            if len(Q) == 0:
+                continue
+            # 各リンクの絶対角・関節の位置・カプセルの重心（面の座標）
+            cum = np.cumsum(Q, axis=1)
+            jx = np.zeros((len(Q), len(Jp) + 1))
+            cx = np.zeros((len(Q), len(Jp)))
+            for i, j in enumerate(Jp):
+                a = cum[:, i]
+                v = j['child_pos']
+                vx, vz = float(np.dot(v, e_x)), float(np.dot(v, e_z))
+                jx[:, i + 1] = jx[:, i] + vx * np.cos(a) + vz * np.sin(a)
+                cm = (j['cap_s'] + j['cap_e']) / 2.0
+                cmx, cmz = float(np.dot(cm, e_x)), float(np.dot(cm, e_z))
+                cx[:, i] = jx[:, i] + cmx * np.cos(a) + cmz * np.sin(a)
+            # 関節 i の要るトルク = Σ_{k≥i} m_k g (重心の水平位置 − 関節の水平位置) ＋ 荷物 g (先端 − 関節)
+            lo_all, hi_all = [], []
+            for i in range(len(Jp)):
+                dxs = cx[:, i:] - jx[:, i:i + 1]
+                base_t = (payload * G0 * (jx[:, -1] - jx[:, i])) if payload > 0 else np.zeros(len(Q))
+                t_lo = base_t + G0 * np.sum(np.where(dxs > 0, m_lo[i:], m_hi[i:]) * dxs, axis=1)
+                t_hi = base_t + G0 * np.sum(np.where(dxs > 0, m_hi[i:], m_lo[i:]) * dxs, axis=1)
+                lo_all.append(t_lo); hi_all.append(t_hi)
+            lo_all, hi_all = np.array(lo_all).T, np.array(hi_all).T          # (N, n)
+            minabs = np.where((lo_all <= 0) & (hi_all >= 0), 0.0, np.minimum(np.abs(lo_all), np.abs(hi_all)))
+            ratio = (minabs / lim[1:][None, :]).max(axis=1)
+            k = int(np.argmin(ratio))
+            # 刻みの取りこぼし: 最後のリンクの向きを step/2 動かしたときのトルクの変化の上限
+            Mtot = payload + float(m_hi.sum())
+            slack = G0 * Mtot * float(sum(Lk)) * (step / 2.0 if step else 0.0) * 3.0
+            cand = dict(ratio=float(ratio[k]), q=Q[k], tau=minabs[k], slack=slack, n=len(Q), psi=psi)
+            if best is None or cand['ratio'] < best['ratio']:
+                best = cand
+        exact = best
+        info['exact'] = exact
+
+    # --- 所見をまとめる -------------------------------------------------------------------
+    head = f'静力学（{lim_txt}）: 目標でタスクの荷重を支えられるか'
+    if not loads and exact is None:
+        F.append(('info', f'{head}。\n      この課題には静力学で効くタスクの荷重がありません（先端の荷物もばねも無い）。'
+                          f'{"箱は床と擦れないので（Bug 108）、押しに要る力も静力学では 0 です。" if task == "pusher" else ""}'
+                          f'\n      → **ギア比による棄却は掛かりません**（出力が足りるかは動きの速さで決まり、静力学では判定できない）'))
+        return F, False, info
+    F.append(('info', f'{head}（{"・".join(loads) if loads else "荷重はリンクの自重だけ"}）'))
+
+    def _payload_max(tau_need, jidx_global, lim_j):
+        """支えられる荷物の上限の目安。荷物の項だけが線形に増える関節（肩）で出す。律速が肩でなければ出さない。"""
+        if not pay_arm or jidx_global != 1:
+            return None
+        link_part = tau_need - payload * G0 * pay_arm
+        return max(0.0, (lim_j - max(0.0, link_part)) / (G0 * pay_arm))
+
+    # 荷物（と、長さが固定ならリンクの自重）
+    if exact is not None:
+        jl = int(np.argmax(exact['tau'] / lim[1:]))
+        tau_need, lim_j, jn = float(exact['tau'][jl]), float(lim[1 + jl]), J[1 + jl]['name']
+        over = (tau_need - lim_j) > exact['slack']
+        how = (f'逆運動学の全解 {exact["n"]} 個のうち最も楽な姿勢で、リンクの自重（太さは設計空間で最も有利な値）'
+               f'{"と荷物" if payload_ok else ""}を入れて計算（刻みの取りこぼしの幅 {exact["slack"]:.2f} N·m）')
+        m_max = _payload_max(tau_need, 1 + jl, lim_j) if payload_ok else None
+    elif payload_ok and shoulder_fixed and detail and detail[0][0] == J[1]['name']:
+        jn, tau_need, lim_j = detail[0][0], float(detail[0][1]), float(detail[0][2])
+        over = tau_need > lim_j + 1e-9
+        how = (f'{detail[0][3]}。どの形でも同じ値（リンクの長さも最適化されるので、リンクの自重は入れていない。'
+               f'腕の一部を肩の後ろへ回して自重で釣り合わせる形は考えない）')
+        m_max = _payload_max(tau_need, 1, lim_j)
+    else:
+        jn = None
+        if payload_ok:
+            why = ('台座が設計変数で、肩の位置が形によって動く（`+fix_base=true` で固定できる）' if planar_sub and not (length_frozen or fix_base)
+                   else '肩より先が 1 つの面の中で動く連鎖ではないか、目標が腕の面に入らない')
+            F.append(('warn', f'荷物を支えるトルクは判定できません: {why}。'))
+    if jn is not None:
+        info['payload'] = dict(joint=jn, tau=tau_need, lim=lim_j, over=over, m_max=m_max)
+        what = '荷物' if payload_ok else '腕の自重'
+        if over:
+            fatal = True
+            adv = [f'関節 `{jn}` の駆動器を、上限 **{math.ceil(tau_need)} N·m 以上**のものに替える']
+            if m_max is not None:
+                adv.append(f'荷物を **{m_max:.1f} kg 以下**にする')
+            adv.append('目標を根元へ近づける')
+            adv = [f'{"①②③"[i]} {a}' for i, a in enumerate(adv)]
+            F.append(('fatal',
+                f'**関節のトルクが足りず、目標で{what}を支えられません**（関節 `{jn}`: 要るトルク {tau_need:.1f} N·m ＞ 上限 {lim_j:g} N·m）。\n'
+                f'      {how}。\n'
+                + (f'      ⚠️ 荷物のトルクの腕の長さは目標の位置で決まるので、**リンクを短くしても直りません**。\n' if payload_ok else '')
+                + '      → 次のどれかで直ります: ' + '　'.join(adv)))
+        else:
+            F.append(('ok', f'目標で{what}を支えられます（関節 `{jn}`: 要るトルク {tau_need:.1f} N·m ≤ 上限 {lim_j:g} N·m、'
+                            f'余裕 {(1 - tau_need / lim_j) * 100:.0f} %）。\n      {how}'
+                            + (f'\n      支えられる荷物の上限の目安: {m_max:.1f} kg' if m_max is not None else '')))
+        # 参考: 長さも最適化する設定では、描いた形（XML の長さ・太さ）でリンクの自重がいくら上乗せになるか
+        if payload_ok and exact is None and not length_frozen:
+            _f, _x, _i = layer1_statics(chain, task, target, length_frozen=True, fix_base=True, gear_ub=gear_ub,
+                                         gear_fixed=gear_fixed, size_spec=None, ext_free=False, payload=payload,
+                                         pipe_wall=pipe_wall, pipe_rho=pipe_rho, nphi=nphi)
+            if _i.get('payload'):
+                d = _i['payload']
+                F.append(('info', f'参考（判定に使わない）: 描いた形（XML の長さ・太さ）なら、リンクの自重を入れて関節 `{d["joint"]}` に '
+                                  f'{d["tau"]:.1f} N·m（荷物だけの値より {d["tau"] - tau_need:+.1f} N·m）'))
+
+    # ばねの箱
+    if spring_res is not None:
+        s = spring_res
+        tmin, tmax = float(s['tau_min_ep'].min()), float(s['tau_min_ep'].max())
+        nz = float(spring.get('noise', 0.0))
+        base = (f'根元の関節 `{j0["name"]}` が、目標で箱をばねに逆らって押し続けるのに要るトルク: '
+                f'各話の最も有利な押し方で {tmin:.0f}〜{tmax:.0f} N·m（上限 {lim[0]:g}）。\n'
+                f'      ばねの伸びは {s["disp"].min():.2f}〜{s["disp"].max():.2f} m（自然長は各話の初期位置。箱の初期位置は ±{nz:.2f} m ずれる）。'
+                f'押す点は箱の面の上のどこでもよく、摩擦 {mu:g} が最も有利な向きに働くとした下界で、どの形でも同じ値。\n'
+                f'      ⚠️ 押す面の 1 点で押すとした（箱をつかむ・挟むは考えない）')
+        k_all = lim[0] / (float(s['disp'].max()) * s['best_per_N']) if s['best_per_N'] > 0 else float('inf')
+        info['spring_k_all'] = k_all
+        if s['frac_fail'] >= 1.0:
+            fatal = True
+            F.append(('fatal', f'**関節のトルクが足りず、どの話でも目標で箱を保てません**。\n      {base}\n'
+                               f'      → 関節 `{j0["name"]}` の駆動器を上限 **{math.ceil(tmax)} N·m 以上**に替えるか、'
+                               f'ばねを **k {k_all:.0f} N/m 以下**にしてください（どの話でも保てる値）。'))
+        elif s['frac_fail'] > 0:
+            F.append(('warn', f'**話の {s["frac_fail"] * 100:.0f} % では、上限で目標に箱を保てません**（箱の初期位置が目標から遠い話）。\n'
+                              f'      {base}\n'
+                              f'      ⚠️ 棄却はしません（最も有利な話では保てるため。Bug 51 と同じく、棄却は最も有利な位置で判定する）。\n'
+                              f'      → どの話でも保つには、駆動器を上限 **{math.ceil(tmax)} N·m 以上**にするか、ばねを **k {k_all:.0f} N/m 以下**にしてください。'))
+        else:
+            F.append(('ok', f'どの話でも、上限を超えずに目標で箱を保つ押し方があります。\n      {base}'))
+    return F, fatal, info
+
+
 def layer2(bodies, task):
     """第2層: 学習後の収束形態から読む。"""
     findings = []
@@ -1168,7 +1577,34 @@ def self_check():
     assert fatal_short, '⛔ 0.6 倍でも棄却されない。判定が緩みすぎている'
     assert ADVICE, '⛔ 棄却したのに倍率の助言が無い（閉ループが閉じない）'
 
+    # ④ ⭐ 9-368: 第1層の静力学（ギア比による棄却）。確かめの値は系譜 9-366（荷物）・9-354（ばねの箱）
+    ch = parse_statics_chain(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                                           ASSET_DIR, 'e2e_a1v_phys_arm171.xml'))
+    kw = dict(fix_base=True, gear_ub=150.0, offset_type='xz')
+    res = {}
+    for frozen in (True, False):
+        for mp in (10.0, 20.0):
+            _, fat, inf = layer1_statics(ch, 'reach', [0.8, 0.0, 0.15], length_frozen=frozen, payload=mp, **kw)
+            res[(frozen, mp)] = (fat, inf['payload']['tau'])
+    assert not res[(False, 10.0)][0] and not res[(True, 10.0)][0], '⛔ 荷物 10 kg を棄却している（肩 78.5〜85.6 N·m < 150）'
+    assert res[(False, 20.0)][0] and res[(True, 20.0)][0], '⛔ 荷物 20 kg を棄却しない（肩 157 N·m > 150）'
+    assert abs(res[(False, 20.0)][1] - 20 * G0 * 0.8) < 1e-6, res[(False, 20.0)]      # 荷重だけ: m g × 水平距離 0.8 m
+    assert abs(res[(True, 10.0)][1] - 85.62) < 0.05, res[(True, 10.0)]                # 自重込み（probe_vertical_payload.py と一致）
+    sp = lambda k, nz: layer1_statics(ch, 'pusher', None, length_frozen=False, **kw,
+                                      spring=dict(k=k, axis='y', target=[1.0, 0.30], cube_pos=[1.0, 0.0, 0.2], half=0.15, noise=nz))
+    _, f900, i900 = sp(900.0, 0.0)
+    _, f350, _ = sp(350.0, 0.0)
+    assert f900 and abs(float(i900['spring']['tau_min_ep'].min()) - 209.25) < 0.01, '⛔ k 900 の下界が 9-354 の 209 N·m と合わない'
+    assert not f350, '⛔ k 350（81〜129 N·m）を棄却している'
+    _, f900n, i900n = sp(900.0, 0.1)
+    assert not f900n and 0.85 < i900n['spring']['frac_fail'] < 1.0, '⛔ 箱の初期位置のずれ ±0.1 m で、保てない話の割合が想定（約 92 %）と違う'
+    _, fp, _ = layer1_statics(parse_statics_chain(_os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                              ASSET_DIR, 'e2e_b1.xml')), 'pusher', None, length_frozen=True, fix_base=False, gear_ub=150.0)
+    assert not fp, '⛔ 荷重の無い水平の押しを静力学で棄却している'
+
     print('✅ Bug 50 回帰テスト 3 項目すべて通過')
+    print('✅ 9-368 静力学: 荷物 10 kg を通し 20 kg を棄却（荷重だけ・自重込みとも）、ばね k 900 の下界 209.25 N·m（9-354）・'
+          f'k 350 は通す、箱のずれ ±0.1 m では k 900 を棄却せず保てない話 {i900n["spring"]["frac_fail"] * 100:.0f} %、水平の押しは棄却しない')
     print(f'   先端半径: 実値 {tip_radius(geo, 0.0):.4f} / 設計上限込み {tip_radius(geo, 0.10):.4f}')
     print(f'   e2e_b1: 実効到達 {reach:.4f} m > 打点 {near:.4f} m → 棄却しない ⭐')
     print(f'   0.6 倍: 棄却する ⭐  助言 {max(ADVICE):.2f} 倍')
@@ -1201,6 +1637,20 @@ def main():
                     help='長さの定数に掛ける縮尺（run 指定時は cfg の length_scale）。既定 1（9-329、軸6）')
     ap.add_argument('--length-free', action='store_true',
                     help='リンク長も最適化対象として判定する（--run 指定時は cfg から自動判定）')
+    # ⭐ 9-368: 第1層の静力学（ギア比による棄却）。run 指定時は cfg・config.yaml・launch_env.json から読む
+    ap.add_argument('--payload', type=float, default=None, help='先端の荷物 [kg]（到達）。run 指定時は cfg の robot.payload_mass')
+    ap.add_argument('--spring-k', type=float, default=None, dest='spring_k',
+                    help='ばねで引き戻される箱の k [N/m]。run 指定時は launch_env.json の CNOID_CUBE_SPRING_K')
+    ap.add_argument('--spring-axis', default=None, dest='spring_axis', choices=['x', 'y'], help='ばねの向き（既定 y）')
+    ap.add_argument('--spring-target', nargs=2, type=float, default=None, dest='spring_target',
+                    help='箱を押して保つ目標 (x, y)。run 指定時は reward_specs.target_x・target_y')
+    ap.add_argument('--fix-base', action='store_true', dest='fix_base',
+                    help='台座（根元の柱）を設計変数から外す（+fix_base=true）。長さも最適化するとき、肩の位置が決まる')
+    ap.add_argument('--gear-ub', type=float, default=None, dest='gear_ub',
+                    help=f'関節トルクの上限 [N·m]（ギア比の上限）。run 指定時は cfg から。--xml だけなら既定 {STATIC_GEAR_UB:g}')
+    ap.add_argument('--friction', type=float, default=None, help=f'接触の摩擦。既定 {STATIC_MU}（AIST の既定。run 指定時は CNOID_FRICTION）')
+    ap.add_argument('--pipe-wall', type=float, default=None, dest='pipe_wall',
+                    help='薄肉パイプの肉厚 [m]（CNOID_PIPE_WALL）。指定すると質量をいまの半径から出す')
     args, _ = ap.parse_known_args()
     if args.self_check:
         return self_check()
@@ -1327,6 +1777,58 @@ def main():
                        cube_noise=(CUBE_POS_NOISE if args.cube_noise is None else args.cube_noise),
                        push_stroke=args.push_stroke)
     groups = [('第1層: 設計図だけで分かること（学習不要）', f1)]
+
+    # ⭐ 9-368: 第1層の静力学（ギア比による棄却）。手で渡した値は上書きしない
+    import json
+    payload, spring_k, spring_axis, spring_tgt = args.payload, args.spring_k, args.spring_axis, args.spring_target
+    fix_base, gear_ub, mu, pipe_wall = args.fix_base, args.gear_ub, args.friction, args.pipe_wall
+    size_spec, ext_free, offset_type, pipe_rho = None, False, None, STATIC_PIPE_RHO
+    s_noise = CUBE_POS_NOISE if args.cube_noise is None else args.cube_noise
+    if run:
+        _le_path = os.path.join(run, 'launch_env.json')
+        le = json.load(open(_le_path)) if os.path.exists(_le_path) else {}
+        if payload is None:
+            payload = float(rob.get('payload_mass', 0.0) or 0.0)
+        if spring_k is None:
+            spring_k = float(le.get('CNOID_CUBE_SPRING_K') or 0.0)
+        if spring_axis is None:
+            spring_axis = (le.get('CNOID_CUBE_SPRING_AXIS') or 'y').strip().lower()
+        if spring_tgt is None and rs.get('use_target_reward'):
+            spring_tgt = [float(rs.get('target_x', 1.0)), float(rs.get('target_y', 0.0))]
+        fix_base = fix_base or bool(cfgd.get('fix_base', False))
+        if mu is None and le.get('CNOID_FRICTION'):
+            mu = float(le['CNOID_FRICTION'])
+        if pipe_wall is None:
+            pipe_wall = float(le.get('CNOID_PIPE_WALL') or 0.0)
+        pipe_rho = float(le.get('CNOID_PIPE_RHO') or STATIC_PIPE_RHO)
+        _gp = rob.get('geom_params') or {}
+        size_spec = _gp.get('size') or None
+        ext_free = 'ext_start' in _gp
+        offset_type = (bp.get('offset') or {}).get('type')
+        if gear_ub is None:
+            gear_ub = GEAR_UB
+    else:
+        if gear_ub is None:
+            gear_ub = STATIC_GEAR_UB
+            print(f'[diagnose] 静力学の上限トルクは既定の {STATIC_GEAR_UB:g} N·m（--gear-ub で変える）', flush=True)
+        if not length_frozen:
+            offset_type = 'xz'            # 縦型の cfg と同じ（--xml だけでは cfg が無い）
+    spring = None
+    if spring_k:
+        if spring_tgt is None:
+            ap.error('--spring-k を使うときは --spring-target X Y（箱を押して保つ目標）も指定してください')
+        if geo.get('cube') is None:
+            ap.error('ばねの箱を判定するには XML に cube が要ります')
+        spring = dict(k=float(spring_k), axis=spring_axis or 'y', target=spring_tgt,
+                      cube_pos=geo['cube']['pos'], half=geo['cube']['half'], noise=s_noise)
+    chain = parse_statics_chain(os.path.join(ASSET_DIR, f'{args.xml}.xml'))
+    fs, fatal_s, _ = layer1_statics(chain, args.task, args.target if args.task == 'reach' else None,
+                                    length_frozen=length_frozen, fix_base=fix_base, gear_ub=float(gear_ub),
+                                    gear_fixed=GEAR_FIXED, size_spec=size_spec, ext_free=ext_free, offset_type=offset_type,
+                                    payload=float(payload or 0.0), spring=spring, mu=(STATIC_MU if mu is None else mu),
+                                    pipe_wall=float(pipe_wall or 0.0), pipe_rho=pipe_rho)
+    groups.append(('第1層（静力学）: 関節トルクの上限で、目標でタスクの荷重を支えられるか（学習不要）', fs))
+    fatal = fatal or fatal_s
 
     if run:
         groups += _run_layers23(run, args.task, geo, args.target)
