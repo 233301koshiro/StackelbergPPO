@@ -84,7 +84,13 @@ def main() -> int:
     #   ⚠️ **CLAUDE.md には「週に1回」と散文で書いてあったが、17 日守られていなかった。**
     #   ⭐ CLAUDE.md §5-1-2 の規律「検査を書けるならスクリプトにする」に従い、
     #     周期は散文ではなくこの検査が持つ。記録は 目次.md の「docs の棚卸し」節。
-    print(_since_last_inventory(toc), end='\n\n')
+    print(_since_last_inventory(toc))
+    # ⭐ 外部の方針レビュー（/review-out）の経過日数も同じ週 1 の周期で出す（2026-11-28、ユーザー
+    #   「定期的に gemini に研究の方針とそれに対する検証や行動が伴っているかを依頼するための仕組み」）。
+    #   記録は docs/研究応用/方針/外部の方針レビュー記録.md。
+    sys.path.insert(0, str(ROOT / 'scripts'))
+    from policy_review_material import last_review_line
+    print(last_review_line(), end='\n\n')
 
     # 1. 孤立ファイル
     # ⚠️ **ビルドスクリプトが読むファイルは MD からリンクされていなくても孤立ではない。**
