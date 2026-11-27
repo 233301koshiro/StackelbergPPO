@@ -14,6 +14,8 @@
   cube         (T, 3)  Pusher の対象物（無い場合は形状 (0,)）
   target       (3,)    Reach の目標
   ep_*         採用した全話の軌跡・置いた瞬間・形（ep_bone / ep_geom）・報酬（ep_reward / ep_reward_ctrl）
+  ep_ctrl      (話ごとに T, 制御の数)  関節ごとの制御入力（9-360。指令トルク ＝ clip(u, ±1) × ep_gear_eff、actuators_map の順。後ろの列は対象のスライド）
+  ep_gear_eff  (話ごとに 関節の数)  実行時のシミュレータのギア比（TRACE_GEAR_OVERRIDE の差し替え後の値）
 
 環境変数: TRACE_EPISODES（既定 5）・TRACE_SKIP（既定 0。9-237）・TRACE_STEPS（既定 1200）・TRACE_OUT（出力先）・
   ⭐ TRACE_STOCHASTIC=1 で**学習中と同じ確率的な行動**で回す（9-225。既定は平均の行動＝評価と同じ）
@@ -156,6 +158,8 @@ for k in range(N_EP):
     shape = None      # ⭐ 9-225: この話の形（ボーンと半径）
     r_tot = r_ctrl = 0.0   # ⭐ 9-225: この話の報酬の合計と、そのうち制御コストの合計
     u_abs = []             # ⭐ 9-240: 実行フェーズの step ごとの |制御入力| の最大（ctrlrange ±1 を超えるか）
+    u_vec = []             # ⭐ 9-360: 実行フェーズの step ごとの関節ごとの制御入力（トルク ＝ clip(u) × ギア比、actuators_map の順）
+    gear_eff = None        # ⭐ 9-360: 実行に入った時点のシミュレータのギア比（差し替え後の値）
     init = None       # ⭐ 9-218: execution に入った瞬間（最初の step の前）の腕とパック
     for _ in range(cfg.skel_transform_nsteps + 2 + max_steps):
         in_exec = env.stage == 'execution'
@@ -166,6 +170,8 @@ for k in range(N_EP):
             for (_jn, _ai), _g in zip(_am.items(), GEAR_OVR):
                 _ai['gear'] = float(_g)
             print(f'[trace] ⭐ ギア比を差し替えた: {[round(a["gear"],1) for a in _am.values()]}', flush=True)
+        if in_exec and gear_eff is None:
+            gear_eff = [float(a['gear']) for a in env._world.actuators_map.values()]
         if in_exec and init is None:
             try:
                 _nm = [b.name for b in env.robot.bodies]
@@ -180,7 +186,9 @@ for k in range(N_EP):
         with torch.no_grad():
             action = agent.policy_net.select_action(sv, mean_action=not STOCH).numpy().astype(np.float64)
         if in_exec:
-            u_abs.append(float(np.abs(env.action_to_control(action[:, :env.control_action_dim])).max()))
+            _c = np.asarray(env.action_to_control(action[:, :env.control_action_dim]), dtype=float).ravel()
+            u_abs.append(float(np.abs(_c).max()))
+            u_vec.append(_c)
         # ⛔ 9-246（Bug 63）: 打ち切り（truncation、max_nsteps 1000）も話の終わりにする。旧版は捨てていて、
         #   学習では 1000 step で切れる話を 1200 step まで再生していた（最後の 200 step は方策が学習していない区間）
         state, reward, term, trunc, info = env.step(action)
@@ -222,7 +230,8 @@ for k in range(N_EP):
         if done:
             break
     if k >= SKIP:
-        eps.append((np.array(xpos), np.array(xmat), np.array(cube), init, shape, (r_tot, r_ctrl), np.array(u_abs)))
+        eps.append((np.array(xpos), np.array(xmat), np.array(cube), init, shape, (r_tot, r_ctrl), np.array(u_abs),
+                    np.array(u_vec), gear_eff))
     print(f'[trace] 話 {k+1}/{N_EP}  step={len(xpos)}  '
           f'{"⭐ 採用" if k >= SKIP else "捨てる（TRACE_SKIP 指定）"}', flush=True)
 
@@ -272,7 +281,11 @@ np.savez_compressed(out, replay_env=json.dumps(REPLAY_ENV),
                     # ⭐ 9-225: 話ごとの報酬の合計と制御コストの合計（どちらが効いているかを分ける）
                     ep_reward=np.array([e[5][0] for e in eps]), ep_reward_ctrl=np.array([e[5][1] for e in eps]),
                     # ⭐ 9-240: step ごとの |制御入力| の最大。ctrlrange ±1 は Choreonoid 側で切られない
-                    ep_u_abs=np.array([e[6] for e in eps], dtype=object))
+                    ep_u_abs=np.array([e[6] for e in eps], dtype=object),
+                    # ⭐ 9-360: 関節ごとの制御入力（step × 関節）と、実行時のシミュレータのギア比（差し替え後）。
+                    #   指令トルク ＝ clip(ep_ctrl, ctrlrange) × ep_gear_eff（CNOID_CTRL_CLIP=1 のとき）
+                    ep_ctrl=np.array([e[7] for e in eps], dtype=object),
+                    ep_gear_eff=np.array([e[8] for e in eps], dtype=object))
 
 print(f'[trace] {restore_dir} ckpt={checkpoint}')
 print(f'[trace] リンク: {names}')
