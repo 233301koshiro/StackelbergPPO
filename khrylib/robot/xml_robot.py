@@ -9,6 +9,8 @@ from scipy.sparse.linalg import eigsh
 from scipy.linalg import fractional_matrix_power
 from scipy.linalg import eigh
 
+_BONE_FRAC_PRINTED = set()   # 9-362: bone_frac の範囲の行をリンクごとに 1 回だけ出す
+
 def parse_vec(string):
     return np.fromstring(string, sep=' ')
 
@@ -171,12 +173,29 @@ class Geom:
             end = self.end - self.body.pos if self.local_coord else self.end
             self.node.attrib['fromto'] = ' '.join([f'{x:.6f}'.rstrip('0').rstrip('.') for x in np.concatenate([start, end])])
 
+    def _apply_bone_frac(self, key):
+        # ⭐ 9-362: `bone_frac: [下, 上]` があれば、探索範囲を **このリンクの設計長に比例** させる（lb = 下 × L、ub = 上 × L）。
+        #   ⛔ 従来は size [0.03, 0.10]・ext_start [0, 0.2] m の**絶対値**で、原論文の公開実装の Pusher（リンク 0.566 m）の値のまま。
+        #     リンクを 0.5〜1.8 倍に拡大縮小した形でも同じ幅なので、上限 ÷ リンク長が短腕 196 %・中腕 89 %・長腕 55 % とそろわなかった（9-362）。
+        #   L は最初に範囲を決めるときのカプセルの骨の長さ（設計長）で、以後は固定する（縦型で学習中に長さが変わっても範囲は動かない）。
+        frac = self.param_specs[key].get('bone_frac', None)
+        if frac is None or self.param_inited:
+            return
+        L = float(np.linalg.norm(self.end - self.bone_start))
+        lb, ub = float(frac[0]) * L, float(frac[1]) * L
+        self.param_specs[key]['lb'], self.param_specs[key]['ub'] = lb, ub
+        tag = (self.body.name, key, round(L, 6))
+        if tag not in _BONE_FRAC_PRINTED:
+            _BONE_FRAC_PRINTED.add(tag)
+            print(f'[bone_frac] リンク {self.body.name} の {key}: 設計長 {L:.4f} m × {list(frac)} → [{lb:.4f}, {ub:.4f}] m', flush=True)
+
     def get_params(self, param_list, get_name=False, pad_zeros=False):
         if 'size' in self.param_specs:
             if get_name:
                 param_list.append('size')
             else:
                 if self.type == 'capsule':
+                    self._apply_bone_frac('size')
                     if not self.param_inited and self.param_specs['size'].get('rel', False):
                         self.param_specs['size']['lb'] += self.size
                         self.param_specs['size']['ub'] += self.size
@@ -191,6 +210,7 @@ class Geom:
                 param_list.append('ext_start')
             else:
                 if self.type == 'capsule':
+                    self._apply_bone_frac('ext_start')
                     if not self.param_inited and self.param_specs['ext_start'].get('rel', False):
                         self.param_specs['ext_start']['lb'] += self.ext_start
                         self.param_specs['ext_start']['ub'] += self.ext_start
