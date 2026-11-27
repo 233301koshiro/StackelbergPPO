@@ -53,20 +53,20 @@ GROUPS = [
         ('根元重', 'tripo_pjdp_prox_phys', 'tripo_pjdp_prox_phys_s2', 'tripo_pjdp_prox_phys_s2_ws', 'tripo_pjdp_prox_phys_s3'),
         # seed 1 は門を直す前の run（9-279 の帯 [5.38, 7.04] が使った組）。取り直しは `_s2_ws`
         ('先端重', 'tripo_pjdp_dist_phys_cg', 'tripo_pjdp_dist_phys_s2', 'tripo_pjdp_dist_phys_s2_ws', 'tripo_pjdp_dist_phys_cg_s3')]),
-    ('4.5.4', '閉ループ 伸ばす 到達（1.99 倍）', 'reach', [
+    ('4.5.3', '閉ループ 伸ばす 到達（1.99 倍）', 'reach', [
         ('短腕', 'tripo_pj_short_phys_cg', None, None),
         ('1.99 倍', 'tripo_pjr199_phys', 'tripo_pjr199_phys_s2', 'tripo_pjr199_phys_s2_ws')]),
-    ('4.5.4', '閉ループ 伸ばす 押し（2.11 倍）', 'push', [
+    ('4.5.3', '閉ループ 伸ばす 押し（2.11 倍）', 'push', [
         ('短腕', 'tripo_pjp_short_phys_cg', None, None),
         ('2.11 倍', 'tripo_pjr211p_phys', 'tripo_pjr211p_phys_s2', 'tripo_pjr211p_phys_s2_ws')]),
     # seed 2 は 9-334 ㊶（queue_1104_frozen_alloc_455.sh）
-    ('4.5.5', '閉ループ 関節固定 到達（A1）', 'reach', [
+    ('4.5.4', '閉ループ 関節固定 到達（A1）', 'reach', [
         ('可動', 'e2e_a1_reach_phys', 'e2e_a1_reach_phys_s2', 'e2e_a1_reach_phys_s2_ws', 'e2e_a1_reach_phys_s3'),
         ('固定', 'e2e_a1_fix3_reach_phys', 'e2e_a1_fix3_reach_phys_s2', 'e2e_a1_fix3_reach_phys_s2_ws', 'e2e_a1_fix3_reach_phys_s3')]),
-    ('4.5.5', '閉ループ 関節固定 押し（A1）', 'push', [
+    ('4.5.4', '閉ループ 関節固定 押し（A1）', 'push', [
         ('可動', 'e2e_a1_pusher_phys', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s2', 'e2e_a1_pusher_phys_s3'),
         ('固定', 'e2e_a1_fix3_pusher_phys', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s2', 'e2e_a1_fix3_pusher_phys_s3')]),
-    ('4.5.5', '第3層の提案 関節 1 固定 到達（中腕）', 'reach', [
+    ('4.5.4', '第3層の提案 関節 1 固定 到達（中腕）', 'reach', [
         # 関節 1 固定の seed 1 は新しい種でしか回していない（queue_1029_fix1_seed2.sh が `_s2_ws` と比べた）ので、可動も元・新とも `_s2_ws`
         ('可動', 'tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3'),
         ('固定', 'tripo_pj_mid_phys_fix1', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s2', 'tripo_pj_mid_phys_fix1_s3')]),
