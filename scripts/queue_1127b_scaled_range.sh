@@ -15,6 +15,8 @@
 # ⭐ 起動から 60 秒後に確かめる: 種の行、[bone_frac] の行（3 本 ＝ 3 リンクの size。ext_start の行が無いこと）、[pipe] の行（ワーカー 0 のログ）、
 #   PRETICK の行（元が持つときだけ。ワーカー 0 のログ。本体の stdout には出ない＝系譜 9-351 の 11-17 追記）。
 # ⭐ 9-361 のキュー（queue_1127_armature_gear.sh）が全部を起動し終えてから始める（ユーザー「おすすめで」: 9-361 を続け、その後ろ）。
+# ⭐ 11-27 夜（ユーザー「やろう。…判定機の核なのではやめにやらない？」→「いいよ」）: 縦型の到達＋先端の荷物（queue_1127e_vertical_payload.sh、系譜 9-366）の
+#   後ろへ回した。待っていた bash（何も起動していない）を PID で止め、この待ちの条件を足して起動し直した。
 # ⭐ 11-27 13:55 に一度投入した版（後方延長と太さを比例させる cfg `_sc`、run 名 `*_sc`）は、何も起動しないうちにユーザーの承認で止めて、この版に書き直した。
 #
 # ⭐⭐ 事前登録した読み 62（投入前の 11-27 午後に書き直した。結果を見てから変えない。全文は系譜 9-362）:
@@ -77,8 +79,8 @@ launch(){ local SRC=$1 RUN=$2
 log "=== 11-27 実在に近づけた設計空間の確かめ（系譜 9-362、読み 62）HEAD=$(git rev-parse --short HEAD)。4 本。9-361 のキューの起動が終わるのを待つ"
 git diff HEAD -- khrylib design_opt scripts/choreonoid_train.py > single_run/queue_1127b_scaled_range.code.diff
 log "コードの未コミットの差分 $(wc -l < single_run/queue_1127b_scaled_range.code.diff) 行を single_run/queue_1127b_scaled_range.code.diff に残した（空ならコミット済み）"
-while pgrep -f "^bash scripts/queue_1127_armature_gear.sh" > /dev/null; do sleep 60; done
-log "9-361 のキューは起動を終えた。始める"
+while pgrep -f "^bash scripts/queue_1127_armature_gear.sh" > /dev/null || pgrep -f "^bash scripts/queue_1127e_vertical_payload.sh" > /dev/null; do sleep 60; done
+log "9-361 と縦型の荷物（9-366）のキューは起動を終えた。始める"
 if ! pgrep -f "^bash scripts/watch_midrun.sh" > /dev/null; then
   nohup setsid bash scripts/watch_midrun.sh > /dev/null 2>&1 < /dev/null &
   log "学習中の見張り watch_midrun.sh を起動（PID $!）"

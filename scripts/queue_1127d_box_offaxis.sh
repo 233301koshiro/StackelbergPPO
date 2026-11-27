@@ -10,6 +10,8 @@
 #   この 8 本は全部に init_self_contact_caps=true を付けてそろえる（Bug 72 の直した門）。比べる相手はこの 8 本の中だけ。
 #   それ以外（cfg pusher_gearonly_real・xml・ctrl_cost 0.2・contact_weight 0・init_contact_penalty 50・arm_safe_init・
 #   launch_env の物理〔速度の上限 3.1416・PRETICK ほか〕）は元 run の `.hydra/overrides.yaml` と `launch_env.json` をそのまま読む。
+# ⭐ 11-27 夜（ユーザー「いいよ」）: 縦型の荷物（queue_1127e、系譜 9-366）を 9-361 の直後へ入れた。順は 9-361 → 9-366 → 9-362 → この E1 → ばねの箱。
+#   待っていた bash（何も起動していない）を PID で止め、待ちの条件に queue_1127e を足して起動し直した。
 # ⭐ 9-362 のキュー（queue_1127b_scaled_range.sh）が起動を終えて抜けてから、学習の枠（2 本）が空くたびに起動する。
 #   8 本を起動し終えたら、ばねの箱のキュー（queue_1127c_spring_box_nxag.sh）を起動し直す（ユーザーの指定でばねの箱より前に入れるため、
 #   待っていただけのばねの箱のキューはユーザーの承認で止めてある。中身は変えていない）。
@@ -69,7 +71,7 @@ launch(){ local SRC=$1 RUN=$2 DY=$3
 log "=== 11-27 夜 箱を軸の外へ（系譜 9-363、読み 64）HEAD=$(git rev-parse --short HEAD)。8 本。9-361・9-362 のキューの起動が終わるのを待つ"
 git diff HEAD -- khrylib design_opt scripts/choreonoid_train.py > single_run/queue_1127d_box_offaxis.code.diff
 log "コードの未コミットの差分 $(wc -l < single_run/queue_1127d_box_offaxis.code.diff) 行を single_run/queue_1127d_box_offaxis.code.diff に残した（空ならコミット済み）"
-while pgrep -f "^bash scripts/queue_1127_armature_gear.sh" > /dev/null || pgrep -f "^bash scripts/queue_1127b_scaled_range.sh" > /dev/null; do sleep 60; done
+while pgrep -f "^bash scripts/queue_1127_armature_gear.sh" > /dev/null || pgrep -f "^bash scripts/queue_1127e_vertical_payload.sh" > /dev/null || pgrep -f "^bash scripts/queue_1127b_scaled_range.sh" > /dev/null; do sleep 60; done
 log "9-361・9-362 のキューは起動を終えた。枠が空くたびに始める"
 if ! pgrep -f "^bash scripts/watch_midrun.sh" > /dev/null; then
   nohup setsid bash scripts/watch_midrun.sh > /dev/null 2>&1 < /dev/null &
