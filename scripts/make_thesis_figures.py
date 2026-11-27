@@ -820,18 +820,18 @@ def fig_learning_curves():
 
 # ── 報酬の帯の幅と、収束した設計変数の seed 間の幅（2026-11-25、系譜 9-357・9-358。スライド・想定問答 Q85 用で修論には載せない） ──
 def _var_spread_morph(run):
-    """best の再生（trace/arm_trace.npz）から ギア比・半径・後方延長（関節 1〜3）を出す。後方延長はカプセルの始点の x の負の分で近似。"""
+    """best の再生（trace/arm_trace.npz）から ギア比・半径（関節 1〜3）を出す。
+    ⛔ 後方延長は 11-27 に外した（ユーザー「修論の後方延長は消す」「予備審査でもふれない」、系譜 9-362）。"""
     z = np.load(os.path.join(ROOT, 'single_run', run, 'trace', 'arm_trace.npz'), allow_pickle=True)
     g = np.array(z['ep_gear'][0], float)[1:4]
     r = np.array(z['ep_geom'][0], float)[1:4]
-    e = np.clip(-np.array(z['ep_cap'][0], float)[1:4, 0], 0, None)
-    raw = np.concatenate([g, r, e])
-    norm = np.concatenate([(g - 20) / 130, (r - 0.03) / 0.07, e / 0.2])
+    raw = np.concatenate([g, r])
+    norm = np.concatenate([(g - 20) / 130, (r - 0.03) / 0.07])
     return raw, norm
 
 
 def fig_var_spread():
-    """左に報酬（best、3 seed の点と最小〜最大の帯）、右に設計変数 9 個の 3 seed の位置（探索範囲を下限〜上限にそろえる）。
+    """左に報酬（best、3 seed の点と最小〜最大の帯）、右に設計変数 6 個の 3 seed の位置（探索範囲を下限〜上限にそろえる）。
     結果の幅と変数の幅が対応しないこと（9-357）、到達の中腕の関節 1 は差し替えると両向きで下がること（9-358）を見せる。"""
     CONDS = [
         ('到達・中腕', ['tripo_pj_mid_phys', 'tripo_pj_mid_phys_s2_ws', 'tripo_pj_mid_phys_s3']),
@@ -841,8 +841,8 @@ def fig_var_spread():
     ]
     SEED_C = ['#0072B2', '#D55E00', '#009E73']
     SEED_M = ['o', 's', '^']
-    VARS = ['関節1', '関節2', '関節3'] * 3
-    GROUPS = [('ギア比\n20〜150 N·m', 20, 150), ('半径（太さ）\n0.03〜0.10 m', 0.03, 0.10), ('後方延長（近似）\n0〜0.2 m', 0.0, 0.2)]
+    VARS = ['関節1', '関節2', '関節3'] * 2
+    GROUPS = [('ギア比\n20〜150 N·m', 20, 150), ('半径（太さ）\n0.03〜0.10 m', 0.03, 0.10)]
     morph = _var_spread_morph
     fig = plt.figure(figsize=(11.5, 11.0))
     gs = fig.add_gridspec(4, 2, width_ratios=[1.0, 2.5], wspace=0.18, hspace=0.95)
@@ -877,7 +877,7 @@ def fig_var_spread():
         data = [morph(r) for r in runs]
         norm = np.array([d[1] for d in data])
         raw = np.array([d[0] for d in data])
-        for j in range(9):
+        for j in range(6):
             xj = j + (j // 3) * 0.6
             lo, hi = norm[:, j].min(), norm[:, j].max()
             ax2.plot([xj, xj], [lo, hi], color='0.55', lw=5, alpha=0.35, solid_capstyle='round', zorder=1)
@@ -888,7 +888,7 @@ def fig_var_spread():
         ax2.set_ylim(-0.08, 1.25)
         ax2.set_yticks([0, 1])
         ax2.set_yticklabels(['下限', '上限'], fontsize=9)
-        ticks = [j + (j // 3) * 0.6 for j in range(9)]
+        ticks = [j + (j // 3) * 0.6 for j in range(6)]
         ax2.set_xticks(ticks)
         ax2.set_xticklabels(VARS, fontsize=9)  # どの行でも列の意味が分かるよう、関節名と変数名を全行に付ける
         for g, (lab, _, _) in enumerate(GROUPS):
@@ -896,7 +896,7 @@ def fig_var_spread():
                      transform=ax2.get_xaxis_transform())
         ax2.set_xlim(-0.6, ticks[-1] + 0.6)
         ax2.grid(axis='x', visible=False)
-        for g in range(1, 3):
+        for g in range(1, 2):
             ax2.axvline(g * 3.6 - 0.9, color='0.8', lw=0.8)
         if k == 0:
             for g, (lab, _, _) in enumerate(GROUPS):
@@ -910,7 +910,7 @@ def fig_var_spread():
     handles = [plt.Line2D([], [], marker=SEED_M[s], color=SEED_C[s], ls='', ms=8, label=f'seed {s}') for s in range(3)]
     fig.legend(handles=handles, loc='lower center', ncol=3, frameon=False, bbox_to_anchor=(0.5, -0.01))
     fig.text(0.5, -0.04, '灰色の帯・棒 ＝ 3 seed の最小〜最大。% は探索範囲に対する幅（45 % 以上だけ表示）。'
-             '後方延長はカプセルの始点の x から出した近似。リンクの長さは設計変数ではない（スケッチで決まる）。',
+             'リンクの長さは設計変数ではない（スケッチで決まる）。',
              ha='center', fontsize=8.5, color='0.35')
     
     out = os.path.join(os.path.dirname(OUT), 'スライド用', 'var_spread.png')
@@ -1017,9 +1017,9 @@ def fig_a3_fail():
 def fig_joint_modes():
     """修論 図 4.2・新方針の予備審査資料 図 4: 関節軸の 2 つのモードと設計変数（2026-11-27、ユーザー「文字で言うと頭に入ってこないから…回転軸の円形の矢印がはいったやつ」
     →「後段で紹介するの設計変数も図の中に入れたら」「地面から15cmとかも」）。
-    設計変数（ギア比 g・太さ r・カプセルの後方延長 e、縦型だけリンク長 l）を寸法線と引き出し線で描き込む。
-    後方延長は 11-27 に足した（ユーザー「図4に後方延長が書いてないのはなんで？」）。両モードとも [0, 0.2] m（pusher_gearonly_real・
-    pusher_tripo_v3_reallen の geom_params.ext_start）。カプセルを関節より後ろ（親リンクの側）へ延ばす部分を薄い紫で描く。リンク長を最適化するのは縦型アームだけ
+    設計変数（ギア比 g・太さ r、縦型だけリンク長 l）を寸法線と引き出し線で描き込む。
+    ⛔ カプセルの後方延長 e は 11-27 昼に描き足したが、同じ日に修論と予備審査から消した（ユーザー「修論の後方延長は消す」、系譜 9-362。
+    実在の腕に対応する部品が無く、論文も属性に挙げないので、設計変数から外して取り直す）。リンク長を最適化するのは縦型アームだけ
     （修論 表 4.2 の「骨のベクトル（縦型アームのみ）」。平面の比較では長さはスケッチのまま）。11-27 に (a) のリンク長を外した。床からの 0.15 m は評価に用いた平面の腕の値
     （tripo_arm_v2c_pj_*_phys_arm171.xml・e2e_a1_phys_arm171.xml の body "0" の z、修論 4.1）。縦型（e2e_a1v）の根元は床から 0.02 m で、柱の長さはスケッチで決まるので数字を描かない。
 
@@ -1076,25 +1076,6 @@ def fig_joint_modes():
         end = e0 if np.dot(np.array(xytext) - m, -n) > 0 else e1
         callout(a, tuple(end), xytext, text, **kw)
 
-    def tail(a, p, q, e, text, xytext, **kw):
-        """後方延長: リンク p→q のカプセルを関節 p より後ろ（q と逆向き）へ e だけ延ばした部分を薄い色で描き、
-        関節〜延長の端に両矢印を引いて文字へ引き出す（xml_robot の ext_start。到達半径は変えない）。"""
-        d = np.array([q[0] - p[0], q[1] - p[1]]); d = d / np.linalg.norm(d)
-        t = (p[0] - d[0] * e, p[1] - d[1] * e)
-        a.plot([p[0], t[0]], [p[1], t[1]], color=EDGE, lw=13.5, solid_capstyle='round', zorder=2.6)
-        a.plot([p[0], t[0]], [p[1], t[1]], color='#e9e3f3', lw=11, solid_capstyle='round', zorder=2.7)
-        n = np.array([-d[1], d[0]])
-        if n[1] < 0:
-            n = -n                                  # 寸法線は上側に出す
-        off = n * 0.2
-        p2, t2 = (p[0] + off[0], p[1] + off[1]), (t[0] + off[0], t[1] + off[1])
-        a.annotate('', xy=t2, xytext=p2, arrowprops=dict(arrowstyle='<->', color='#1f4e79', lw=1.3,
-                   shrinkA=0, shrinkB=0, mutation_scale=10), zorder=12)
-        for u in (p, t):
-            a.plot([u[0] + n[0] * 0.08, u[0] + n[0] * 0.24], [u[1] + n[1] * 0.08, u[1] + n[1] * 0.24],
-                   color='#1f4e79', lw=0.9, zorder=12)
-        callout(a, ((p2[0] + t2[0]) / 2, (p2[1] + t2[1]) / 2), xytext, text, **kw)
-
     def callout(a, xy, xytext, text, **kw):
         a.annotate(text, xy=xy, xytext=xytext, color='#1f4e79', zorder=11,
                    arrowprops=dict(arrowstyle='-', color='#1f4e79', lw=1.0), **kw)
@@ -1117,7 +1098,6 @@ def fig_joint_modes():
         a.plot([J[i][0], J[i][0]], [J[i][1] - 0.5, J[i][1] + 0.6], ls='--', color='#333333', lw=1, zorder=6)
         ring(a, J[i], 0.42, 0.17, YAW, 200, 520, 7, 2)
         a.text(J[i][0] + 0.12, J[i][1] + 0.62, f'j{i + 1}', ha='center', va='bottom')
-    tail(a, J[2], J[3], 0.8, 'カプセルの後方延長 e\n（各リンク）', (1.3, 2.3), ha='center', va='bottom')
     callout(a, (J[0][0] - 0.38, J[0][1] + 0.1), (-1.15, 1.75), 'ギア比 g\n（各関節）', ha='left', va='center')
     m1 = ((J[0][0] + J[1][0]) / 2, (J[0][1] + J[1][1]) / 2)
     thick(a, J[0], J[1], 0.17, (m1[0] + 0.2, -0.45), '太さ r（各リンク）', ha='left', va='top')
@@ -1142,11 +1122,10 @@ def fig_joint_modes():
         a.plot(x, y, color=PITCH, lw=4, zorder=8)
         a.add_patch(FancyArrowPatch((x[-6], y[-6]), (x[-1], y[-1]), arrowstyle='-|>', mutation_scale=22, color=PITCH, lw=0, zorder=8))
         a.plot(*c, 'o', color='#333333', ms=4, zorder=9)
-        if i == 2:                              # j4 の左上は後方延長の部分なので、左下に置く
+        if i == 2:                              # j4 は左下に置く（左上は前のリンクに近い）
             a.text(c[0] - 0.3, c[1] - 0.2, f'j{i + 2}', ha='right', va='top')
         else:
             a.text(c[0] - 0.36, c[1] + 0.2, f'j{i + 2}', ha='right', va='bottom')
-    tail(a, J[2], J[3], 0.6, '後方延長 e', (2.2, 2.55), ha='left', va='center')
     callout(a, (J[1][0] - 0.1, J[1][1] + 0.27), (0.75, 2.6), 'ギア比 g', ha='right', va='center')
     m1 = ((J[2][0] + J[3][0]) / 2, (J[2][1] + J[3][1]) / 2)
     thick(a, J[2], J[3], 0.13, (2.55, 0.55), '太さ r', ha='left', va='center')

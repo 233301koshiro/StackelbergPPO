@@ -225,7 +225,10 @@ def _queue_launches(t, r):
     """キューの文字列 t が run 名 r を起動するか。名前をそのまま書いた行のほか、
     ⛔ 2026-10-23: 変数で組み立てた名前（`tripo_pjp_mid_frozen_phys_fx$X`）と、引数に接尾辞を足す形（`RUN=$1_ws`）を拾えず、
     R1 の `_fx_s2` と seed1 の取り直し `_ws` を「事前登録が見つからない」にしていた。"""
-    if r in t:
+    # ⛔ Bug 114（11-27）: 以前は `r in t`（部分一致）で、`tripo_pjp_mid_phys_vp` が `tripo_pjp_mid_phys_vp_nx` を起動するキューにも一致した。
+    #   名前の前後が語の文字でないときだけ一致させる
+    #   `元:新` の対（queue_1127b_scaled_range.sh の PAIRS）の左側は元の run なので、直後が `:語` の出現は数えない
+    if re.search(rf'(?<![A-Za-z0-9_]){re.escape(r)}(?![A-Za-z0-9_])(?!:[A-Za-z])', t):
         return True
     # 変数は、末尾なら seed の接尾辞（`$X` ＝ 空か `_s2`）、途中なら 1〜2 語（`tripo_${1}_phys_s2` の `pjp_long`）にだけ一致させる。
     #   何にでも一致させると `tripo_pjp_mid_phys$X` が `tripo_pjp_mid_phys_nosync` まで拾う
@@ -246,16 +249,29 @@ def _queue_launches(t, r):
     return False
 
 
+def _queue_log_launched(q):
+    """キュー q（scripts/queue_*.sh）のログ single_run/<名前>.log にある「<run> launched」の run 名の集合。ログが無ければ None。"""
+    log = ROOT / 'single_run' / (q.stem + '.log')
+    if not log.exists():
+        return None
+    return set(re.findall(r'(?:^|\s)([A-Za-z0-9_]+) launched\b', log.read_text(encoding='utf-8', errors='ignore'), re.M))
+
+
 def ck_prereg(r):
     """事前登録（読み）がキューか台帳にあるか。"""
     for q in (ROOT / 'scripts').glob('queue_*.sh'):
         t = q.read_text(encoding='utf-8')
         if _queue_launches(t, r) and ('読み' in t or '停止条件' in t):
+            # ⛔ Bug 114: 元の run の名前を「比べる相手・起動行の元」として書いただけのキューも一致する（9-361・9-362 のキューは元の名前を並べる）。
+            #   キューのログに「<run> launched」の行があり、r が既に在るのにその中に無ければ、このキューは r を起動していない
+            launched = _queue_log_launched(q)
+            if launched and r not in launched and (ROOT / 'single_run' / r / 'log').exists():   # まだ起動していない run は判断しない（キューが途中）
+                continue
             return True, f'{q.name} に読みあり'
     led = (ROOT / 'docs/研究応用/台帳/実験系譜.md').read_text(encoding='utf-8')
     for m in re.finditer(r'^### .*$', led, re.M):
         seg = led[m.start():m.start() + 6000]
-        if r in seg and ('事前' in seg or '読み' in seg):
+        if re.search(rf'(?<![A-Za-z0-9_]){re.escape(r)}(?![A-Za-z0-9_])', seg) and ('事前' in seg or '読み' in seg):
             return True, '台帳に読みあり'
     return False, '⚠️ 事前登録が見つからない（結果を見てから読み方を決めていないか）'
 
