@@ -213,6 +213,51 @@ def fig_matrix_bands():
     return 'matrix_bands.png'
 
 
+def fig_pair_bands():
+    """新方針の予備審査資料の結果③（幾何で区別できない形態対）を、図 matrix_bands と同じ読み方のドットプロットで描く（2026-11-27）。
+
+    ユーザー 11-27「結果②に足してもドットプロットを行って見せたほうがわかりやすい」。デッキの 18 枚目は表だけで、
+    押しの 2 つの帯がどれだけ重なるか（0.09）が見えなかった。点は各シードの最良エピソード報酬、帯はシード間の最小〜最大。
+    到達の seed 1 は取り直した `_s2_ws`（修論 4.4.3.2 の値）、押しは Bug 106・107 を直した取り直し（系譜 9-351 の `_vp`、読み 57-3）。
+    """
+    sys.path.insert(0, os.path.join(ROOT, 'scripts'))
+    import judge_reading57 as j57
+    C_PROX, C_DIST = '#8e44ad', '#e67e22'
+    names = ['根元重', '先端重']
+    reach = [['tripo_pjd_prox_phys', 'tripo_pjd_prox_phys_s2_ws', 'tripo_pjd_prox_phys_s3'],
+             ['tripo_pjd_dist_phys_cg', 'tripo_pjd_dist_phys_cg_s2_ws', 'tripo_pjd_dist_phys_cg_s3']]
+    push = [[n + '_vp' for n in j57.PROX], [n + '_vp' for n in j57.DIST]]
+    cols = [C_PROX, C_DIST]
+    fig = plt.figure(figsize=(8.4, 2.9))
+    gs = fig.add_gridspec(1, 2, wspace=0.42)
+    for k, (runs, title) in enumerate([(reach, 'Reach（目標へ到達する）'), (push, 'Pusher（対象を押し出す）')]):
+        vv = [[running_best(curve(r)[1])[-1] for r in rs] for rs in runs]
+        print(f'[pair_bands] {title}: ' + ' / '.join(f'{n} ' + ' '.join(f'{v:.2f}' for v in x) for n, x in zip(names, vv)))
+        ax = fig.add_subplot(gs[k])
+        ypos = [1, 0]
+        lo, hi = [min(x) for x in vv], [max(x) for x in vv]
+        span = max(hi) - min(lo)
+        xmin, xmax = min(lo) - 0.25 * span, max(hi) + 0.25 * span
+        for i in range(2):
+            ax.barh(ypos[i], hi[i] - lo[i], left=lo[i], height=0.40, color=cols[i], alpha=0.22,
+                    edgecolor=cols[i], lw=1.2, zorder=2)
+            ax.scatter(vv[i], [ypos[i]] * len(vv[i]), s=46, color=cols[i], edgecolor='white', lw=1.2, zorder=4)
+            ax.text((lo[i] + hi[i]) / 2, ypos[i] + (0.30 if i == 0 else -0.30), f'[{lo[i]:.2f}, {hi[i]:.2f}]',
+                    ha='center', va='bottom' if i == 0 else 'top', fontsize=9.5, color=cols[i])
+        if lo[0] <= hi[1] and lo[1] <= hi[0]:          # 帯が重なるなら、重なりを灰色で示す
+            ax.axvspan(max(lo), min(hi), color='#888888', alpha=0.18, lw=0, zorder=1)
+        ax.set_yticks(ypos)
+        ax.set_yticklabels([f'{n}\n（{len(x)} シード）' for n, x in zip(names, vv)], fontsize=10.5)
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(-0.7, 1.7)
+        ax.set_title(title, fontsize=13, pad=8)
+        ax.set_xlabel('最良エピソード報酬（右ほど良い）', fontsize=11.5)
+        ax.grid(axis='y', alpha=0)
+    fig.savefig(os.path.join(OUT, 'pair_bands.png'))
+    plt.close(fig)
+    return 'pair_bands.png'
+
+
 # ── 図2: 転用成分の分解（4.3.4.1） ────────────────────────────────────────────
 def fig_transfer_decomposition():
     spec = [('rrbot_arm_pusher_H1',    '転用元 H1',            '#7f8c8d', '--'),
@@ -1147,6 +1192,7 @@ def fig_joint_modes():
 FIGS = {'matrix': fig_matrix_reversal, 'a3fail': fig_a3_fail, 'r1r2': fig_r1r2_dots,
         'modes': fig_joint_modes,
         'matrix_bands': fig_matrix_bands,
+        'pair_bands': fig_pair_bands,
         'var_spread': fig_var_spread,
         'curves': fig_learning_curves,
         'star': fig_target_star,
