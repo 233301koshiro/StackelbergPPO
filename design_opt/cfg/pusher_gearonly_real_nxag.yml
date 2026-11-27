@@ -1,0 +1,73 @@
+# pusher_gearonly_real_nxag: 実在に近づけた設計空間（_nx、9-362）に、駆動の模型（同じモーターで減速比を変える）を足す（系譜 9-367、2026-11-28、ユーザー「後方延長を入れたタイミングと同じ時にいれれない？」→「やろう」）。
+#   ⚠️ **pusher_gearonly_real_nx との差は gear の 3 行（armature_ref_gear・armature_base・armature_floor）だけ**（pusher_gearonly_real_ag と同じ値）。
+#   速度の上限を減速比に反比例させる分は cfg ではなく起動行の CNOID_JOINT_MAX_VEL_GEAR_REF=150（mujoco_env_choreonoid.py）。両方そろえて使う。
+#
+# pusher_gearonly_real: 実寸の物理でリンク長を凍結し、ギア比だけ最適化する（実験系譜 9-160）。
+#   ⚠️ **pusher_gearonly との差はギア上限（400 → 150）のみ。**密度は XML 側（*_real）。
+
+env_name: pusher
+agent_specs:
+  batch_design: true
+# training parameters
+gamma: 0.995
+tau: 0.95
+policy_specs:
+  control_log_std: -0.5
+
+robot_param_scale: 1
+skel_transform_nsteps: 5
+
+done_condition:
+  max_ang: 60
+
+obs_specs:
+  attr: ['depth']
+  sim: []
+  design: true
+  clip_qvel: true
+  use_projected_params: true
+  use_body_ind: true
+max_body_depth: 4
+
+add_body_condition:
+  max_nchild: 2
+
+robot:
+  param_mapping: sin
+  no_root_offset: true
+  
+  # M2 ablation (2026-07-15): bone_offset を設計変数から外す（リンク長 0.30/0.25 で凍結）。
+  # gear のみの貢献度を分離する
+  body_params: {}
+
+  joint_params: {}
+
+  geom_params:
+    # ⭐ 9-362（2026-11-27、ユーザー「後方延長という概念はもはや消して良くない？」「それでいこう」）: 実在に近づけた設計空間。
+    #   ① 後方延長 ext_start を設計変数から外す（実在の腕に対応する部品が無く、原論文・Transform2Act の論文も属性に挙げない。
+    #      カプセルの始点は関節のまま＝ 0）。② 太さの範囲を **リンクの設計長に比例** させる（xml_robot.py の Geom._apply_bone_frac。
+    #      比は原論文の公開実装の Pusher〔リンク 0.566 m に 0.03〜0.10 m〕を縮尺した 0.03/0.566・0.10/0.566）。
+    #   ③ 質量は起動行の CNOID_PIPE_WALL=0.002 でいまの半径から計算する（mujoco_env_choreonoid.py。cfg ではなく起動行）。
+    #   lb・ub は bone_frac が上書きする。
+    size:
+      lb: 0.03
+      ub: 0.10
+      bone_frac: [0.0530, 0.1768]
+
+  actuator_params:
+    gear:
+      # ⭐⭐ 9-160: この形態で導出した実在アクチュエータの範囲。
+      #   ⚠️ **9-129 の 25〜150 は e2e_a1v 用の値なので流用しない。**形態ごとに計算する。
+      #   実効密度 294.2（アルミ・肉厚 2 mm。半径 0.032〜0.045 m の薄肉パイプ）→ 腕 1.311 kg
+      #   根元の自重トルク 4.84 ＋ 押しトルク 11.74（cube 2.7 kg・μ=0.5・腕 0.887 m）＝ **16.58 N·m**
+      #   ⭐ 下限 = 必要トルクの 1.25 倍 = 20.7 → **20**（旧と同じ）
+      #   ⭐ 上限 = **UR5e の関節トルク 150 N·m**（9-129 と同じ機体）
+      # ⭐⭐ したがって旧条件との差は **上限 400 → 150 の 1 変数のみ**。
+      lb: 20
+      ub: 150
+      # ⭐ 9-367: 回転子の慣性 ＝ max(0.05, 1.71 ×（ギア比 / 150）²)（9-361 の _ag と同じ）
+      armature_ref_gear: 150
+      armature_base: 1.71
+      armature_floor: 0.05
+  
+

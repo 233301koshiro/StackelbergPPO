@@ -6,6 +6,8 @@
 # ⭐ なぜ: 読み 59 の 6 本（*_cw1）は 9-362 で直す前の設計空間だった（後方延長あり・太さは絶対値 [0.03, 0.10] m・密度は固定・ギア比に費用なし）。
 #   ばねの箱は「ギア比の上限への張り付き（第2層）」を静力学の正解と比べる課題なので、費用が無いと要らなくても上限へ流れる（9-360）。
 # ⭐ 変えるもの（読み 59 の起動行から。比べる相手は読み 59 ではなく静力学の正解なので、まとめて「最終の設計空間」にする）:
+# ⭐⭐ 11-28 0 時台（ユーザー「後方延長を入れたタイミングと同じ時にいれれない？」→「やろう」、系譜 9-367）: 速度の上限を減速比に反比例させる直し
+#   （起動行に CNOID_JOINT_MAX_VEL_GEAR_REF=150）を足した。回転子の慣性 ∝ ギア比²（cfg の _ag の分）とセット。run 名は `_nxagv`。まだ 1 本も起動していない。
 #   ① cfg を pusher_tripo_v3_reallen → pusher_tripo_v3_reallen_nxag（後方延長なし・太さは設計長 × [0.053, 0.177]・回転子の慣性 ∝ ギア比²）
 #   ② 起動行に CNOID_PIPE_WALL=0.002（質量をいまの半径から薄肉パイプで）
 #   それ以外（seed・ばね k・向き y・目標 (1.0, 0.30)・contact_weight 1.0・制御コスト 0・Bug 106・107 の直し）は元 run の
@@ -22,8 +24,8 @@
 #   63-0: a 6 本とも触れる／b 触れない run がある／c 1 本も触れない（ユーザーに諮る）。
 #   ⭐ 読み 59 の弱さを塞ぐ: 63-1・63-2 は、その k の 3 seed がどれも best の 50 話の半分（25 話）以上で箱に当たったときだけ判定する。
 #      満たさない k は判定に使わずユーザーに諮る。
-#   63-1（k 350: e2e_a1v_spring350_cw1_nxag・e2e_a1v_spring350_s2_ws_cw1_nxag・e2e_a1v_spring350_s3_cw1_nxag）: a〜c は 58-1 と同じ。
-#   63-2（k 900: e2e_a1v_spring900_cw1_nxag・e2e_a1v_spring900_s2_ws_cw1_nxag・e2e_a1v_spring900_s3_cw1_nxag）: a〜c は 58-2 と同じ。
+#   63-1（k 350: e2e_a1v_spring350_cw1_nxagv・e2e_a1v_spring350_s2_ws_cw1_nxagv・e2e_a1v_spring350_s3_cw1_nxagv）: a〜c は 58-1 と同じ。
+#   63-2（k 900: e2e_a1v_spring900_cw1_nxagv・e2e_a1v_spring900_s2_ws_cw1_nxagv・e2e_a1v_spring900_s3_cw1_nxagv）: a〜c は 58-2 と同じ。
 #      ⛔ k 900 で 1 seed でも届いたら抜け穴を疑い、結論を書かずに調べる。
 #   63-3（上限 500）: 63-2 が a か b のときだけユーザーに確かめて投入。
 #   記録のみ: 読み 59 の同じ seed との差（触れた話・d_end・旋回のギア比）、関節ごとの回転子の慣性、形の長さ、最初に触れたエポック。
@@ -35,15 +37,15 @@ Q=single_run/queue_1127c_spring_box_nxag.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a $Q; }
 njobs(){ ps -eo comm,args | awk '$1=="choreonoid" && /choreonoid_train\.py/' | wc -l; }
 NEW_CFG=pusher_tripo_v3_reallen_nxag
-NEW_ENV="CNOID_PIPE_WALL=0.002"
+NEW_ENV="CNOID_PIPE_WALL=0.002 CNOID_JOINT_MAX_VEL_GEAR_REF=150"
 # 元 → 新しい run（check_before_conclusion.py の事前登録の判定が run 名を拾えるように、名前は省かずに書く）
-PAIRS="e2e_a1v_spring350_cw1:e2e_a1v_spring350_cw1_nxag
-e2e_a1v_spring900_cw1:e2e_a1v_spring900_cw1_nxag
-e2e_a1v_spring350_s2_ws_cw1:e2e_a1v_spring350_s2_ws_cw1_nxag
-e2e_a1v_spring900_s2_ws_cw1:e2e_a1v_spring900_s2_ws_cw1_nxag
-e2e_a1v_spring350_s3_cw1:e2e_a1v_spring350_s3_cw1_nxag
-e2e_a1v_spring900_s3_cw1:e2e_a1v_spring900_s3_cw1_nxag"
-RUNS="e2e_a1v_spring350_cw1_nxag e2e_a1v_spring900_cw1_nxag e2e_a1v_spring350_s2_ws_cw1_nxag e2e_a1v_spring900_s2_ws_cw1_nxag e2e_a1v_spring350_s3_cw1_nxag e2e_a1v_spring900_s3_cw1_nxag"
+PAIRS="e2e_a1v_spring350_cw1:e2e_a1v_spring350_cw1_nxagv
+e2e_a1v_spring900_cw1:e2e_a1v_spring900_cw1_nxagv
+e2e_a1v_spring350_s2_ws_cw1:e2e_a1v_spring350_s2_ws_cw1_nxagv
+e2e_a1v_spring900_s2_ws_cw1:e2e_a1v_spring900_s2_ws_cw1_nxagv
+e2e_a1v_spring350_s3_cw1:e2e_a1v_spring350_s3_cw1_nxagv
+e2e_a1v_spring900_s3_cw1:e2e_a1v_spring900_s3_cw1_nxagv"
+RUNS="e2e_a1v_spring350_cw1_nxagv e2e_a1v_spring900_cw1_nxagv e2e_a1v_spring350_s2_ws_cw1_nxagv e2e_a1v_spring900_s2_ws_cw1_nxagv e2e_a1v_spring350_s3_cw1_nxagv e2e_a1v_spring900_s3_cw1_nxagv"
 
 launch(){ local SRC=$1 RUN=$2
   if [ -d "single_run/$RUN/log" ]; then log "$RUN は既にある。飛ばす"; return 0; fi
@@ -78,6 +80,7 @@ launch(){ local SRC=$1 RUN=$2
   if [ -n "$p" ]; then log "✅ $RUN: $p（ワーカー 0。最後の数が関節ごとの回転子の慣性 J ＝ ギア比の費用）"; else log "⛔⛔ $RUN: ワーカー 0 のログに PRETICK の行が無い"; fi
   grep -q "cfg=$NEW_CFG" single_run/$RUN/.hydra/overrides.yaml 2>/dev/null && log "✅ $RUN: cfg=$NEW_CFG" || log "⛔⛔ $RUN: overrides に cfg=$NEW_CFG が無い"
   grep -q '"CNOID_PIPE_WALL": "0.002"' single_run/$RUN/launch_env.json 2>/dev/null && log "✅ $RUN: launch_env.json に CNOID_PIPE_WALL=0.002" || log "⛔⛔ $RUN: launch_env.json に CNOID_PIPE_WALL が無い"
+  grep -q '"CNOID_JOINT_MAX_VEL_GEAR_REF": "150"' single_run/$RUN/launch_env.json 2>/dev/null && log "✅ $RUN: launch_env.json に CNOID_JOINT_MAX_VEL_GEAR_REF=150（9-367）" || log "⛔⛔ $RUN: launch_env.json に CNOID_JOINT_MAX_VEL_GEAR_REF が無い"
   grep -q "\"CNOID_CUBE_SPRING_K\": \"$K\"" single_run/$RUN/launch_env.json 2>/dev/null && log "✅ $RUN: launch_env.json の CNOID_CUBE_SPRING_K=$K" || log "⛔⛔ $RUN: launch_env.json のばねの k が $K でない"
   grep -q 'contact_weight=1.0' single_run/$RUN/.hydra/overrides.yaml 2>/dev/null && log "✅ $RUN: overrides の contact_weight=1.0" || log "⛔⛔ $RUN: overrides に contact_weight=1.0 が無い"
   return 0; }

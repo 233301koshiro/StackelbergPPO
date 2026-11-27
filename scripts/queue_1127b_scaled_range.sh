@@ -15,30 +15,36 @@
 # ⭐ 起動から 60 秒後に確かめる: 種の行、[bone_frac] の行（3 本 ＝ 3 リンクの size。ext_start の行が無いこと）、[pipe] の行（ワーカー 0 のログ）、
 #   PRETICK の行（元が持つときだけ。ワーカー 0 のログ。本体の stdout には出ない＝系譜 9-351 の 11-17 追記）。
 # ⭐ 9-361 のキュー（queue_1127_armature_gear.sh）が全部を起動し終えてから始める（ユーザー「おすすめで」: 9-361 を続け、その後ろ）。
+# ⭐⭐ 11-28 0 時台（ユーザー「後方延長を入れたタイミングと同じ時にいれれない？」→「やろう」、系譜 9-367）: 駆動の模型も最終の形にする。
+#   ④ 回転子の慣性 ∝ ギア比²（cfg `pusher_gearonly_real_nxag`。_nx との差は gear の 3 行、9-361 の _ag と同じ）
+#   ⑤ 速度の上限を減速比に反比例（起動行に CNOID_JOINT_MAX_VEL_GEAR_REF=150。ギア比 150 で今の 3.1416）
+#   同じモーターで減速比を変えるなら力・慣性・速さの 3 つが一緒に変わるので、④⑤はセット。run 名は `_nxagv`。読み 62 は投入前に書き直した。
+#   待っていた bash（何も起動していない）を PID で止め、この版で起動し直した。
 # ⭐ 11-27 夜（ユーザー「やろう。…判定機の核なのではやめにやらない？」→「いいよ」）: 縦型の到達＋先端の荷物（queue_1127e_vertical_payload.sh、系譜 9-366）の
 #   後ろへ回した。待っていた bash（何も起動していない）を PID で止め、この待ちの条件を足して起動し直した。
 # ⭐ 11-27 13:55 に一度投入した版（後方延長と太さを比例させる cfg `_sc`、run 名 `*_sc`）は、何も起動しないうちにユーザーの承認で止めて、この版に書き直した。
 #
-# ⭐⭐ 事前登録した読み 62（投入前の 11-27 午後に書き直した。結果を見てから変えない。全文は系譜 9-362）:
+# ⭐⭐ 事前登録した読み 62（11-28 0 時台に書き直した〔駆動の模型を足したので予測の前提が変わった。投入前〕。結果を見てから変えない。全文は系譜 9-362）:
 #   元の帯（3 seed の最良エピソード報酬）: 押し 中腕 [8.38, 8.63]・長腕 [25.15, 40.31]、到達 中腕 [-1.85, -1.64]・長腕 [-9.68, -7.71]。
-#   62-1 押し: a 新しい 2 本がどちらも元の帯の中 → 設計空間を直しても判定は動かない（1 seed）。b 長腕 ＞ 中腕は保つが、どちらかが帯の外
-#        → 値は動く。seed 1・2 を足して帯で見る。c 長腕 ≦ 中腕 → 判定が設計空間に依る。全面の取り直しをユーザーと決める。
+#   ⚠️ 元との差は 5 つ（後方延長なし・太さ比例・薄肉パイプの質量・回転子の慣性 ∝ ギア比²・速度の上限 ∝ 1/ギア比）。どれが効いたかは分けない（案 1）。
+#   62-1 押し: a 新しい 2 本がどちらも元の帯の中 / b 長腕 ＞ 中腕は保つが、どちらかが帯の外 → seed 1・2 を足して帯で見る / c 長腕 ≦ 中腕 → 判定が設計空間と駆動の模型に依る。全面の取り直しをユーザーと決める。
 #   62-2 到達: 同じ a・b・c（順位は 中腕 ＞ 長腕、報酬は大きいほど良い）。あわせて両方とも目標に届くか（最終の誤差 < 10 mm）。
-#   62-3 形（記録だけ）: 先端のリンクの半径が新しい上限に張り付くか。リンクの質量（元の設計空間の最良の形と比べて）。
-#   予測: 到達は a。押しは b（質量の式が変わるので値は動くが、長腕 ＞ 中腕の差〔帯の間 16.5〕は保つ）。
+#   62-3 形（記録だけ）: 学習したギア比（低いほど速いので 150 から離れるか）、関節ごとの速度の上限、先端の半径、リンクの質量。
+#   予測: 62-1 は b（低いギア比で速く当てられるので値は帯より上へ動きうるが、長腕 ＞ 中腕は保つ。9-365 の計算ではどのギア比でも長腕が 1.6〜2.9 倍）。
+#        62-2 は a か b（届くかは運動学で決まり、順位は保つ）。62-3 は押しで 20〜75 側（9-365 の計算で形ごとの最良が 20〜40）。
 #   停止条件: 床・台座・触れる前の ⛔⛔ が出たら、判定の前に再生して見る。
 set -u
 cd /userdir/StackelbergPPO
 Q=single_run/queue_1127b_scaled_range.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a $Q; }
 njobs(){ ps -eo comm,args | awk '$1=="choreonoid" && /choreonoid_train\.py/' | wc -l; }
-NEW_ENV="CNOID_PIPE_WALL=0.002"
+NEW_ENV="CNOID_PIPE_WALL=0.002 CNOID_JOINT_MAX_VEL_GEAR_REF=150"
 # 元 → 新しい run（check_before_conclusion.py の事前登録の判定が run 名を拾えるように、名前は省かずに書く）
-PAIRS="tripo_pjp_mid_phys_vp:tripo_pjp_mid_phys_vp_nx
-tripo_pjp_long_phys_vp:tripo_pjp_long_phys_vp_nx
-tripo_pj_mid_phys:tripo_pj_mid_phys_nx
-tripo_pj_long_phys:tripo_pj_long_phys_nx"
-RUNS="tripo_pjp_mid_phys_vp_nx tripo_pjp_long_phys_vp_nx tripo_pj_mid_phys_nx tripo_pj_long_phys_nx"
+PAIRS="tripo_pjp_mid_phys_vp:tripo_pjp_mid_phys_vp_nxagv
+tripo_pjp_long_phys_vp:tripo_pjp_long_phys_vp_nxagv
+tripo_pj_mid_phys:tripo_pj_mid_phys_nxagv
+tripo_pj_long_phys:tripo_pj_long_phys_nxagv"
+RUNS="tripo_pjp_mid_phys_vp_nxagv tripo_pjp_long_phys_vp_nxagv tripo_pj_mid_phys_nxagv tripo_pj_long_phys_nxagv"
 
 launch(){ local SRC=$1 RUN=$2
   if [ -d "single_run/$RUN/log" ]; then log "$RUN は既にある。飛ばす"; return 0; fi
@@ -47,7 +53,7 @@ launch(){ local SRC=$1 RUN=$2
   local ARGS ENVS SEED CFG PID W
   CFG=$(sed -n 's/^- cfg=//p' single_run/$SRC/.hydra/overrides.yaml | head -1)
   [ "$CFG" = pusher_gearonly_real ] || { log "⛔⛔ $SRC の cfg が想定外（$CFG）。飛ばす"; return 0; }
-  ARGS=$(sed -n 's/^- //p' single_run/$SRC/.hydra/overrides.yaml | sed "s/^cfg=$CFG\$/cfg=${CFG}_nx/" | tr '\n' ' ')
+  ARGS=$(sed -n 's/^- //p' single_run/$SRC/.hydra/overrides.yaml | sed "s/^cfg=$CFG\$/cfg=${CFG}_nxag/" | tr '\n' ' ')
   SEED=$(sed -n 's/^- seed=//p' single_run/$SRC/.hydra/overrides.yaml | head -1)
   ENVS=$(python3 -c "import json;print(' '.join(f'{k}={v}' for k,v in json.load(open('single_run/$SRC/launch_env.json')).items()))")
   local AV; AV=$(df -BG --output=avail . | tail -1 | tr -dc '0-9')
@@ -72,11 +78,14 @@ launch(){ local SRC=$1 RUN=$2
     p=$(grep -ao 'tick の前にトルクを絞って速度の上限を守る: [0-9]* 関節' "$W" 2>/dev/null | head -1)
     if [ -n "$p" ]; then log "✅ $RUN: $p（ワーカー 0）"; else log "⛔⛔ $RUN: ワーカー 0 のログに PRETICK の行が無い（元は持つのに）"; fi
   fi
-  grep -q "cfg=${CFG}_nx" single_run/$RUN/.hydra/overrides.yaml 2>/dev/null && log "✅ $RUN: cfg=${CFG}_nx" || log "⛔⛔ $RUN: overrides に cfg=${CFG}_nx が無い"
+  grep -q "^- cfg=${CFG}_nxag\$" single_run/$RUN/.hydra/overrides.yaml 2>/dev/null && log "✅ $RUN: cfg=${CFG}_nxag" || log "⛔⛔ $RUN: overrides に cfg=${CFG}_nxag が無い"
+  local vg; vg=$(grep -aoh '速度の上限を減速比に反比例させる[^）]*）: [0-9]* 関節 \[[^]]*\]' "$W" single_run/$RUN/stdout.log 2>/dev/null | head -1)
+  if [ -n "$vg" ]; then log "✅ $RUN: $vg"; else log "⛔⛔ $RUN: 「速度の上限を減速比に反比例させる」の行が無い（9-367 の直しが効いていない疑い）"; fi
+  grep -q '"CNOID_JOINT_MAX_VEL_GEAR_REF": "150"' single_run/$RUN/launch_env.json 2>/dev/null && log "✅ $RUN: launch_env.json に CNOID_JOINT_MAX_VEL_GEAR_REF=150" || log "⛔⛔ $RUN: launch_env.json に CNOID_JOINT_MAX_VEL_GEAR_REF が無い"
   grep -q '"CNOID_PIPE_WALL": "0.002"' single_run/$RUN/launch_env.json 2>/dev/null && log "✅ $RUN: launch_env.json に CNOID_PIPE_WALL=0.002（再生も同じ質量で走る）" || log "⛔⛔ $RUN: launch_env.json に CNOID_PIPE_WALL が無い"
   return 0; }
 
-log "=== 11-27 実在に近づけた設計空間の確かめ（系譜 9-362、読み 62）HEAD=$(git rev-parse --short HEAD)。4 本。9-361 のキューの起動が終わるのを待つ"
+log "=== 11-28 実在に近づけた設計空間＋駆動の模型の確かめ（系譜 9-362・9-367、読み 62 を 11-28 に書き直した）HEAD=$(git rev-parse --short HEAD)。4 本。9-361 のキューの起動が終わるのを待つ"
 git diff HEAD -- khrylib design_opt scripts/choreonoid_train.py > single_run/queue_1127b_scaled_range.code.diff
 log "コードの未コミットの差分 $(wc -l < single_run/queue_1127b_scaled_range.code.diff) 行を single_run/queue_1127b_scaled_range.code.diff に残した（空ならコミット済み）"
 while pgrep -f "^bash scripts/queue_1127_armature_gear.sh" > /dev/null || pgrep -f "^bash scripts/queue_1127e_vertical_payload.sh" > /dev/null; do sleep 60; done

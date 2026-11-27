@@ -961,6 +961,11 @@ _CTRL_CLIP = bool(os.environ.get('CNOID_CTRL_CLIP'))   # 9-241・Bug 60
 _HINGE_DAMP_TORQUE = bool(os.environ.get('CNOID_HINGE_DAMP_TORQUE'))   # 9-244・Bug 61
 _HINGE_DAMP_SAID = False
 _JOINT_MAX_VEL = float(os.environ.get('CNOID_JOINT_MAX_VEL') or 0)   # 9-245
+# ⭐ 2026-11-28（系譜 9-367）: 同じモーターで減速比だけを変える想定で、関節の速度の上限を減速比に反比例させる。
+#   `CNOID_JOINT_MAX_VEL_GEAR_REF=150` のとき、関節ごとの上限 = CNOID_JOINT_MAX_VEL × 150 / その関節のギア比（ギア比 150 で今の 3.1416）。
+#   回転子の慣性 ∝ ギア比²（cfg の armature_ref_gear、9-361）とセットで使う。既定（未指定）は全関節で同じ上限のまま
+_JOINT_MAX_VEL_GEAR_REF = float(os.environ.get('CNOID_JOINT_MAX_VEL_GEAR_REF') or 0)
+_VCAP_GEAR_SAID = False
 # ⭐ Bug 65: 速度だけ切ると、その tick の位置は切る前の速度で進んでいる（半陰的オイラー）。実効の最高速度が
 #   上限 ＋ トルク÷慣性×Δt になり、ギア比と慣性（＝形）で変わる。STRICT では位置も上限の速さで進め直す（既定は旧動作）
 _JOINT_MAX_VEL_STRICT = bool(os.environ.get('CNOID_JOINT_MAX_VEL_STRICT'))
@@ -1066,6 +1071,7 @@ class ChoreonoidSimWorld:
         hinge_damp = []
         limits     = []
         vel_limits = []
+        vel_gear_log = []   # 9-367: (関節, ギア比, 上限)
         vcap_strict = []
         arm_lim = set()
         for entry_idx, (sb, _) in enumerate(entries):
@@ -1096,6 +1102,11 @@ class ChoreonoidSimWorld:
                 #   NaN・リンクの重なり・素通りが出た。トルクを ±1 で切る（Bug 60）のと同じ「実在の飽和」
                 if vel is None and _JOINT_MAX_VEL and entry_idx == 0 and j.isRevoluteJoint():
                     vel = _JOINT_MAX_VEL
+                    if _JOINT_MAX_VEL_GEAR_REF > 0:   # 9-367: 減速比に反比例
+                        _g = abs(float((self.actuators_map.get(j.jointName) or {}).get('gear', 0.0)))
+                        if _g > 0:
+                            vel = _JOINT_MAX_VEL * _JOINT_MAX_VEL_GEAR_REF / _g
+                            vel_gear_log.append((j.jointName, round(_g, 2), round(vel, 4)))
                     if _JOINT_MAX_VEL_STRICT:
                         vcap_strict.append(j)
                 if vel is not None:
@@ -1164,6 +1175,12 @@ class ChoreonoidSimWorld:
             _VCAP_SAID = True
             nv = sum(1 for e, j, v in vel_limits if v == _JOINT_MAX_VEL)
             print(f'[choreonoid] ⭐ 腕の回転関節の速度を {_JOINT_MAX_VEL} rad/s で飽和させる: {nv} 関節（9-245）', flush=True)
+        global _VCAP_GEAR_SAID
+        if _JOINT_MAX_VEL_GEAR_REF > 0 and not _VCAP_GEAR_SAID:   # ⑤-3-2: 何に・何本・期待の値
+            _VCAP_GEAR_SAID = True
+            print(f'[choreonoid] ⭐ 速度の上限を減速比に反比例させる（CNOID_JOINT_MAX_VEL_GEAR_REF={_JOINT_MAX_VEL_GEAR_REF:g}、系譜 9-367）: '
+                  f'{len(vel_gear_log)} 関節 {vel_gear_log}（名前, ギア比, 上限 [rad/s]。期待 = {_JOINT_MAX_VEL} × {_JOINT_MAX_VEL_GEAR_REF:g} / ギア比）'
+                  + ('' if vel_gear_log else ' ⛔ 1 関節も掴めていない'), flush=True)
         if hinge_damp and not _HINGE_DAMP_SAID:   # 読み込みのたびに出すとログが膨らむので 1 プロセス 1 回
             _HINGE_DAMP_SAID = True
             print(f'[choreonoid] ⭐ 腕の回転関節の減衰をトルク −b·q̇ で掛ける: {len(hinge_damp)} 関節（Bug 61）'

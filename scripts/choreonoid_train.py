@@ -41,7 +41,8 @@ PHYSICS_ENV = ('CNOID_SELF_COLLISION', 'CNOID_CULLING_DEPTH', 'CNOID_CTRL_CLIP',
                'CNOID_TORQUE_SPEED',   # ⭐ 11-08 系譜 9-342: モータのトルクと速さの特性も物理
                'CNOID_JOINT_MAX_VEL_PRETICK', 'CNOID_CAPSULE_INERTIA_ROT',   # ⭐ 11-16 Bug 106・107（系譜 9-350）: 速度の上限の掛け方とカプセルの慣性の向き
                'CNOID_CUBE_SPRING_K', 'CNOID_CUBE_SPRING_AXIS',   # ⭐ 11-19 系譜 9-354: 箱を引き戻すばねとその向き（無いとばね無しで再生する）
-               'CNOID_PIPE_WALL', 'CNOID_PIPE_RHO')   # ⭐ 11-27 系譜 9-362: カプセルの密度をいまの半径から薄肉パイプで計算する（無いと XML の固定の密度で再生する）
+               'CNOID_PIPE_WALL', 'CNOID_PIPE_RHO',   # ⭐ 11-27 系譜 9-362: カプセルの密度をいまの半径から薄肉パイプで計算する（無いと XML の固定の密度で再生する）
+               'CNOID_JOINT_MAX_VEL_GEAR_REF')   # ⭐ 11-28 系譜 9-367: 速度の上限を減速比に反比例（無いと全関節 3.1416 で再生する）
 _rd = next((a.split('=', 1)[1] for a in sys.argv if a.startswith('hydra.run.dir=')), None)
 if _rd:
     import json
