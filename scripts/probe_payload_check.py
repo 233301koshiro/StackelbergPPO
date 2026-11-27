@@ -4,10 +4,10 @@
   ① 生成した XML: 荷物 0 なら <inertial> を書かない（既存の run の物理を変えない）。荷物 m なら先端の body（子を持たない body）だけに
      書かれ、質量 = カプセル + m、重心がカプセルの先端側へ寄る。太さを変えるとカプセルの質量が追随する
   ② MuJoCo: 腕を水平に倒した姿勢の重力のトルク（qfrc_bias）の増え方が、m × g × 先端までの水平距離（関節ごと）と一致する
-  ③ Choreonoid（`--cnoid`、コンテナで `choreonoid --no-window --python` から）: 同じ XML を変換器に通し、先端のリンクの質量を読む
+  ③ Choreonoid（環境変数 `PAYLOAD_CNOID=1`、コンテナで `choreonoid --no-window --python` から。Choreonoid は `--cnoid` を自分の引数として読んで落ちる）: 同じ XML を変換器に通し、先端のリンクの質量を読む
 
     python3 scripts/probe_payload_check.py
-    /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/probe_payload_check.py -- --cnoid
+    PAYLOAD_CNOID=1 CNOID_CAPSULE_INERTIA_ROT=1 /choreonoid_ws/install/bin/choreonoid --no-window --python scripts/probe_payload_check.py > ログ 2>&1
 """
 import copy
 import os
@@ -89,17 +89,37 @@ def main_mujoco():
 
 
 def main_cnoid():
+    """③ 変換器（mujoco_xml_to_body）で .body にし、Choreonoid の BodyLoader で読み込んだ体のリンクの質量を、荷物 0 と 10 kg で並べる。"""
+    import tempfile
+    from cnoid.Body import BodyLoader
     from khrylib.rl.envs.common import mujoco_env_choreonoid as mc
-    for xml in XMLS:
-        for pay in (0.0, 10.0):
-            _, xs = build(xml, pay)
-            res = mc.mujoco_xml_to_body(xs) if hasattr(mc, 'mujoco_xml_to_body') else None
-            print(os.path.basename(xml), pay, type(res))
+    ok_all = True
+    try:
+        for xml in XMLS:
+            ms = {}
+            for pay in (0.0, 10.0):
+                _, xs = build(xml, pay)
+                defs = mc.mujoco_xml_to_body(xs)[0]
+                yaml_str = dict(defs)[defs[0][0]]              # 腕（最初の worldbody の子）
+                with tempfile.NamedTemporaryFile(suffix='.body', mode='w', delete=False) as f:
+                    f.write(yaml_str); path = f.name
+                b = BodyLoader().load(path); os.unlink(path)
+                ms[pay] = {b.link(k).name: (b.link(k).m, np.asarray(b.link(k).c, float)) for k in range(b.numLinks)}
+            tipname = [n for n in ms[10.0] if n.startswith('1111')][0]
+            d = {n: ms[10.0][n][0] - ms[0.0][n][0] for n in ms[0.0]}
+            ok = abs(d[tipname] - 10.0) < 1e-3 and all(abs(v) < 1e-6 for n, v in d.items() if n != tipname)
+            ok_all &= ok
+            print(f'{os.path.basename(xml)}: Choreonoid のリンクの質量 荷物 0 → 10 kg の差 '
+                  + ', '.join(f'{n} {v:+.4f}' for n, v in d.items())
+                  + f'  先端 {tipname} の重心 {np.round(ms[0.0][tipname][1], 4).tolist()} → {np.round(ms[10.0][tipname][1], 4).tolist()} {"✅" if ok else "❌"}', flush=True)
+        print('⭐ Choreonoid でも先端のリンクだけが +10 kg' if ok_all else '⛔ 一致しないものがある', flush=True)
+    except Exception as e:
+        import traceback; traceback.print_exc(); print(f'⛔ 例外 {e!r}', flush=True)
     os._exit(0)
 
 
 if __name__ == '__main__':
-    if '--cnoid' in sys.argv:
+    if '--cnoid' in sys.argv or os.environ.get('PAYLOAD_CNOID'):
         main_cnoid()
     else:
         main_mujoco()
