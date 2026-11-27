@@ -23,6 +23,7 @@
   python3 scripts/probe_vertical_payload.py --check    # 荷物なしで D が K を大きく外れないか（最適化の確かめ）
   python3 scripts/probe_vertical_payload.py --random   # リンク長を振った 24 形で、荷物ごとに K・S が D と逆を向く対を数える（数分）
   python3 scripts/probe_vertical_payload.py --random --nstep=50   # 話を 2 s に縮める（動く途中の比重を上げる）
+  python3 scripts/probe_vertical_payload.py --box      # 根元重・先端重のリンク長を学習と同じ箱（設計長の 0.5〜2.93 倍）で動かしたときの S の最良（約 3 分、系譜 9-369）
 """
 import sys
 import numpy as np
@@ -192,7 +193,7 @@ def order(vals):
     return ' > '.join(sorted(vals, key=lambda k: -vals[k]))
 
 
-if __name__ == '__main__' and '--random' not in sys.argv:
+if __name__ == '__main__' and '--random' not in sys.argv and '--box' not in sys.argv:
     payloads = [0.0] if '--check' in sys.argv else [0.0, 5.0, 10.0, 15.0, 20.0]
     for mp in payloads:
         K, S, D = {}, {}, {}
@@ -239,3 +240,32 @@ def random_search(n=24, payloads=(0.0, 5.0, 7.5, 10.0, 12.5, 15.0), seed=0, marg
 
 if __name__ == '__main__' and '--random' in sys.argv:
     random_search()
+
+
+def box_search(N=22, payloads=(0.0, 10.0), lo=0.5, hi=2.93):
+    """系譜 9-369: 縦型の cfg はリンク長も設計変数（body_params.offset の rel_frac [0.5, 2.93, ·]）。
+    形を固定した K・S と、リンク長を各形の箱の中で動かしたときの S の最良を並べる。
+    半径（RADII）とギア比（150）は固定、横方向のずれは無視する。--radii で半径を振った固定の形の S も出す。"""
+    for mp in payloads:
+        for name in ('prox', 'dist'):
+            l0 = np.array(FORMS[name]); g = [np.linspace(lo * a, hi * a, N) for a in l0]
+            best, arg = -np.inf, None
+            for a in g[0]:
+                for b in g[1]:
+                    for c in g[2]:
+                        s_ = ruler_K_S([a, b, c], mp)[1]
+                        if s_ > best:
+                            best, arg = s_, (a, b, c)
+            print(f'{mp:4.1f} kg {name}: 固定 S {ruler_K_S(list(l0), mp)[1]:.2f}  箱の中の最良 S {best:.2f}'
+                  f'（{arg[0]:.3f}/{arg[1]:.3f}/{arg[2]:.3f}）', flush=True)
+    global RADII
+    r0 = RADII
+    for r in ([0.03] * 3, r0, [0.10] * 3, [0.10, 0.03, 0.03], [0.03, 0.03, 0.10]):
+        RADII = r
+        out = [f'{mp:.0f} kg 根元重 {ruler_K_S(FORMS["prox"], mp)[1]:.2f} 先端重 {ruler_K_S(FORMS["dist"], mp)[1]:.2f}' for mp in payloads]
+        print('半径', r, ' | '.join(out), flush=True)
+    RADII = r0
+
+
+if __name__ == '__main__' and '--box' in sys.argv:
+    box_search()
