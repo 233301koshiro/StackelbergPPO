@@ -13,6 +13,13 @@
 #   荷物が物理に入ったことは、完走後の自動再生（record_arm_trace.py）の「実行時のリンクの質量」の行で見る（先端のリンク = カプセル + 10 kg）。
 # ⭐ 9-361 のキュー（queue_1127_armature_gear.sh）が全部を起動し終えてから始める。9-362（queue_1127b）・E1（queue_1127d）はこのキューの後ろ（ユーザー判断）。
 #
+#
+# ⭐⭐⭐ 11-28 に差し替えた（系譜 9-369、ユーザー「この実験だけはリンク長を設計空間から外さないと結論付けれないってだけ？それならいいよ」）:
+#   外部レビュー（Gemini）で、縦型の cfg はリンク長も設計変数（body_params.offset、設計長の 0.5〜2.93 倍）と分かった。読み 65 は形を固定した計算で
+#   予測しており、リンク長が動くと根元重と先端重は同じ形へ寄れて、10 kg の正解の差 13.3 が 1.06 に消える（probe_vertical_payload.py --box）。
+#   ⇒ この 8 本だけ、リンク長を外した cfg（`pusher_tripo_v3_reallen_fixlen`・`_pay10_fixlen`。元との差は body_params を空にした 1 か所）を使う。
+#   ギア比・太さ・後方延長は元のまま学習する。run 名に `_fl` を付けた。研究の設計空間（縦型はリンク長も最適化）は変えない。
+#   差し替える前のキュー（PID 23735、同じファイル名）は学習を 1 本も起動していない（9-361 の待ちの中）。
 # ⭐⭐ 事前登録した読み 65（投入前の 11-27 夜に書いた。結果を見てから変えない。全文は系譜 9-366）:
 #   量: 各 run の最良のエピソード報酬（exec_R_eps の最大）。2 seed の範囲（帯）で比べる。帯が重なれば順位を述べない。
 #   65-1（10 kg）: a 根元重の帯が先端重の帯より上で重ならない（静力学・計算の予測どおり。運動学の物差しは逆を予測）／b 重なる／c 先端重が上で重ならない。
@@ -20,7 +27,7 @@
 #        根元重が上で重ならない（c′）なら、計算の 0 kg の予測と食い違う。
 #   65-3（荷物の効き、各形）: 10 kg の帯が 0 kg の帯より下（荷物を止め続ける費用）。先端重の方が下がり幅が大きい（計算 0→10 kg: 根元重 −6.7→−38.6、先端重 −5.7→−50.9）。
 #   65-4（記録だけ）: 最終の誤差、学習したギア比（10 kg では止める費用を下げるため上限 150 側に寄ると予測）、20 話の再生で目標の 10 mm 以内に入る割合。
-#   判定器として言えること: 65-1 が a なら「荷物で正しい物差しが運動学から静力学へ替わる場面で、学習の判定は替わった後の物差しに追従した」。
+#   判定器として言えること: 65-1 が a なら「荷物で正しい物差しが運動学から静力学へ替わる場面で、学習の判定は替わった後の物差しに追従した」（形を固定した 2 つの形について。11-28 に範囲を足した）。
 #   停止条件: 床・台座・触れる前の ⛔⛔ が出たら、判定の前に再生して見る。完走ごとに目視（目視記録.md）。
 set -u
 cd /userdir/StackelbergPPO
@@ -28,14 +35,14 @@ Q=single_run/queue_1127e_vertical_payload.log
 log(){ echo "[$(date '+%m-%d %H:%M:%S')] $*" | tee -a $Q; }
 njobs(){ ps -eo comm,args | awk '$1=="choreonoid" && /choreonoid_train\.py/' | wc -l; }
 # 元:新しい run:XML:cfg（10 kg の組を先に。同じ荷物の 2 形を続けて起動するので、2 本ずつ同時に終わる）
-PLAN="e2e_a1v_reach_phys_vp:e2e_a1v_reach_vprox_p10_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen_pay10
-e2e_a1v_reach_phys_vp:e2e_a1v_reach_vdist_p10_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen_pay10
-e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vprox_p10_s2_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen_pay10
-e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vdist_p10_s2_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen_pay10
-e2e_a1v_reach_phys_vp:e2e_a1v_reach_vprox_p00_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen
-e2e_a1v_reach_phys_vp:e2e_a1v_reach_vdist_p00_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen
-e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vprox_p00_s2_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen
-e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vdist_p00_s2_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen"
+PLAN="e2e_a1v_reach_phys_vp:e2e_a1v_reach_vprox_p10_fl_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen_pay10_fixlen
+e2e_a1v_reach_phys_vp:e2e_a1v_reach_vdist_p10_fl_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen_pay10_fixlen
+e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vprox_p10_fl_s2_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen_pay10_fixlen
+e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vdist_p10_fl_s2_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen_pay10_fixlen
+e2e_a1v_reach_phys_vp:e2e_a1v_reach_vprox_p00_fl_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen_fixlen
+e2e_a1v_reach_phys_vp:e2e_a1v_reach_vdist_p00_fl_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen_fixlen
+e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vprox_p00_fl_s2_vp:e2e_a1v_phys_arm171_vprox:pusher_tripo_v3_reallen_fixlen
+e2e_a1v_reach_phys_s2_ws_vp:e2e_a1v_reach_vdist_p00_fl_s2_vp:e2e_a1v_phys_arm171_vdist:pusher_tripo_v3_reallen_fixlen"
 RUNS=$(echo "$PLAN" | cut -d: -f2 | tr '\n' ' ')
 
 launch(){ local SRC=$1 RUN=$2 XML=$3 NCFG=$4
@@ -68,7 +75,7 @@ launch(){ local SRC=$1 RUN=$2 XML=$3 NCFG=$4
   if grep -aq 'は読まれない' single_run/$RUN/stdout.log; then log "⛔⛔ $RUN: 起動行の robot の指定が読まれていない警告がある"; fi
   return 0; }
 
-log "=== 11-27 縦型の到達＋先端の荷物（系譜 9-366、読み 65）HEAD=$(git rev-parse --short HEAD)。8 本。9-361 のキューの起動が終わるのを待つ"
+log "=== 11-28 差し替え版（リンク長を外した _fixlen、系譜 9-369）縦型の到達＋先端の荷物（系譜 9-366、読み 65）HEAD=$(git rev-parse --short HEAD)。8 本。9-361 のキューの起動が終わるのを待つ"
 git diff HEAD -- khrylib design_opt scripts/choreonoid_train.py > single_run/queue_1127e_vertical_payload.code.diff
 log "コードの未コミットの差分 $(wc -l < single_run/queue_1127e_vertical_payload.code.diff) 行を single_run/queue_1127e_vertical_payload.code.diff に残した（空ならコミット済み）"
 while pgrep -f "^bash scripts/queue_1127_armature_gear.sh" > /dev/null; do sleep 60; done
